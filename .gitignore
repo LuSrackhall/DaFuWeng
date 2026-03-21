@@ -20,3 +20,6 @@ apps/desktop-tauri/src-tauri/gen/
 
 release-notes.md
 .github/hooks/runtime/
+__pycache__/
+*.pyc
+.github/prompts/ui-ux-pro-max/
