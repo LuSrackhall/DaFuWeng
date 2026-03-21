@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@dafuweng/contracts": [
+        "packages/contracts/src"
+      ],
+      "@dafuweng/board-config": [
+        "packages/board-config/src"
+      ]
+    }
+  }
+}

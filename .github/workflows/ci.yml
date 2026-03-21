@@ -1,0 +1,88 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: Lint commit messages
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            FROM="${{ github.event.pull_request.base.sha }}"
+            TO="${{ github.event.pull_request.head.sha }}"
+          else
+            FROM="${{ github.event.before }}"
+            TO="${{ github.sha }}"
+          fi
+
+          if [ "$FROM" = "0000000000000000000000000000000000000000" ]; then
+            FROM=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          pnpm exec commitlint --from "$FROM" --to "$TO" --verbose
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: Lint TypeScript workspace
+        run: pnpm lint
+      - name: Run TypeScript tests
+        run: pnpm test
+      - name: Build frontend workspace
+        run: pnpm build
+      - name: Install Playwright browser
+        run: pnpm --filter @dafuweng/frontend exec playwright install chromium
+      - name: Run frontend end-to-end test
+        run: pnpm --filter @dafuweng/frontend test:e2e
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - name: Run Go tests
+        working-directory: backend
+        run: go test ./...
+
+  openspec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate OpenSpec structure
+        run: |
+          test -f openspec/config.yaml
+          test -f openspec/changes/web-first-authoritative-multiplayer-foundation/proposal.md
+          test -f openspec/changes/web-first-authoritative-multiplayer-foundation/design.md
+          test -f openspec/changes/web-first-authoritative-multiplayer-foundation/tasks.md
