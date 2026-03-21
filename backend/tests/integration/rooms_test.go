@@ -403,8 +403,107 @@ func TestCommunityTileResolvesDeterministicCardEffect(t *testing.T) {
 		t.Fatalf("expected host cash 1600 after first community deck card, got %v", host["cash"])
 	}
 	communityDeck := resolved["communityDeck"].(map[string]any)
-	if len(communityDeck["drawPile"].([]any)) != 3 {
+	if len(communityDeck["drawPile"].([]any)) != 6 {
 		t.Fatalf("expected community draw pile to shrink after card draw")
+	}
+}
+
+func TestChanceRelativeMoveCardChainsIntoTargetTile(t *testing.T) {
+	_, mux, dataPath := newServiceForTestWithDice(t, [2]int{2, 2})
+	roomID, hostID, _, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Position = 3
+		players[0].Cash = 1500
+		return players
+	})
+	mutateRoomSnapshot(t, dataPath, roomID, func(snapshot *pocketbase.PersistedRoomSnapshot) {
+		chanceDeck, _ := json.Marshal(map[string]any{"drawPile": []string{"chance-move-back-three"}, "discardPile": []string{}})
+		snapshot.ChanceDeckJSON = chanceDeck
+	})
+	mux = reloadMuxWithDice(t, dataPath, [2]int{2, 2})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "chance-relative"})
+	rollRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	if rollRecorder.Code != http.StatusOK {
+		t.Fatalf("expected relative move card roll status 200, got %d", rollRecorder.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rollRecorder.Body.Bytes(), &body)
+	players := body["players"].([]any)
+	host := players[0].(map[string]any)
+	if host["position"] != float64(4) {
+		t.Fatalf("expected host to chain from chance card to tile 4, got %v", host["position"])
+	}
+	if host["cash"] != float64(1300) {
+		t.Fatalf("expected host to pay tax after relative move chain, got %v", host["cash"])
+	}
+}
+
+func TestChanceNearestRailwayCardOffersTargetTile(t *testing.T) {
+	_, mux, dataPath := newServiceForTestWithDice(t, [2]int{2, 2})
+	roomID, hostID, _, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Position = 3
+		return players
+	})
+	mutateRoomSnapshot(t, dataPath, roomID, func(snapshot *pocketbase.PersistedRoomSnapshot) {
+		chanceDeck, _ := json.Marshal(map[string]any{"drawPile": []string{"chance-nearest-railway"}, "discardPile": []string{}})
+		snapshot.ChanceDeckJSON = chanceDeck
+	})
+	mux = reloadMuxWithDice(t, dataPath, [2]int{2, 2})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "chance-railway"})
+	rollRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	if rollRecorder.Code != http.StatusOK {
+		t.Fatalf("expected nearest railway card roll status 200, got %d", rollRecorder.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rollRecorder.Body.Bytes(), &body)
+	players := body["players"].([]any)
+	host := players[0].(map[string]any)
+	if host["position"] != float64(15) {
+		t.Fatalf("expected host to move to tile 15, got %v", host["position"])
+	}
+	if body["turnState"] != "awaiting-roll" {
+		t.Fatalf("expected nearest railway card to finish the turn, got %v", body["turnState"])
+	}
+}
+
+func TestCommunityRepairFeeCanEnterCardDeficit(t *testing.T) {
+	_, mux, dataPath := newServiceForTestWithDice(t, [2]int{6, 6})
+	roomID, hostID, _, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Position = 5
+		players[0].Cash = 40
+		players[0].Properties = []string{"tile-1", "tile-3"}
+		players[0].PropertyImprovements = map[string]int{"tile-1": 2, "tile-3": 1}
+		return players
+	})
+	mutateRoomSnapshot(t, dataPath, roomID, func(snapshot *pocketbase.PersistedRoomSnapshot) {
+		communityDeck, _ := json.Marshal(map[string]any{"drawPile": []string{"community-repair-fee"}, "discardPile": []string{}})
+		snapshot.CommunityDeckJSON = communityDeck
+	})
+	mux = reloadMuxWithDice(t, dataPath, [2]int{6, 6})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "repair-deficit"})
+	rollRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	if rollRecorder.Code != http.StatusOK {
+		t.Fatalf("expected repair fee card roll status 200, got %d", rollRecorder.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rollRecorder.Body.Bytes(), &body)
+	if body["turnState"] != "awaiting-deficit-resolution" {
+		t.Fatalf("expected repair fee to enter card deficit, got %v", body["turnState"])
+	}
+	pendingPayment := body["pendingPayment"].(map[string]any)
+	if pendingPayment["reason"] != "card" {
+		t.Fatalf("expected pending payment reason card, got %v", pendingPayment["reason"])
+	}
+	if pendingPayment["sourceTileLabel"] != "房屋维修" {
+		t.Fatalf("expected card title as deficit source, got %v", pendingPayment["sourceTileLabel"])
 	}
 }
 
@@ -590,6 +689,17 @@ func mutateRoomPlayers(t *testing.T, dataPath string, roomID string, mutate func
 		t.Fatalf("expected players to marshal: %v", err)
 	}
 	snapshot.PlayersJSON = playersJSON
+	store.SaveRoomState(snapshot)
+}
+
+func mutateRoomSnapshot(t *testing.T, dataPath string, roomID string, mutate func(snapshot *pocketbase.PersistedRoomSnapshot)) {
+	t.Helper()
+	store := pocketbase.NewClient(pocketbase.ClientConfig{BaseURL: "http://127.0.0.1:8090", DataPath: dataPath})
+	snapshot, ok := store.LoadRoomState(roomID)
+	if !ok {
+		t.Fatalf("expected room snapshot to exist")
+	}
+	mutate(&snapshot)
 	store.SaveRoomState(snapshot)
 }
 
@@ -786,5 +896,162 @@ func TestImprovedRentCanEnterDeficitRecovery(t *testing.T) {
 	}
 	if pendingPayment["creditorPlayerId"] != hostID {
 		t.Fatalf("expected host to be rent creditor, got %v", pendingPayment["creditorPlayerId"])
+	}
+}
+
+func TestBankruptcyTransfersAssetsToPlayerCreditor(t *testing.T) {
+	_, mux, dataPath := newServiceForTest(t)
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Cash = 65
+		players[0].Properties = []string{"tile-1", "tile-3"}
+		players[0].MortgagedProperties = []string{"tile-3"}
+		players[0].PropertyImprovements = map[string]int{"tile-1": 2}
+		players[0].HeldCardIDs = []string{"chance-jail-card"}
+		players[1].Cash = 900
+		return players
+	})
+	store := pocketbase.NewClient(pocketbase.ClientConfig{BaseURL: "http://127.0.0.1:8090", DataPath: dataPath})
+	snapshot, _ := store.LoadRoomState(roomID)
+	snapshot.TurnState = "awaiting-deficit-resolution"
+	snapshot.CurrentTurnPlayerID = hostID
+	pendingPayment, _ := json.Marshal(map[string]any{"amount": 140, "reason": "rent", "creditorKind": "player", "creditorPlayerId": secondPlayerID, "sourceTileId": "tile-6", "sourceTileLabel": "东湖路"})
+	snapshot.PendingPaymentJSON = pendingPayment
+	store.SaveRoomState(snapshot)
+	mux = reloadMuxWithDice(t, dataPath, [2]int{1, 1})
+
+	bankruptcyPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "player-creditor-bankruptcy"})
+	bankruptcyRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(bankruptcyRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bytes.NewReader(bankruptcyPayload)))
+	if bankruptcyRecorder.Code != http.StatusOK {
+		t.Fatalf("expected player creditor bankruptcy status 200, got %d", bankruptcyRecorder.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(bankruptcyRecorder.Body.Bytes(), &body)
+	players := body["players"].([]any)
+	host := players[0].(map[string]any)
+	creditor := players[1].(map[string]any)
+	if host["isBankrupt"] != true {
+		t.Fatalf("expected bankrupt player flag")
+	}
+	if len(host["properties"].([]any)) != 0 {
+		t.Fatalf("expected bankrupt player properties cleared")
+	}
+	if creditor["cash"] != float64(965) {
+		t.Fatalf("expected creditor cash 965 after receiving remaining cash, got %v", creditor["cash"])
+	}
+	creditorProperties := creditor["properties"].([]any)
+	if len(creditorProperties) < 2 {
+		t.Fatalf("expected creditor to receive transferred properties, got %v", creditorProperties)
+	}
+	creditorCards := creditor["heldCardIds"].([]any)
+	if len(creditorCards) != 1 || creditorCards[0] != "chance-jail-card" {
+		t.Fatalf("expected creditor to receive held jail card, got %v", creditorCards)
+	}
+	creditorMortgages := creditor["mortgagedProperties"].([]any)
+	if len(creditorMortgages) != 1 || creditorMortgages[0] != "tile-3" {
+		t.Fatalf("expected creditor to inherit mortgaged property, got %v", creditorMortgages)
+	}
+	if body["turnState"] != "post-roll-pending" {
+		t.Fatalf("expected room to finish after player-creditor bankruptcy leaves one active player, got %v", body["turnState"])
+	}
+	if body["roomState"] != "finished" {
+		t.Fatalf("expected room to finish when one active player remains, got %v", body["roomState"])
+	}
+}
+
+func TestBankruptcyReturnsHeldCardsToDeckForBankCreditor(t *testing.T) {
+	_, mux, dataPath := newServiceForTest(t)
+	roomID, hostID, _, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Cash = 0
+		players[0].Properties = []string{"tile-1"}
+		players[0].PropertyImprovements = map[string]int{"tile-1": 1}
+		players[0].HeldCardIDs = []string{"chance-jail-card", "community-jail-card"}
+		return players
+	})
+	store := pocketbase.NewClient(pocketbase.ClientConfig{BaseURL: "http://127.0.0.1:8090", DataPath: dataPath})
+	snapshot, _ := store.LoadRoomState(roomID)
+	snapshot.TurnState = "awaiting-deficit-resolution"
+	snapshot.CurrentTurnPlayerID = hostID
+	pendingPayment, _ := json.Marshal(map[string]any{"amount": 200, "reason": "tax", "creditorKind": "bank", "sourceTileId": "tile-4", "sourceTileLabel": "税务局"})
+	snapshot.PendingPaymentJSON = pendingPayment
+	store.SaveRoomState(snapshot)
+	mux = reloadMuxWithDice(t, dataPath, [2]int{1, 1})
+
+	bankruptcyPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "bank-creditor-bankruptcy"})
+	bankruptcyRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(bankruptcyRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bytes.NewReader(bankruptcyPayload)))
+	if bankruptcyRecorder.Code != http.StatusOK {
+		t.Fatalf("expected bank creditor bankruptcy status 200, got %d", bankruptcyRecorder.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(bankruptcyRecorder.Body.Bytes(), &body)
+	players := body["players"].([]any)
+	host := players[0].(map[string]any)
+	if rawHeldCards, ok := host["heldCardIds"]; ok && len(rawHeldCards.([]any)) != 0 {
+		t.Fatalf("expected bankrupt player held cards cleared")
+	}
+	chanceDeck := body["chanceDeck"].(map[string]any)
+	communityDeck := body["communityDeck"].(map[string]any)
+	if len(chanceDeck["discardPile"].([]any)) == 0 || chanceDeck["discardPile"].([]any)[len(chanceDeck["discardPile"].([]any))-1] != "chance-jail-card" {
+		t.Fatalf("expected chance jail card returned to discard pile, got %v", chanceDeck["discardPile"])
+	}
+	if len(communityDeck["discardPile"].([]any)) == 0 || communityDeck["discardPile"].([]any)[len(communityDeck["discardPile"].([]any))-1] != "community-jail-card" {
+		t.Fatalf("expected community jail card returned to discard pile, got %v", communityDeck["discardPile"])
+	}
+}
+
+func TestCashTradeProposalAndAcceptance(t *testing.T) {
+	_, mux, _ := newServiceForTest(t)
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+
+	proposalPayload, _ := json.Marshal(map[string]any{
+		"playerId": hostID,
+		"idempotencyKey": "trade-1",
+		"counterpartyPlayerId": secondPlayerID,
+		"offeredCash": 100,
+		"requestedCash": 50,
+		"offeredTileIds": []string{},
+		"requestedTileIds": []string{},
+		"offeredCardIds": []string{},
+		"requestedCardIds": []string{},
+	})
+	proposalRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(proposalRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/trade/propose", bytes.NewReader(proposalPayload)))
+	if proposalRecorder.Code != http.StatusOK {
+		t.Fatalf("expected trade proposal status 200, got %d", proposalRecorder.Code)
+	}
+	var proposed map[string]any
+	_ = json.Unmarshal(proposalRecorder.Body.Bytes(), &proposed)
+	if proposed["turnState"] != "awaiting-trade-response" {
+		t.Fatalf("expected room to await trade response, got %v", proposed["turnState"])
+	}
+	if proposed["currentTurnPlayerId"] != secondPlayerID {
+		t.Fatalf("expected counterparty to become current responder, got %v", proposed["currentTurnPlayerId"])
+	}
+
+	acceptPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "trade-accept-1"})
+	acceptRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(acceptRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/trade/accept", bytes.NewReader(acceptPayload)))
+	if acceptRecorder.Code != http.StatusOK {
+		t.Fatalf("expected trade acceptance status 200, got %d", acceptRecorder.Code)
+	}
+	var accepted map[string]any
+	_ = json.Unmarshal(acceptRecorder.Body.Bytes(), &accepted)
+	if accepted["turnState"] != "awaiting-roll" {
+		t.Fatalf("expected accepted trade to restore awaiting-roll, got %v", accepted["turnState"])
+	}
+	if accepted["currentTurnPlayerId"] != hostID {
+		t.Fatalf("expected proposer to resume turn after trade, got %v", accepted["currentTurnPlayerId"])
+	}
+	players := accepted["players"].([]any)
+	host := players[0].(map[string]any)
+	second := players[1].(map[string]any)
+	if host["cash"] != float64(1450) {
+		t.Fatalf("expected host cash 1450 after trade, got %v", host["cash"])
+	}
+	if second["cash"] != float64(1550) {
+		t.Fatalf("expected second player cash 1550 after trade, got %v", second["cash"])
 	}
 }

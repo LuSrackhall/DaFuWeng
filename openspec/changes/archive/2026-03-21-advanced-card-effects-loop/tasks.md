@@ -1,0 +1,3 @@
+- [x] Extend deterministic card definitions with richer non-interactive effect families
+- [x] Reuse deficit recovery for unaffordable card payments
+- [x] Add integration tests for chained movement, nearest railway, and repair-fee deficit

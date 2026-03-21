@@ -24,6 +24,7 @@ type PersistedRoomSnapshot struct {
 	PendingPropertyJSON []byte
 	PendingAuctionJSON  []byte
 	PendingPaymentJSON  []byte
+	PendingTradeJSON    []byte
 	ChanceDeckJSON      []byte
 	CommunityDeckJSON   []byte
 	LastRoll            [2]int
@@ -56,6 +57,19 @@ type PersistedRoomEvent struct {
 	ReleaseMethod string
 	FailedAttemptCount int
 	ImprovementLevel int
+	OfferedCash int
+	RequestedCash int
+	OfferedTileIDs []string
+	RequestedTileIDs []string
+	OfferedCardIDs []string
+	RequestedCardIDs []string
+	TradeSnapshotVersion int
+	TransferredPropertyIDs []string
+	TransferredMortgagedPropertyIDs []string
+	TransferredCardIDs []string
+	ReturnedCardIDs []string
+	ClearedImprovementTileIDs []string
+	CashAfterByPlayer map[string]int
 	LastRoll [2]int
 }
 

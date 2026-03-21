@@ -32,6 +32,15 @@ Use this skill when a feature or milestone needs coordinated execution with mini
    - Use the `Monopoly QA Lead` agent to define or review unit, integration, and Playwright coverage.
 7. Simulate the player experience.
    - Use the `Monopoly Simulated Player` agent before tagging or declaring a milestone ready.
+8. Start with workspace hygiene.
+   - Check git status before new implementation work.
+   - If completed agent-owned work is still uncommitted, decide whether to commit and push it before starting the next slice.
+   - Keep unrelated user changes out of agent commits and report them explicitly.
+9. Close the loop with management reporting.
+   - In progress updates and the final summary, include a role-by-role account of which AI roles were used, what each one contributed, and which work remained with the main coding agent.
+   - If no supporting roles were used, state that explicitly.
+10. Use repository-friendly commits.
+   - Prefer conventional commit messages with Chinese subjects when committing implementation slices.
 
 ## Output
 
@@ -39,3 +48,4 @@ Use this skill when a feature or milestone needs coordinated execution with mini
 - The OpenSpec change to create or continue
 - The next implementation slice
 - The required validation and playtest gate
+- A role-by-role execution summary suitable for manager review

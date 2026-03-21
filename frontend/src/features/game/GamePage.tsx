@@ -1,7 +1,7 @@
 import { sampleBoard } from "@dafuweng/board-config";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { attemptJailRoll, buildImprovement, declareBankruptcy, declineProperty, mortgageProperty, passAuction, payJailFine, purchaseProperty, rollDice, sellImprovement, submitAuctionBid, useJailCard } from "../../network/roomApi";
+import { acceptTrade, attemptJailRoll, buildImprovement, declareBankruptcy, declineProperty, mortgageProperty, passAuction, payJailFine, proposeTrade, purchaseProperty, rejectTrade, rollDice, sellImprovement, submitAuctionBid, useJailCard } from "../../network/roomApi";
 import { BoardScene } from "../../scene/board/BoardScene";
 import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
@@ -13,6 +13,13 @@ export function GamePage() {
   const { projection, isFallback, isLoading, error, applySnapshot, refreshProjection } = useGameProjection(roomId);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [auctionBid, setAuctionBid] = useState("200");
+  const [tradeCounterpartyId, setTradeCounterpartyId] = useState("");
+  const [tradeOfferedCash, setTradeOfferedCash] = useState("0");
+  const [tradeRequestedCash, setTradeRequestedCash] = useState("0");
+  const [tradeOfferedTiles, setTradeOfferedTiles] = useState("");
+  const [tradeRequestedTiles, setTradeRequestedTiles] = useState("");
+  const [tradeOfferedCards, setTradeOfferedCards] = useState("");
+  const [tradeRequestedCards, setTradeRequestedCards] = useState("");
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const presentation = usePresentationState(projection.currentTurnPlayerId, projection.players);
@@ -53,6 +60,26 @@ export function GamePage() {
     && !isSubmittingCommand
     && projection.turnState === "awaiting-roll"
     && activePlayer.playerId === projection.currentTurnPlayerId;
+  const canProposeTrade = !isFallback
+    && !isLoading
+    && !isSubmittingCommand
+    && projection.turnState === "awaiting-roll"
+    && projection.pendingTrade === null
+    && activePlayer.playerId === projection.currentTurnPlayerId;
+  const canResolveTrade = !isFallback
+    && !isLoading
+    && !isSubmittingCommand
+    && projection.turnState === "awaiting-trade-response"
+    && projection.pendingTrade !== null
+    && activePlayer.playerId === projection.pendingTrade.counterpartyPlayerId;
+
+  const otherPlayers = projection.players.filter((player) => player.id !== activePlayer.playerId && !player.isBankrupt);
+
+  useEffect(() => {
+    if (!tradeCounterpartyId && otherPlayers.length > 0) {
+      setTradeCounterpartyId(otherPlayers[0].id);
+    }
+  }, [otherPlayers, tradeCounterpartyId]);
 
   async function handleRollDice() {
     setIsSubmittingCommand(true);
@@ -238,6 +265,58 @@ export function GamePage() {
     }
   }
 
+  function parseTradeIds(raw: string) {
+    return raw.split(",").map((value) => value.trim()).filter(Boolean);
+  }
+
+  async function handleProposeTrade() {
+    setIsSubmittingCommand(true);
+    setActionMessage(null);
+
+    try {
+      const snapshot = await proposeTrade(roomId, {
+        playerId: activePlayer.playerId,
+        idempotencyKey: crypto.randomUUID(),
+        counterpartyPlayerId: tradeCounterpartyId,
+        offeredCash: Number(tradeOfferedCash) || 0,
+        requestedCash: Number(tradeRequestedCash) || 0,
+        offeredTileIds: parseTradeIds(tradeOfferedTiles),
+        requestedTileIds: parseTradeIds(tradeRequestedTiles),
+        offeredCardIds: parseTradeIds(tradeOfferedCards),
+        requestedCardIds: parseTradeIds(tradeRequestedCards)
+      });
+      applySnapshot(snapshot);
+      setActionMessage("已同步权威交易报价。");
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "交易报价失败");
+      await refreshProjection();
+    } finally {
+      setIsSubmittingCommand(false);
+    }
+  }
+
+  async function handleResolveTrade(action: "accept" | "reject") {
+    setIsSubmittingCommand(true);
+    setActionMessage(null);
+
+    try {
+      const payload = {
+        playerId: activePlayer.playerId,
+        idempotencyKey: crypto.randomUUID()
+      };
+      const snapshot = action === "accept"
+        ? await acceptTrade(roomId, payload)
+        : await rejectTrade(roomId, payload);
+      applySnapshot(snapshot);
+      setActionMessage(action === "accept" ? "已同步权威交易结果。" : "已同步权威拒绝结果。");
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "交易处理失败");
+      await refreshProjection();
+    } finally {
+      setIsSubmittingCommand(false);
+    }
+  }
+
   const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayer.playerId);
   const mortgageCandidates = (activeProjectionPlayer?.properties ?? []).filter(
     (tileId) => !(activeProjectionPlayer?.mortgagedProperties ?? []).includes(tileId)
@@ -376,6 +455,71 @@ export function GamePage() {
               ))}
               <button className="button button--primary" type="button" onClick={handleBankruptcy} disabled={!canResolveDeficit}>
                 宣告破产
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {projection.pendingTrade ? (
+          <section className="player-card">
+            <strong>待响应交易</strong>
+            <span>发起方: {projection.pendingTrade.proposerPlayerId}</span>
+            <span>对手方: {projection.pendingTrade.counterpartyPlayerId}</span>
+            <span>发起方出价现金: {projection.pendingTrade.offeredCash}</span>
+            <span>发起方索要现金: {projection.pendingTrade.requestedCash}</span>
+            <span>发起方出让地产: {projection.pendingTrade.offeredTileIds.join(", ") || "无"}</span>
+            <span>发起方索要地产: {projection.pendingTrade.requestedTileIds.join(", ") || "无"}</span>
+            <span>发起方出让卡牌: {projection.pendingTrade.offeredCardIds.join(", ") || "无"}</span>
+            <span>发起方索要卡牌: {projection.pendingTrade.requestedCardIds.join(", ") || "无"}</span>
+            <div className="lobby__actions">
+              <button className="button button--primary" type="button" onClick={() => handleResolveTrade("accept")} disabled={!canResolveTrade}>
+                接受交易
+              </button>
+              <button className="button button--secondary" type="button" onClick={() => handleResolveTrade("reject")} disabled={!canResolveTrade}>
+                拒绝交易
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {otherPlayers.length > 0 ? (
+          <section className="player-card">
+            <strong>发起交易</strong>
+            <label className="player-card">
+              <strong>目标玩家</strong>
+              <select value={tradeCounterpartyId} onChange={(event) => setTradeCounterpartyId(event.target.value)}>
+                {otherPlayers.map((player) => (
+                  <option key={player.id} value={player.id}>{player.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="player-card">
+              <strong>我出现金</strong>
+              <input value={tradeOfferedCash} onChange={(event) => setTradeOfferedCash(event.target.value)} />
+            </label>
+            <label className="player-card">
+              <strong>我索要现金</strong>
+              <input value={tradeRequestedCash} onChange={(event) => setTradeRequestedCash(event.target.value)} />
+            </label>
+            <label className="player-card">
+              <strong>我出让地产</strong>
+              <input value={tradeOfferedTiles} onChange={(event) => setTradeOfferedTiles(event.target.value)} placeholder="tile-1,tile-3" />
+            </label>
+            <label className="player-card">
+              <strong>我索要地产</strong>
+              <input value={tradeRequestedTiles} onChange={(event) => setTradeRequestedTiles(event.target.value)} placeholder="tile-6" />
+            </label>
+            <label className="player-card">
+              <strong>我出让卡牌</strong>
+              <input value={tradeOfferedCards} onChange={(event) => setTradeOfferedCards(event.target.value)} placeholder="chance-jail-card" />
+            </label>
+            <label className="player-card">
+              <strong>我索要卡牌</strong>
+              <input value={tradeRequestedCards} onChange={(event) => setTradeRequestedCards(event.target.value)} placeholder="community-jail-card" />
+            </label>
+            <div className="lobby__actions">
+              <button className="button button--secondary" type="button" onClick={handleProposeTrade} disabled={!canProposeTrade || !tradeCounterpartyId}>
+                发起交易
               </button>
             </div>
           </section>

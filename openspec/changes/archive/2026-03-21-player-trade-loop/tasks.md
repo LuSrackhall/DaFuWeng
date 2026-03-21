@@ -1,0 +1,3 @@
+- [x] Add authoritative pending trade state and propose/accept/reject commands
+- [x] Settle cash-only and mixed-asset trades atomically in the backend
+- [x] Add projection, integration, and Playwright coverage for trade proposal and acceptance

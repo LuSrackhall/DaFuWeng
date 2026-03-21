@@ -317,4 +317,99 @@ describe("toProjectionView", () => {
     expect(updated.pendingPayment?.reason).toBe("rent");
     expect(updated.pendingPayment?.creditorPlayerId).toBe("p1");
   });
+
+  test("applies creditor-aware bankruptcy settlement", () => {
+    const updated = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-24",
+        type: "bankruptcy-declared",
+        sequence: 24,
+        snapshotVersion: 24,
+        summary: "房主 向 玩家二 破产，资产已转移。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        ownerCashAfter: 1425,
+        transferredPropertyIds: ["tile-1", "tile-6"],
+        transferredMortgagedPropertyIds: ["tile-6"],
+        transferredCardIds: ["chance-jail-card"],
+        clearedImprovementTileIds: ["tile-1"],
+      },
+      {
+        id: "evt-25",
+        type: "bankruptcy-declared",
+        sequence: 25,
+        snapshotVersion: 25,
+        summary: "玩家三 向银行破产，资产已清算。",
+        playerId: "p3",
+        returnedCardIds: ["community-jail-card"],
+      },
+    ]);
+
+    expect(updated.players[0]?.isBankrupt).toBe(true);
+    expect(updated.players[1]?.cash).toBe(1425);
+    expect(updated.players[1]?.properties).toContain("tile-1");
+    expect(updated.players[1]?.mortgagedProperties).toContain("tile-6");
+    expect(updated.players[1]?.heldCardIds).toContain("chance-jail-card");
+    expect(updated.communityDeck.discardPile).toContain("community-jail-card");
+  });
+
+  test("applies trade proposal, acceptance, and rejection", () => {
+    const proposed = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-26",
+        type: "trade-proposed",
+        sequence: 26,
+        snapshotVersion: 26,
+        summary: "房主 向 玩家二 发起了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p2",
+        offeredCash: 100,
+        requestedCash: 50,
+        tradeSnapshotVersion: 26,
+      },
+    ]);
+
+    expect(proposed.turnState).toBe("awaiting-trade-response");
+    expect(proposed.currentTurnPlayerId).toBe("p2");
+    expect(proposed.pendingTrade?.offeredCash).toBe(100);
+
+    const accepted = applyRoomEvents(proposed, [
+      {
+        id: "evt-27",
+        type: "trade-accepted",
+        sequence: 27,
+        snapshotVersion: 27,
+        summary: "玩家二 接受了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p1",
+        offeredCash: 100,
+        requestedCash: 50,
+        cashAfterByPlayer: { p1: 1450, p2: 1550 },
+      },
+    ]);
+
+    expect(accepted.pendingTrade).toBeNull();
+    expect(accepted.currentTurnPlayerId).toBe("p1");
+    expect(accepted.players[0]?.cash).toBe(1450);
+    expect(accepted.players[1]?.cash).toBe(1550);
+
+    const rejected = applyRoomEvents(proposed, [
+      {
+        id: "evt-28",
+        type: "trade-rejected",
+        sequence: 28,
+        snapshotVersion: 28,
+        summary: "玩家二 拒绝了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p1",
+      },
+    ]);
+
+    expect(rejected.pendingTrade).toBeNull();
+    expect(rejected.turnState).toBe("awaiting-roll");
+    expect(rejected.currentTurnPlayerId).toBe("p1");
+  });
 });

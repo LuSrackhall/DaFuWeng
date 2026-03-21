@@ -24,6 +24,16 @@
 - Keep change names in kebab-case.
 - Before implementation, make sure proposal, design, and tasks are present for the active change.
 
+## AI Workflow Rules
+
+- At the start of every new conversation, check the git working tree before proposing or implementing new work.
+- If previously completed implementation work is still uncommitted and it belongs to the current coding agent, decide proactively whether to commit and push it instead of waiting for the user to ask.
+- Do not mix unrelated user-owned local edits into agent commits. If the workspace is dirty because of unrelated changes, commit only the files that belong to the current slice and report the remaining dirty paths clearly.
+- Prefer conventional commit messages with Chinese subjects, for example `feat: 完成双边交易闭环` or `fix: 修正卡牌欠款回放`.
+- Treat commit and push as normal workflow decisions, not user-only actions, when the implementation slice is complete and validated.
+- In every conversation, explicitly clarify current progress and provide a role-by-role summary of which AI roles or subagents were used, what each one did, and which work remained with the main coding agent.
+- If no extra AI roles were used in the round, state that explicitly in the progress summary.
+
 ## Engineering Rules
 
 - Favor config-driven board definitions so map tiles, cards, rent bands, and rule variants can evolve without rewriting core logic.

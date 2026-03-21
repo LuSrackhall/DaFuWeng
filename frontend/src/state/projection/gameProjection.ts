@@ -3,7 +3,20 @@ import type { PlayerState, ProjectionEvent, ProjectionSnapshot, RoomEventCatchUp
 import { sampleProjection } from "@dafuweng/board-config";
 import { getRoom, getRoomEvents, subscribeRoomEventStream } from "../../network/roomApi";
 
-type PlayerSummary = Pick<PlayerState, "id" | "name" | "cash" | "position" | "properties" | "mortgagedProperties" | "inJail" | "jailTurnsServed" | "heldCardIds" | "isBankrupt">;
+type PlayerSummary = Pick<
+  PlayerState,
+  | "id"
+  | "name"
+  | "cash"
+  | "position"
+  | "properties"
+  | "mortgagedProperties"
+  | "propertyImprovements"
+  | "inJail"
+  | "jailTurnsServed"
+  | "heldCardIds"
+  | "isBankrupt"
+>;
 
 type ProjectionView = ProjectionSnapshot & {
   currentTurnPlayerName: string;
@@ -72,6 +85,21 @@ function updateDeck(snapshot: ProjectionSnapshot, deckKind: "chance" | "communit
   };
 }
 
+function updateDecksForCardIds(
+  snapshot: ProjectionSnapshot,
+  cardIds: string[] | undefined,
+  disposition: "returned",
+) {
+  if (!cardIds || cardIds.length === 0) {
+    return snapshot;
+  }
+
+  return cardIds.reduce<ProjectionSnapshot>((current, cardId) => {
+    const deckKind = cardId.startsWith("community-") ? "community" : "chance";
+    return updateDeck(current, deckKind, cardId, disposition);
+  }, snapshot);
+}
+
 export function applyRoomEvents(snapshot: ProjectionSnapshot, events: ProjectionEvent[]): ProjectionSnapshot {
   let nextSnapshot: ProjectionSnapshot = {
     ...snapshot,
@@ -98,22 +126,26 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           pendingPayment: null,
           chanceDeck: nextSnapshot.chanceDeck,
           communityDeck: nextSnapshot.communityDeck,
-          pendingActionLabel: "等待当前玩家掷骰"
+          pendingActionLabel: "等待当前玩家掷骰",
         };
         break;
       case "dice-rolled":
         nextSnapshot = {
           ...nextSnapshot,
-          lastRoll: event.lastRoll ?? nextSnapshot.lastRoll
+          lastRoll: event.lastRoll ?? nextSnapshot.lastRoll,
         };
         break;
       case "player-moved":
         nextSnapshot = {
           ...nextSnapshot,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            position: event.playerPosition ?? player.position
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              position: event.playerPosition ?? player.position,
+            }),
+          ),
         };
         break;
       case "property-offered":
@@ -123,14 +155,18 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           pendingAuction: null,
           pendingPayment: null,
           pendingActionLabel: `可购买 ${event.tileLabel}，价格 ${event.tilePrice}。`,
-          pendingProperty: event.tileId && event.tileLabel && event.tilePrice !== undefined && event.tileIndex !== undefined
-            ? {
-                tileId: event.tileId,
-                tileIndex: event.tileIndex,
-                label: event.tileLabel,
-                price: event.tilePrice
-              }
-            : nextSnapshot.pendingProperty
+          pendingProperty:
+            event.tileId &&
+            event.tileLabel &&
+            event.tilePrice !== undefined &&
+            event.tileIndex !== undefined
+              ? {
+                  tileId: event.tileId,
+                  tileIndex: event.tileIndex,
+                  label: event.tileLabel,
+                  price: event.tilePrice,
+                }
+              : nextSnapshot.pendingProperty,
         };
         break;
       case "property-purchased":
@@ -139,13 +175,18 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           pendingProperty: null,
           pendingAuction: null,
           pendingPayment: null,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            cash: event.cashAfter ?? player.cash,
-            properties: event.tileId && !player.properties.includes(event.tileId)
-              ? [...player.properties, event.tileId]
-              : player.properties
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              cash: event.cashAfter ?? player.cash,
+              properties:
+                event.tileId && !player.properties.includes(event.tileId)
+                  ? [...player.properties, event.tileId]
+                  : player.properties,
+            }),
+          ),
         };
         break;
       case "property-declined":
@@ -153,61 +194,78 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           ...nextSnapshot,
           pendingProperty: null,
           pendingAuction: nextSnapshot.pendingAuction,
-          pendingPayment: null
+          pendingPayment: null,
         };
         break;
       case "auction-started":
         nextSnapshot = {
           ...nextSnapshot,
           turnState: "awaiting-auction",
-          currentTurnPlayerId: event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
+          currentTurnPlayerId:
+            event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
           pendingProperty: null,
           pendingPayment: null,
-          pendingAuction: event.tileId && event.tileLabel && event.tilePrice !== undefined && event.tileIndex !== undefined && event.playerId
-            ? {
-                tileId: event.tileId,
-                tileIndex: event.tileIndex,
-                label: event.tileLabel,
-                price: event.tilePrice,
-                initiatorPlayerId: event.playerId,
-                highestBid: 0,
-                highestBidderId: null,
-                passedPlayerIds: []
-              }
-            : nextSnapshot.pendingAuction,
-          pendingActionLabel: `拍卖 ${event.tileLabel}，轮到当前玩家出价或放弃。`
+          pendingAuction:
+            event.tileId &&
+            event.tileLabel &&
+            event.tilePrice !== undefined &&
+            event.tileIndex !== undefined &&
+            event.playerId
+              ? {
+                  tileId: event.tileId,
+                  tileIndex: event.tileIndex,
+                  label: event.tileLabel,
+                  price: event.tilePrice,
+                  initiatorPlayerId: event.playerId,
+                  highestBid: 0,
+                  highestBidderId: null,
+                  passedPlayerIds: [],
+                }
+              : nextSnapshot.pendingAuction,
+          pendingActionLabel: `拍卖 ${event.tileLabel}，轮到当前玩家出价或放弃。`,
         };
         break;
       case "auction-bid-submitted":
         nextSnapshot = {
           ...nextSnapshot,
           turnState: "awaiting-auction",
-          currentTurnPlayerId: event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
+          currentTurnPlayerId:
+            event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
           pendingPayment: null,
           pendingAuction: nextSnapshot.pendingAuction
             ? {
                 ...nextSnapshot.pendingAuction,
-                highestBid: event.amount ?? nextSnapshot.pendingAuction.highestBid,
-                highestBidderId: event.playerId ?? nextSnapshot.pendingAuction.highestBidderId
+                highestBid:
+                  event.amount ?? nextSnapshot.pendingAuction.highestBid,
+                highestBidderId:
+                  event.playerId ?? nextSnapshot.pendingAuction.highestBidderId,
               }
             : nextSnapshot.pendingAuction,
-          pendingActionLabel: `拍卖进行中，当前最高出价 ${event.amount ?? 0}。`
+          pendingActionLabel: `拍卖进行中，当前最高出价 ${event.amount ?? 0}。`,
         };
         break;
       case "auction-pass-submitted":
         nextSnapshot = {
           ...nextSnapshot,
           turnState: "awaiting-auction",
-          currentTurnPlayerId: event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
+          currentTurnPlayerId:
+            event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
           pendingPayment: null,
-          pendingAuction: nextSnapshot.pendingAuction && event.playerId
-            ? {
-                ...nextSnapshot.pendingAuction,
-                passedPlayerIds: nextSnapshot.pendingAuction.passedPlayerIds.includes(event.playerId)
-                  ? nextSnapshot.pendingAuction.passedPlayerIds
-                  : [...nextSnapshot.pendingAuction.passedPlayerIds, event.playerId]
-              }
-            : nextSnapshot.pendingAuction
+          pendingAuction:
+            nextSnapshot.pendingAuction && event.playerId
+              ? {
+                  ...nextSnapshot.pendingAuction,
+                  passedPlayerIds:
+                    nextSnapshot.pendingAuction.passedPlayerIds.includes(
+                      event.playerId,
+                    )
+                      ? nextSnapshot.pendingAuction.passedPlayerIds
+                      : [
+                          ...nextSnapshot.pendingAuction.passedPlayerIds,
+                          event.playerId,
+                        ],
+                }
+              : nextSnapshot.pendingAuction,
         };
         break;
       case "auction-settled":
@@ -216,13 +274,18 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           pendingAuction: null,
           pendingProperty: null,
           pendingPayment: null,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            cash: event.cashAfter ?? player.cash,
-            properties: event.tileId && !player.properties.includes(event.tileId)
-              ? [...player.properties, event.tileId]
-              : player.properties
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              cash: event.cashAfter ?? player.cash,
+              properties:
+                event.tileId && !player.properties.includes(event.tileId)
+                  ? [...player.properties, event.tileId]
+                  : player.properties,
+            }),
+          ),
         };
         break;
       case "auction-ended-unsold":
@@ -230,7 +293,7 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           ...nextSnapshot,
           pendingAuction: null,
           pendingProperty: null,
-          pendingPayment: null
+          pendingPayment: null,
         };
         break;
       case "rent-charged":
@@ -242,158 +305,439 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
             if (player.id === event.playerId) {
               return {
                 ...player,
-                cash: event.cashAfter ?? player.cash
+                cash: event.cashAfter ?? player.cash,
               };
             }
             if (player.id === event.ownerPlayerId) {
               return {
                 ...player,
-                cash: event.ownerCashAfter ?? player.cash
+                cash: event.ownerCashAfter ?? player.cash,
               };
             }
             return player;
-          })
+          }),
         };
         break;
       case "improvement-built":
         nextSnapshot = {
           ...nextSnapshot,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            cash: event.cashAfter ?? player.cash,
-            propertyImprovements: event.tileId
-              ? {
-                  ...(player.propertyImprovements ?? {}),
-                  [event.tileId]: event.improvementLevel ?? ((player.propertyImprovements ?? {})[event.tileId] ?? 0) + 1
-                }
-              : (player.propertyImprovements ?? {})
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              cash: event.cashAfter ?? player.cash,
+              propertyImprovements: event.tileId
+                ? {
+                    ...(player.propertyImprovements ?? {}),
+                    [event.tileId]:
+                      event.improvementLevel ??
+                      ((player.propertyImprovements ?? {})[event.tileId] ?? 0) +
+                        1,
+                  }
+                : (player.propertyImprovements ?? {}),
+            }),
+          ),
         };
         break;
       case "improvement-sold":
         nextSnapshot = {
           ...nextSnapshot,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => {
-            const nextImprovements = { ...(player.propertyImprovements ?? {}) };
-            if (event.tileId) {
-              const nextLevel = event.improvementLevel ?? 0;
-              if (nextLevel > 0) {
-                nextImprovements[event.tileId] = nextLevel;
-              } else {
-                delete nextImprovements[event.tileId];
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => {
+              const nextImprovements = {
+                ...(player.propertyImprovements ?? {}),
+              };
+              if (event.tileId) {
+                const nextLevel = event.improvementLevel ?? 0;
+                if (nextLevel > 0) {
+                  nextImprovements[event.tileId] = nextLevel;
+                } else {
+                  delete nextImprovements[event.tileId];
+                }
               }
+
+              return {
+                ...player,
+                cash: event.cashAfter ?? player.cash,
+                propertyImprovements: nextImprovements,
+              };
+            },
+          ),
+        };
+        break;
+      case "trade-proposed":
+        nextSnapshot = {
+          ...nextSnapshot,
+          turnState: "awaiting-trade-response",
+          currentTurnPlayerId:
+            event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
+          pendingTrade:
+            event.playerId && event.ownerPlayerId
+              ? {
+                  proposerPlayerId: event.playerId,
+                  counterpartyPlayerId: event.ownerPlayerId,
+                  offeredCash: event.offeredCash ?? 0,
+                  requestedCash: event.requestedCash ?? 0,
+                  offeredTileIds: event.offeredTileIds ?? [],
+                  requestedTileIds: event.requestedTileIds ?? [],
+                  offeredCardIds: event.offeredCardIds ?? [],
+                  requestedCardIds: event.requestedCardIds ?? [],
+                  snapshotVersion:
+                    event.tradeSnapshotVersion ?? nextSnapshot.snapshotVersion,
+                }
+              : nextSnapshot.pendingTrade,
+          pendingActionLabel: event.summary,
+        };
+        break;
+      case "trade-accepted": {
+        const pendingTrade =
+          nextSnapshot.pendingTrade ??
+          (event.playerId && event.ownerPlayerId
+            ? {
+                proposerPlayerId: event.playerId,
+                counterpartyPlayerId: event.ownerPlayerId,
+                offeredCash: event.offeredCash ?? 0,
+                requestedCash: event.requestedCash ?? 0,
+                offeredTileIds: event.offeredTileIds ?? [],
+                requestedTileIds: event.requestedTileIds ?? [],
+                offeredCardIds: event.offeredCardIds ?? [],
+                requestedCardIds: event.requestedCardIds ?? [],
+                snapshotVersion:
+                  event.tradeSnapshotVersion ?? nextSnapshot.snapshotVersion,
+              }
+            : null);
+
+        nextSnapshot = {
+          ...nextSnapshot,
+          turnState: "awaiting-roll",
+          currentTurnPlayerId:
+            event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
+          pendingTrade: null,
+          pendingActionLabel: "等待当前玩家掷骰",
+          players: nextSnapshot.players.map((player) => {
+            if (!pendingTrade) {
+              return player;
             }
 
-            return {
-              ...player,
-              cash: event.cashAfter ?? player.cash,
-              propertyImprovements: nextImprovements
-            };
-          })
+            const nextCash =
+              event.cashAfterByPlayer?.[player.id] ?? player.cash;
+            if (player.id === pendingTrade.proposerPlayerId) {
+              return {
+                ...player,
+                cash: nextCash,
+                properties: [
+                  ...player.properties.filter(
+                    (tileId) =>
+                      !(pendingTrade.offeredTileIds ?? []).includes(tileId),
+                  ),
+                  ...(pendingTrade.requestedTileIds ?? []).filter(
+                    (tileId) => !player.properties.includes(tileId),
+                  ),
+                ],
+                mortgagedProperties: [
+                  ...(player.mortgagedProperties ?? []).filter(
+                    (tileId) =>
+                      !(pendingTrade.offeredTileIds ?? []).includes(tileId),
+                  ),
+                  ...(pendingTrade.requestedTileIds ?? []).filter(
+                    (tileId) =>
+                      !(player.mortgagedProperties ?? []).includes(tileId) &&
+                      (
+                        nextSnapshot.players.find(
+                          (candidate) =>
+                            candidate.id === pendingTrade.counterpartyPlayerId,
+                        )?.mortgagedProperties ?? []
+                      ).includes(tileId),
+                  ),
+                ],
+                heldCardIds: [
+                  ...(player.heldCardIds ?? []).filter(
+                    (cardId) =>
+                      !(pendingTrade.offeredCardIds ?? []).includes(cardId),
+                  ),
+                  ...(pendingTrade.requestedCardIds ?? []).filter(
+                    (cardId) => !(player.heldCardIds ?? []).includes(cardId),
+                  ),
+                ],
+              };
+            }
+            if (player.id === pendingTrade.counterpartyPlayerId) {
+              return {
+                ...player,
+                cash: nextCash,
+                properties: [
+                  ...player.properties.filter(
+                    (tileId) =>
+                      !(pendingTrade.requestedTileIds ?? []).includes(tileId),
+                  ),
+                  ...(pendingTrade.offeredTileIds ?? []).filter(
+                    (tileId) => !player.properties.includes(tileId),
+                  ),
+                ],
+                mortgagedProperties: [
+                  ...(player.mortgagedProperties ?? []).filter(
+                    (tileId) =>
+                      !(pendingTrade.requestedTileIds ?? []).includes(tileId),
+                  ),
+                  ...(pendingTrade.offeredTileIds ?? []).filter(
+                    (tileId) =>
+                      !(player.mortgagedProperties ?? []).includes(tileId) &&
+                      (
+                        nextSnapshot.players.find(
+                          (candidate) =>
+                            candidate.id === pendingTrade.proposerPlayerId,
+                        )?.mortgagedProperties ?? []
+                      ).includes(tileId),
+                  ),
+                ],
+                heldCardIds: [
+                  ...(player.heldCardIds ?? []).filter(
+                    (cardId) =>
+                      !(pendingTrade.requestedCardIds ?? []).includes(cardId),
+                  ),
+                  ...(pendingTrade.offeredCardIds ?? []).filter(
+                    (cardId) => !(player.heldCardIds ?? []).includes(cardId),
+                  ),
+                ],
+              };
+            }
+
+            return player;
+          }),
+        };
+        break;
+      }
+      case "trade-rejected":
+        nextSnapshot = {
+          ...nextSnapshot,
+          turnState: "awaiting-roll",
+          currentTurnPlayerId:
+            event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
+          pendingTrade: null,
+          pendingActionLabel: "等待当前玩家掷骰",
         };
         break;
       case "card-resolved":
-        nextSnapshot = updateDeck(nextSnapshot, (event.deckKind as "chance" | "community") ?? "chance", event.cardId, event.cardDisposition);
+        nextSnapshot = updateDeck(
+          nextSnapshot,
+          (event.deckKind as "chance" | "community") ?? "chance",
+          event.cardId,
+          event.cardDisposition,
+        );
         nextSnapshot = {
           ...nextSnapshot,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            cash: event.cashAfter ?? player.cash,
-            position: event.playerPosition ?? player.position,
-            heldCardIds: event.cardDisposition === "held" && event.cardId && !(player.heldCardIds ?? []).includes(event.cardId)
-              ? [...(player.heldCardIds ?? []), event.cardId]
-              : (player.heldCardIds ?? [])
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              cash:
+                event.cashAfterByPlayer?.[player.id] ??
+                event.cashAfter ??
+                player.cash,
+              position: event.playerPosition ?? player.position,
+              heldCardIds:
+                event.cardDisposition === "held" &&
+                event.cardId &&
+                !(player.heldCardIds ?? []).includes(event.cardId)
+                  ? [...(player.heldCardIds ?? []), event.cardId]
+                  : (player.heldCardIds ?? []),
+            }),
+          ),
         };
         break;
       case "tax-paid":
         nextSnapshot = {
           ...nextSnapshot,
           pendingPayment: null,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            cash: event.cashAfter ?? player.cash
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              cash: event.cashAfter ?? player.cash,
+            }),
+          ),
         };
         break;
-      case "deficit-started":
+      case "deficit-started": {
+        const deficitReason = event.cardId
+          ? "card"
+          : event.ownerPlayerId
+            ? "rent"
+            : event.tileLabel === "监狱"
+              ? "jail"
+              : "tax";
+
+        const pendingActionLabel =
+          deficitReason === "rent"
+            ? `当前玩家需补缴 ${event.amount ?? 0} 租金。`
+            : deficitReason === "jail"
+              ? `当前玩家需补缴 ${event.amount ?? 0} 监狱罚金。`
+              : deficitReason === "card"
+                ? `当前玩家需补缴 ${event.amount ?? 0} 卡牌费用。`
+                : `当前玩家需补缴 ${event.amount ?? 0} 税费。`;
+
         nextSnapshot = {
           ...nextSnapshot,
           turnState: "awaiting-deficit-resolution",
           pendingProperty: null,
           pendingAuction: null,
-          pendingPayment: event.amount !== undefined
-            ? {
-                amount: event.amount,
-                reason: event.ownerPlayerId ? "rent" : event.tileLabel === "监狱" ? "jail" : "tax",
-                creditorKind: "bank",
-                creditorPlayerId: event.ownerPlayerId,
-                sourceTileId: event.tileId,
-                sourceTileLabel: event.tileLabel
-              }
-            : nextSnapshot.pendingPayment,
-          pendingActionLabel: `当前玩家需补缴 ${event.amount ?? 0} 税费。`
+          pendingPayment:
+            event.amount !== undefined
+              ? {
+                  amount: event.amount,
+                  reason: deficitReason,
+                  creditorKind: event.ownerPlayerId ? "player" : "bank",
+                  creditorPlayerId: event.ownerPlayerId,
+                  sourceTileId: event.tileId,
+                  sourceTileLabel: event.tileLabel,
+                }
+              : nextSnapshot.pendingPayment,
+          pendingActionLabel,
         };
         break;
+      }
       case "property-mortgaged":
         nextSnapshot = {
           ...nextSnapshot,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            cash: event.cashAfter ?? player.cash,
-            mortgagedProperties: event.tileId && !(player.mortgagedProperties ?? []).includes(event.tileId)
-              ? [...(player.mortgagedProperties ?? []), event.tileId]
-              : (player.mortgagedProperties ?? [])
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              cash: event.cashAfter ?? player.cash,
+              mortgagedProperties:
+                event.tileId &&
+                !(player.mortgagedProperties ?? []).includes(event.tileId)
+                  ? [...(player.mortgagedProperties ?? []), event.tileId]
+                  : (player.mortgagedProperties ?? []),
+            }),
+          ),
         };
         break;
       case "bankruptcy-declared":
+        nextSnapshot = updateDecksForCardIds(
+          nextSnapshot,
+          event.returnedCardIds,
+          "returned",
+        );
         nextSnapshot = {
           ...nextSnapshot,
           pendingPayment: null,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            cash: 0,
-            properties: [],
-            mortgagedProperties: [],
-            isBankrupt: true,
-            inJail: false
-          }))
+          players: nextSnapshot.players.map((player) => {
+            if (player.id === event.playerId) {
+              return {
+                ...player,
+                cash: 0,
+                properties: [],
+                mortgagedProperties: [],
+                propertyImprovements: {},
+                heldCardIds: [],
+                isBankrupt: true,
+                inJail: false,
+                jailTurnsServed: 0,
+              };
+            }
+
+            if (player.id === event.ownerPlayerId) {
+              const nextImprovements = {
+                ...(player.propertyImprovements ?? {}),
+              };
+              for (const tileId of event.clearedImprovementTileIds ?? []) {
+                delete nextImprovements[tileId];
+              }
+
+              return {
+                ...player,
+                cash: event.ownerCashAfter ?? player.cash,
+                properties: [
+                  ...player.properties,
+                  ...(event.transferredPropertyIds ?? []).filter(
+                    (tileId) => !player.properties.includes(tileId),
+                  ),
+                ],
+                mortgagedProperties: [
+                  ...(player.mortgagedProperties ?? []),
+                  ...(event.transferredMortgagedPropertyIds ?? []).filter(
+                    (tileId) =>
+                      !(player.mortgagedProperties ?? []).includes(tileId),
+                  ),
+                ],
+                heldCardIds: [
+                  ...(player.heldCardIds ?? []),
+                  ...(event.transferredCardIds ?? []).filter(
+                    (cardId) => !(player.heldCardIds ?? []).includes(cardId),
+                  ),
+                ],
+                propertyImprovements: nextImprovements,
+              };
+            }
+
+            return player;
+          }),
         };
         break;
       case "player-jailed":
         nextSnapshot = {
           ...nextSnapshot,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            inJail: true,
-            jailTurnsServed: 0,
-            position: event.playerPosition ?? player.position
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              inJail: true,
+              jailTurnsServed: 0,
+              position: event.playerPosition ?? player.position,
+            }),
+          ),
         };
         break;
       case "jail-roll-attempted":
         nextSnapshot = {
           ...nextSnapshot,
           lastRoll: event.lastRoll ?? nextSnapshot.lastRoll,
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            jailTurnsServed: event.releaseMethod === "roll" ? 0 : (event.failedAttemptCount ?? player.jailTurnsServed ?? 0)
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              jailTurnsServed:
+                event.releaseMethod === "roll"
+                  ? 0
+                  : (event.failedAttemptCount ?? player.jailTurnsServed ?? 0),
+            }),
+          ),
         };
         break;
       case "jail-card-used":
-        nextSnapshot = updateDeck(nextSnapshot, (event.deckKind as "chance" | "community") ?? "chance", event.cardId, event.cardDisposition);
+        nextSnapshot = updateDeck(
+          nextSnapshot,
+          (event.deckKind as "chance" | "community") ?? "chance",
+          event.cardId,
+          event.cardDisposition,
+        );
         nextSnapshot = {
           ...nextSnapshot,
           turnState: "awaiting-roll",
           pendingActionLabel: "等待当前玩家掷骰",
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            inJail: false,
-            jailTurnsServed: 0,
-            heldCardIds: event.cardId ? (player.heldCardIds ?? []).filter((cardId) => cardId !== event.cardId) : (player.heldCardIds ?? [])
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              inJail: false,
+              jailTurnsServed: 0,
+              heldCardIds: event.cardId
+                ? (player.heldCardIds ?? []).filter(
+                    (cardId) => cardId !== event.cardId,
+                  )
+                : (player.heldCardIds ?? []),
+            }),
+          ),
         };
         break;
       case "jail-fine-paid":
@@ -402,12 +746,16 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           turnState: "awaiting-roll",
           pendingPayment: null,
           pendingActionLabel: "等待当前玩家掷骰",
-          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
-            ...player,
-            inJail: false,
-            jailTurnsServed: 0,
-            cash: event.cashAfter ?? player.cash
-          }))
+          players: updatePlayer(
+            nextSnapshot.players,
+            event.playerId,
+            (player) => ({
+              ...player,
+              inJail: false,
+              jailTurnsServed: 0,
+              cash: event.cashAfter ?? player.cash,
+            }),
+          ),
         };
         break;
       case "room-finished":
@@ -418,20 +766,31 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           pendingActionLabel: "房间已结束",
           pendingPayment: null,
           pendingAuction: null,
-          pendingProperty: null
+          pendingProperty: null,
         };
         break;
       case "turn-advanced":
         nextSnapshot = {
           ...nextSnapshot,
-          currentTurnPlayerId: event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
-          turnState: nextSnapshot.players.find((player) => player.id === (event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId))?.inJail ? "awaiting-jail-decision" : "awaiting-roll",
+          currentTurnPlayerId:
+            event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
+          turnState: nextSnapshot.players.find(
+            (player) =>
+              player.id ===
+              (event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId),
+          )?.inJail
+            ? "awaiting-jail-decision"
+            : "awaiting-roll",
           pendingProperty: null,
           pendingAuction: null,
           pendingPayment: null,
-          pendingActionLabel: nextSnapshot.players.find((player) => player.id === (event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId))?.inJail
+          pendingActionLabel: nextSnapshot.players.find(
+            (player) =>
+              player.id ===
+              (event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId),
+          )?.inJail
             ? "当前玩家在监狱中，可尝试掷骰出狱、使用出狱卡或支付罚金。"
-            : "等待当前玩家掷骰"
+            : "等待当前玩家掷骰",
         };
         break;
     }

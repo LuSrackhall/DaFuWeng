@@ -1,0 +1,3 @@
+- [x] Extend bankruptcy settlement to transfer or return assets by creditor kind
+- [x] Persist and replay enriched bankruptcy settlement events
+- [x] Cover player-creditor and bank-creditor bankruptcy in integration and projection tests

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -155,6 +156,18 @@ type PendingPayment struct {
 	ReleaseFromJail bool   `json:"releaseFromJail,omitempty"`
 }
 
+type PendingTrade struct {
+	ProposerPlayerID string   `json:"proposerPlayerId"`
+	CounterpartyPlayerID string `json:"counterpartyPlayerId"`
+	OfferedCash      int      `json:"offeredCash"`
+	RequestedCash    int      `json:"requestedCash"`
+	OfferedTileIDs   []string `json:"offeredTileIds"`
+	RequestedTileIDs []string `json:"requestedTileIds"`
+	OfferedCardIDs   []string `json:"offeredCardIds"`
+	RequestedCardIDs []string `json:"requestedCardIds"`
+	SnapshotVersion  int      `json:"snapshotVersion"`
+}
+
 type cardDeckState struct {
 	DrawPile    []string `json:"drawPile"`
 	DiscardPile []string `json:"discardPile"`
@@ -167,6 +180,8 @@ type cardDefinition struct {
 	EffectType string
 	Amount     int
 	TargetIndex int
+	RelativeMove int
+	PerLevelAmount int
 }
 
 type Event struct {
@@ -194,6 +209,19 @@ type Event struct {
 	ReleaseMethod   string `json:"releaseMethod,omitempty"`
 	FailedAttemptCount int `json:"failedAttemptCount,omitempty"`
 	ImprovementLevel int `json:"improvementLevel,omitempty"`
+	OfferedCash int `json:"offeredCash,omitempty"`
+	RequestedCash int `json:"requestedCash,omitempty"`
+	OfferedTileIDs []string `json:"offeredTileIds,omitempty"`
+	RequestedTileIDs []string `json:"requestedTileIds,omitempty"`
+	OfferedCardIDs []string `json:"offeredCardIds,omitempty"`
+	RequestedCardIDs []string `json:"requestedCardIds,omitempty"`
+	TradeSnapshotVersion int `json:"tradeSnapshotVersion,omitempty"`
+	TransferredPropertyIDs []string `json:"transferredPropertyIds,omitempty"`
+	TransferredMortgagedPropertyIDs []string `json:"transferredMortgagedPropertyIds,omitempty"`
+	TransferredCardIDs []string `json:"transferredCardIds,omitempty"`
+	ReturnedCardIDs []string `json:"returnedCardIds,omitempty"`
+	ClearedImprovementTileIDs []string `json:"clearedImprovementTileIds,omitempty"`
+	CashAfterByPlayer map[string]int `json:"cashAfterByPlayer,omitempty"`
 	LastRoll        [2]int `json:"lastRoll,omitempty"`
 }
 
@@ -209,6 +237,7 @@ type RoomResponse struct {
 	PendingProperty     *PendingProperty `json:"pendingProperty"`
 	PendingAuction      *PendingAuction  `json:"pendingAuction"`
 	PendingPayment      *PendingPayment  `json:"pendingPayment"`
+	PendingTrade        *PendingTrade    `json:"pendingTrade"`
 	ChanceDeck          cardDeckState    `json:"chanceDeck"`
 	CommunityDeck       cardDeckState    `json:"communityDeck"`
 	LastRoll            [2]int           `json:"lastRoll"`
@@ -258,6 +287,23 @@ type AuctionBidRequest struct {
 	Amount         int    `json:"amount"`
 }
 
+type TradeProposalRequest struct {
+	PlayerID             string   `json:"playerId"`
+	IdempotencyKey       string   `json:"idempotencyKey"`
+	CounterpartyPlayerID string   `json:"counterpartyPlayerId"`
+	OfferedCash          int      `json:"offeredCash"`
+	RequestedCash        int      `json:"requestedCash"`
+	OfferedTileIDs       []string `json:"offeredTileIds"`
+	RequestedTileIDs     []string `json:"requestedTileIds"`
+	OfferedCardIDs       []string `json:"offeredCardIds"`
+	RequestedCardIDs     []string `json:"requestedCardIds"`
+}
+
+type TradeResolutionRequest struct {
+	PlayerID       string `json:"playerId"`
+	IdempotencyKey string `json:"idempotencyKey"`
+}
+
 type MortgagePropertyRequest struct {
 	PlayerID       string `json:"playerId"`
 	IdempotencyKey string `json:"idempotencyKey"`
@@ -294,6 +340,7 @@ type roomRecord struct {
 	PendingProperty     *PendingProperty
 	PendingAuction      *PendingAuction
 	PendingPayment      *PendingPayment
+	PendingTrade        *PendingTrade
 	ChanceDeck          cardDeckState
 	CommunityDeck       cardDeckState
 	LastRoll            [2]int
@@ -323,22 +370,41 @@ type eventDraft struct {
 	ReleaseMethod  string
 	FailedAttemptCount int
 	ImprovementLevel int
+	OfferedCash int
+	RequestedCash int
+	OfferedTileIDs []string
+	RequestedTileIDs []string
+	OfferedCardIDs []string
+	RequestedCardIDs []string
+	TradeSnapshotVersion int
+	TransferredPropertyIDs []string
+	TransferredMortgagedPropertyIDs []string
+	TransferredCardIDs []string
+	ReturnedCardIDs []string
+	ClearedImprovementTileIDs []string
+	CashAfterByPlayer map[string]int
 	LastRoll       [2]int
 }
 
-var chanceDeckOrder = []string{"chance-jail-card", "chance-go-to-jail", "chance-advance-airport", "chance-bonus-50"}
+var chanceDeckOrder = []string{"chance-jail-card", "chance-go-to-jail", "chance-advance-airport", "chance-bonus-50", "chance-move-back-three", "chance-nearest-railway", "chance-pay-bank-75"}
 
-var communityDeckOrder = []string{"community-bonus-100", "community-jail-card", "community-go-start", "community-bonus-50"}
+var communityDeckOrder = []string{"community-bonus-100", "community-jail-card", "community-go-start", "community-bonus-50", "community-repair-fee", "community-player-count-bonus", "community-pay-bank-75"}
 
 var cardDefinitions = map[string]cardDefinition{
 	"chance-jail-card": {ID: "chance-jail-card", DeckKind: "chance", Title: "保释特赦", EffectType: "held-jail-card"},
 	"chance-go-to-jail": {ID: "chance-go-to-jail", DeckKind: "chance", Title: "立即入狱", EffectType: "go-to-jail"},
 	"chance-advance-airport": {ID: "chance-advance-airport", DeckKind: "chance", Title: "前往机场路", EffectType: "move", TargetIndex: 34},
 	"chance-bonus-50": {ID: "chance-bonus-50", DeckKind: "chance", Title: "意外收入", EffectType: "gain-cash", Amount: 50},
+	"chance-move-back-three": {ID: "chance-move-back-three", DeckKind: "chance", Title: "后退三格", EffectType: "relative-move", RelativeMove: -3},
+	"chance-nearest-railway": {ID: "chance-nearest-railway", DeckKind: "chance", Title: "前往最近车站", EffectType: "nearest-railway"},
+	"chance-pay-bank-75": {ID: "chance-pay-bank-75", DeckKind: "chance", Title: "缴纳服务费", EffectType: "lose-cash", Amount: 75},
 	"community-bonus-100": {ID: "community-bonus-100", DeckKind: "community", Title: "年终分红", EffectType: "gain-cash", Amount: 100},
 	"community-jail-card": {ID: "community-jail-card", DeckKind: "community", Title: "免费出狱", EffectType: "held-jail-card"},
 	"community-go-start": {ID: "community-go-start", DeckKind: "community", Title: "回到起点", EffectType: "move-to-start", Amount: 200, TargetIndex: 0},
 	"community-bonus-50": {ID: "community-bonus-50", DeckKind: "community", Title: "银行返利", EffectType: "gain-cash", Amount: 50},
+	"community-repair-fee": {ID: "community-repair-fee", DeckKind: "community", Title: "房屋维修", EffectType: "repair-fee", PerLevelAmount: 25},
+	"community-player-count-bonus": {ID: "community-player-count-bonus", DeckKind: "community", Title: "社群奖励", EffectType: "gain-per-opponent", Amount: 25},
+	"community-pay-bank-75": {ID: "community-pay-bank-75", DeckKind: "community", Title: "支付管理费", EffectType: "lose-cash", Amount: 75},
 }
 
 var developmentRules = map[string]developmentRule{
@@ -498,6 +564,20 @@ func (service *Service) HandleRoomRoute(writer http.ResponseWriter, request *htt
 			return
 		case parts[1] == "sell" && request.Method == http.MethodPost:
 			service.handleSellImprovement(writer, request, roomID)
+			return
+		}
+	}
+
+	if len(parts) == 3 && parts[1] == "trade" && request.Method == http.MethodPost {
+		switch parts[2] {
+		case "propose":
+			service.handleProposeTrade(writer, request, roomID)
+			return
+		case "accept":
+			service.handleAcceptTrade(writer, request, roomID)
+			return
+		case "reject":
+			service.handleRejectTrade(writer, request, roomID)
 			return
 		}
 	}
@@ -814,6 +894,54 @@ func (service *Service) handleSellImprovement(writer http.ResponseWriter, reques
 	}
 
 	room, err := service.sellImprovement(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey), strings.TrimSpace(payload.TileID))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
+func (service *Service) handleProposeTrade(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload TradeProposalRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid trade proposal payload")
+		return
+	}
+
+	room, err := service.proposeTrade(roomID, payload)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
+func (service *Service) handleAcceptTrade(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload TradeResolutionRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid trade resolution payload")
+		return
+	}
+
+	room, err := service.acceptTrade(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
+func (service *Service) handleRejectTrade(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload TradeResolutionRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid trade resolution payload")
+		return
+	}
+
+	room, err := service.rejectTrade(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
 	if err != nil {
 		writeError(writer, http.StatusBadRequest, err.Error())
 		return
@@ -1303,10 +1431,39 @@ func (service *Service) declareBankruptcy(roomID string, playerID string, idempo
 	if playerIndex == -1 {
 		return roomRecord{}, fmt.Errorf("player not found")
 	}
+	pendingPayment := room.PendingPayment
+	bankruptPlayer := room.Players[playerIndex]
+	transferredPropertyIDs := copyStringSlice(bankruptPlayer.Properties)
+	transferredMortgagedPropertyIDs := copyStringSlice(bankruptPlayer.MortgagedProperties)
+	transferredCardIDs := []string{}
+	returnedCardIDs := []string{}
+	clearedImprovementTileIDs := sortedImprovementTileIDs(bankruptPlayer.PropertyImprovements)
+	creditorPlayerID := ""
+	creditorCashAfter := 0
+
+	if pendingPayment.CreditorKind == "player" && pendingPayment.CreditorPlayerID != "" {
+		creditorIndex := findPlayerIndex(room.Players, pendingPayment.CreditorPlayerID)
+		if creditorIndex != -1 {
+			creditorPlayerID = room.Players[creditorIndex].ID
+			room.ensureImprovementMap(creditorIndex)
+			room.Players[creditorIndex].Cash += bankruptPlayer.Cash
+			room.Players[creditorIndex].Properties = appendUniqueStrings(room.Players[creditorIndex].Properties, transferredPropertyIDs)
+			room.Players[creditorIndex].MortgagedProperties = appendUniqueStrings(room.Players[creditorIndex].MortgagedProperties, transferredMortgagedPropertyIDs)
+			transferredCardIDs = copyStringSlice(bankruptPlayer.HeldCardIDs)
+			room.Players[creditorIndex].HeldCardIDs = appendUniqueStrings(room.Players[creditorIndex].HeldCardIDs, transferredCardIDs)
+			creditorCashAfter = room.Players[creditorIndex].Cash
+		}
+	} else {
+		returnedCardIDs = copyStringSlice(bankruptPlayer.HeldCardIDs)
+		for _, cardID := range returnedCardIDs {
+			room.returnHeldCardToDeck(cardID)
+		}
+	}
 
 	room.Players[playerIndex].Cash = 0
 	room.Players[playerIndex].Properties = []string{}
 	room.Players[playerIndex].MortgagedProperties = []string{}
+	room.Players[playerIndex].PropertyImprovements = map[string]int{}
 	room.Players[playerIndex].HeldCardIDs = []string{}
 	room.Players[playerIndex].JailTurnsServed = 0
 	room.Players[playerIndex].InJail = false
@@ -1314,9 +1471,16 @@ func (service *Service) declareBankruptcy(roomID string, playerID string, idempo
 	room.PendingPayment = nil
 	drafts := []eventDraft{{
 		Type:      "bankruptcy-declared",
-		Summary:   fmt.Sprintf("%s 宣告破产。", room.Players[playerIndex].Name),
+		Summary:   bankruptcySummary(room.Players[playerIndex].Name, creditorPlayerID, room.playerName(creditorPlayerID)),
 		PlayerID:  playerID,
+		OwnerPlayerID: creditorPlayerID,
 		CashAfter: 0,
+		OwnerCashAfter: creditorCashAfter,
+		TransferredPropertyIDs: transferredPropertyIDs,
+		TransferredMortgagedPropertyIDs: transferredMortgagedPropertyIDs,
+		TransferredCardIDs: transferredCardIDs,
+		ReturnedCardIDs: returnedCardIDs,
+		ClearedImprovementTileIDs: clearedImprovementTileIDs,
 	}}
 
 	if room.countActivePlayers() <= 1 {
@@ -1448,6 +1612,156 @@ func (service *Service) sellImprovement(roomID string, playerID string, idempote
 	room.Players[playerIndex].Cash += saleValue
 	service.commitRoomMutation(&room, []eventDraft{{Type: "improvement-sold", Summary: fmt.Sprintf("%s 卖掉了 %s 的一层建筑。", room.Players[playerIndex].Name, tileForIDMust(tileID).Label), PlayerID: playerID, TileID: tileID, TileIndex: tileForIDMust(tileID).Index, TileLabel: tileForIDMust(tileID).Label, Amount: saleValue, CashAfter: room.Players[playerIndex].Cash, ImprovementLevel: level - 1}})
 	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "sell-improvement", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
+	return room, nil
+}
+
+func (service *Service) proposeTrade(roomID string, payload TradeProposalRequest) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	playerID := strings.TrimSpace(payload.PlayerID)
+	idempotencyKey := strings.TrimSpace(payload.IdempotencyKey)
+	counterpartyPlayerID := strings.TrimSpace(payload.CounterpartyPlayerID)
+	if playerID == "" || idempotencyKey == "" || counterpartyPlayerID == "" {
+		return roomRecord{}, fmt.Errorf("playerId, idempotencyKey, and counterpartyPlayerId are required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "propose-trade", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.State != "in-game" || room.TurnState != "awaiting-roll" || room.PendingTrade != nil {
+		return roomRecord{}, fmt.Errorf("room is not ready for trade proposals")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current turn player can propose a trade")
+	}
+	proposerIndex := findPlayerIndex(room.Players, playerID)
+	counterpartyIndex := findPlayerIndex(room.Players, counterpartyPlayerID)
+	if proposerIndex == -1 || counterpartyIndex == -1 {
+		return roomRecord{}, fmt.Errorf("trade players not found")
+	}
+	if proposerIndex == counterpartyIndex || room.Players[counterpartyIndex].IsBankrupt {
+		return roomRecord{}, fmt.Errorf("invalid counterparty")
+	}
+	if payload.OfferedCash < 0 || payload.RequestedCash < 0 {
+		return roomRecord{}, fmt.Errorf("trade cash values must be non-negative")
+	}
+	if payload.OfferedCash == 0 && payload.RequestedCash == 0 && len(payload.OfferedTileIDs) == 0 && len(payload.RequestedTileIDs) == 0 && len(payload.OfferedCardIDs) == 0 && len(payload.RequestedCardIDs) == 0 {
+		return roomRecord{}, fmt.Errorf("trade must include at least one asset or cash amount")
+	}
+	if room.Players[proposerIndex].Cash < payload.OfferedCash {
+		return roomRecord{}, fmt.Errorf("proposer cannot afford offered cash")
+	}
+	if room.Players[counterpartyIndex].Cash < payload.RequestedCash {
+		return roomRecord{}, fmt.Errorf("counterparty cannot afford requested cash")
+	}
+	if err := room.validateTradeAssets(proposerIndex, payload.OfferedTileIDs, payload.OfferedCardIDs); err != nil {
+		return roomRecord{}, err
+	}
+	if err := room.validateTradeAssets(counterpartyIndex, payload.RequestedTileIDs, payload.RequestedCardIDs); err != nil {
+		return roomRecord{}, err
+	}
+
+	room.PendingTrade = &PendingTrade{
+		ProposerPlayerID: playerID,
+		CounterpartyPlayerID: counterpartyPlayerID,
+		OfferedCash: payload.OfferedCash,
+		RequestedCash: payload.RequestedCash,
+		OfferedTileIDs: normalizeIDs(payload.OfferedTileIDs),
+		RequestedTileIDs: normalizeIDs(payload.RequestedTileIDs),
+		OfferedCardIDs: normalizeIDs(payload.OfferedCardIDs),
+		RequestedCardIDs: normalizeIDs(payload.RequestedCardIDs),
+		SnapshotVersion: room.SnapshotVersion,
+	}
+	room.TurnState = "awaiting-trade-response"
+	room.CurrentTurnPlayerID = counterpartyPlayerID
+	room.PendingAction = fmt.Sprintf("%s 向 %s 发起了交易报价。", room.Players[proposerIndex].Name, room.Players[counterpartyIndex].Name)
+	service.commitRoomMutation(&room, []eventDraft{{Type: "trade-proposed", Summary: room.PendingAction, PlayerID: playerID, OwnerPlayerID: counterpartyPlayerID, NextPlayerID: counterpartyPlayerID, OfferedCash: payload.OfferedCash, RequestedCash: payload.RequestedCash, OfferedTileIDs: normalizeIDs(payload.OfferedTileIDs), RequestedTileIDs: normalizeIDs(payload.RequestedTileIDs), OfferedCardIDs: normalizeIDs(payload.OfferedCardIDs), RequestedCardIDs: normalizeIDs(payload.RequestedCardIDs), TradeSnapshotVersion: room.PendingTrade.SnapshotVersion}})
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "propose-trade", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
+	return room, nil
+}
+
+func (service *Service) acceptTrade(roomID string, playerID string, idempotencyKey string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" || idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("playerId and idempotencyKey are required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "accept-trade", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-trade-response" || room.PendingTrade == nil {
+		return roomRecord{}, fmt.Errorf("room is not waiting for trade resolution")
+	}
+	trade := room.PendingTrade
+	if trade.CounterpartyPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only the counterparty can accept the trade")
+	}
+	proposerIndex := findPlayerIndex(room.Players, trade.ProposerPlayerID)
+	counterpartyIndex := findPlayerIndex(room.Players, trade.CounterpartyPlayerID)
+	if proposerIndex == -1 || counterpartyIndex == -1 {
+		return roomRecord{}, fmt.Errorf("trade players not found")
+	}
+	if room.Players[proposerIndex].Cash < trade.OfferedCash || room.Players[counterpartyIndex].Cash < trade.RequestedCash {
+		return roomRecord{}, fmt.Errorf("trade cash preconditions are no longer valid")
+	}
+	if err := room.validateTradeAssets(proposerIndex, trade.OfferedTileIDs, trade.OfferedCardIDs); err != nil {
+		return roomRecord{}, err
+	}
+	if err := room.validateTradeAssets(counterpartyIndex, trade.RequestedTileIDs, trade.RequestedCardIDs); err != nil {
+		return roomRecord{}, err
+	}
+
+	room.Players[proposerIndex].Cash = room.Players[proposerIndex].Cash - trade.OfferedCash + trade.RequestedCash
+	room.Players[counterpartyIndex].Cash = room.Players[counterpartyIndex].Cash - trade.RequestedCash + trade.OfferedCash
+	room.transferTradeAssets(proposerIndex, counterpartyIndex, trade.OfferedTileIDs, trade.OfferedCardIDs)
+	room.transferTradeAssets(counterpartyIndex, proposerIndex, trade.RequestedTileIDs, trade.RequestedCardIDs)
+	room.PendingTrade = nil
+	room.TurnState = "awaiting-roll"
+	room.CurrentTurnPlayerID = trade.ProposerPlayerID
+	room.PendingAction = "等待当前玩家掷骰"
+	cashAfterByPlayer := map[string]int{trade.ProposerPlayerID: room.Players[proposerIndex].Cash, trade.CounterpartyPlayerID: room.Players[counterpartyIndex].Cash}
+	service.commitRoomMutation(&room, []eventDraft{{Type: "trade-accepted", Summary: fmt.Sprintf("%s 接受了交易报价。", room.Players[counterpartyIndex].Name), PlayerID: trade.ProposerPlayerID, OwnerPlayerID: trade.CounterpartyPlayerID, NextPlayerID: trade.ProposerPlayerID, OfferedCash: trade.OfferedCash, RequestedCash: trade.RequestedCash, OfferedTileIDs: copyStringSlice(trade.OfferedTileIDs), RequestedTileIDs: copyStringSlice(trade.RequestedTileIDs), OfferedCardIDs: copyStringSlice(trade.OfferedCardIDs), RequestedCardIDs: copyStringSlice(trade.RequestedCardIDs), CashAfterByPlayer: cashAfterByPlayer}})
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "accept-trade", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
+	return room, nil
+}
+
+func (service *Service) rejectTrade(roomID string, playerID string, idempotencyKey string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" || idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("playerId and idempotencyKey are required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "reject-trade", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-trade-response" || room.PendingTrade == nil {
+		return roomRecord{}, fmt.Errorf("room is not waiting for trade resolution")
+	}
+	trade := room.PendingTrade
+	if trade.CounterpartyPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only the counterparty can reject the trade")
+	}
+	room.PendingTrade = nil
+	room.TurnState = "awaiting-roll"
+	room.CurrentTurnPlayerID = trade.ProposerPlayerID
+	room.PendingAction = "等待当前玩家掷骰"
+	service.commitRoomMutation(&room, []eventDraft{{Type: "trade-rejected", Summary: fmt.Sprintf("%s 拒绝了交易报价。", room.playerName(playerID)), PlayerID: trade.ProposerPlayerID, OwnerPlayerID: playerID, NextPlayerID: trade.ProposerPlayerID}})
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "reject-trade", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
 	return room, nil
 }
 
@@ -1725,6 +2039,19 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 			ReleaseMethod:   draft.ReleaseMethod,
 			FailedAttemptCount: draft.FailedAttemptCount,
 			ImprovementLevel: draft.ImprovementLevel,
+			OfferedCash: draft.OfferedCash,
+			RequestedCash: draft.RequestedCash,
+			OfferedTileIDs: copyStringSlice(draft.OfferedTileIDs),
+			RequestedTileIDs: copyStringSlice(draft.RequestedTileIDs),
+			OfferedCardIDs: copyStringSlice(draft.OfferedCardIDs),
+			RequestedCardIDs: copyStringSlice(draft.RequestedCardIDs),
+			TradeSnapshotVersion: draft.TradeSnapshotVersion,
+			TransferredPropertyIDs: copyStringSlice(draft.TransferredPropertyIDs),
+			TransferredMortgagedPropertyIDs: copyStringSlice(draft.TransferredMortgagedPropertyIDs),
+			TransferredCardIDs: copyStringSlice(draft.TransferredCardIDs),
+			ReturnedCardIDs: copyStringSlice(draft.ReturnedCardIDs),
+			ClearedImprovementTileIDs: copyStringSlice(draft.ClearedImprovementTileIDs),
+			CashAfterByPlayer: copyIntMap(draft.CashAfterByPlayer),
 			LastRoll:        draft.LastRoll,
 		}
 		room.RecentEvents = append(room.RecentEvents, event)
@@ -1754,6 +2081,19 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 			ReleaseMethod:   event.ReleaseMethod,
 			FailedAttemptCount: event.FailedAttemptCount,
 			ImprovementLevel: event.ImprovementLevel,
+			OfferedCash: event.OfferedCash,
+			RequestedCash: event.RequestedCash,
+			OfferedTileIDs: copyStringSlice(event.OfferedTileIDs),
+			RequestedTileIDs: copyStringSlice(event.RequestedTileIDs),
+			OfferedCardIDs: copyStringSlice(event.OfferedCardIDs),
+			RequestedCardIDs: copyStringSlice(event.RequestedCardIDs),
+			TradeSnapshotVersion: event.TradeSnapshotVersion,
+			TransferredPropertyIDs: copyStringSlice(event.TransferredPropertyIDs),
+			TransferredMortgagedPropertyIDs: copyStringSlice(event.TransferredMortgagedPropertyIDs),
+			TransferredCardIDs: copyStringSlice(event.TransferredCardIDs),
+			ReturnedCardIDs: copyStringSlice(event.ReturnedCardIDs),
+			ClearedImprovementTileIDs: copyStringSlice(event.ClearedImprovementTileIDs),
+			CashAfterByPlayer: copyIntMap(event.CashAfterByPlayer),
 			LastRoll:        event.LastRoll,
 		})
 	}
@@ -1770,6 +2110,7 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 	var pendingProperty *PendingProperty
 	var pendingAuction *PendingAuction
 	var pendingPayment *PendingPayment
+	var pendingTrade *PendingTrade
 	var chanceDeck cardDeckState
 	var communityDeck cardDeckState
 	_ = json.Unmarshal(snapshot.PlayersJSON, &players)
@@ -1791,6 +2132,12 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 			pendingPayment = &decoded
 		}
 	}
+	if len(snapshot.PendingTradeJSON) > 0 && string(snapshot.PendingTradeJSON) != "null" {
+		var decoded PendingTrade
+		if err := json.Unmarshal(snapshot.PendingTradeJSON, &decoded); err == nil {
+			pendingTrade = &decoded
+		}
+	}
 	_ = json.Unmarshal(snapshot.ChanceDeckJSON, &chanceDeck)
 	_ = json.Unmarshal(snapshot.CommunityDeckJSON, &communityDeck)
 
@@ -1807,6 +2154,7 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 		PendingProperty:     pendingProperty,
 		PendingAuction:      pendingAuction,
 		PendingPayment:      pendingPayment,
+		PendingTrade:        pendingTrade,
 		ChanceDeck:          chanceDeck,
 		CommunityDeck:       communityDeck,
 		LastRoll:            snapshot.LastRoll,
@@ -2001,6 +2349,7 @@ func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 	pendingPropertyJSON, _ := json.Marshal(room.PendingProperty)
 	pendingAuctionJSON, _ := json.Marshal(room.PendingAuction)
 	pendingPaymentJSON, _ := json.Marshal(room.PendingPayment)
+	pendingTradeJSON, _ := json.Marshal(room.PendingTrade)
 	chanceDeckJSON, _ := json.Marshal(room.ChanceDeck)
 	communityDeckJSON, _ := json.Marshal(room.CommunityDeck)
 	return pocketbase.PersistedRoomSnapshot{
@@ -2015,6 +2364,7 @@ func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 		PendingPropertyJSON: pendingPropertyJSON,
 		PendingAuctionJSON:  pendingAuctionJSON,
 		PendingPaymentJSON:  pendingPaymentJSON,
+		PendingTradeJSON:    pendingTradeJSON,
 		ChanceDeckJSON:      chanceDeckJSON,
 		CommunityDeckJSON:   communityDeckJSON,
 		LastRoll:            room.LastRoll,
@@ -2035,6 +2385,7 @@ func (room roomRecord) toResponse() RoomResponse {
 		PendingProperty:     room.PendingProperty,
 		PendingAuction:      room.PendingAuction,
 		PendingPayment:      room.PendingPayment,
+		PendingTrade:        room.PendingTrade,
 		ChanceDeck:          room.ChanceDeck,
 		CommunityDeck:       room.CommunityDeck,
 		LastRoll:            room.LastRoll,
@@ -2114,6 +2465,19 @@ func toPersistedEvents(roomID string, events []Event) []pocketbase.PersistedRoom
 			ReleaseMethod:   event.ReleaseMethod,
 			FailedAttemptCount: event.FailedAttemptCount,
 			ImprovementLevel: event.ImprovementLevel,
+			OfferedCash: event.OfferedCash,
+			RequestedCash: event.RequestedCash,
+			OfferedTileIDs: copyStringSlice(event.OfferedTileIDs),
+			RequestedTileIDs: copyStringSlice(event.RequestedTileIDs),
+			OfferedCardIDs: copyStringSlice(event.OfferedCardIDs),
+			RequestedCardIDs: copyStringSlice(event.RequestedCardIDs),
+			TradeSnapshotVersion: event.TradeSnapshotVersion,
+			TransferredPropertyIDs: copyStringSlice(event.TransferredPropertyIDs),
+			TransferredMortgagedPropertyIDs: copyStringSlice(event.TransferredMortgagedPropertyIDs),
+			TransferredCardIDs: copyStringSlice(event.TransferredCardIDs),
+			ReturnedCardIDs: copyStringSlice(event.ReturnedCardIDs),
+			ClearedImprovementTileIDs: copyStringSlice(event.ClearedImprovementTileIDs),
+			CashAfterByPlayer: copyIntMap(event.CashAfterByPlayer),
 			LastRoll:        event.LastRoll,
 		})
 	}
@@ -2148,6 +2512,19 @@ func toRoomEvents(events []pocketbase.PersistedRoomEvent) []Event {
 			ReleaseMethod:   event.ReleaseMethod,
 			FailedAttemptCount: event.FailedAttemptCount,
 			ImprovementLevel: event.ImprovementLevel,
+			OfferedCash: event.OfferedCash,
+			RequestedCash: event.RequestedCash,
+			OfferedTileIDs: copyStringSlice(event.OfferedTileIDs),
+			RequestedTileIDs: copyStringSlice(event.RequestedTileIDs),
+			OfferedCardIDs: copyStringSlice(event.OfferedCardIDs),
+			RequestedCardIDs: copyStringSlice(event.RequestedCardIDs),
+			TradeSnapshotVersion: event.TradeSnapshotVersion,
+			TransferredPropertyIDs: copyStringSlice(event.TransferredPropertyIDs),
+			TransferredMortgagedPropertyIDs: copyStringSlice(event.TransferredMortgagedPropertyIDs),
+			TransferredCardIDs: copyStringSlice(event.TransferredCardIDs),
+			ReturnedCardIDs: copyStringSlice(event.ReturnedCardIDs),
+			ClearedImprovementTileIDs: copyStringSlice(event.ClearedImprovementTileIDs),
+			CashAfterByPlayer: copyIntMap(event.CashAfterByPlayer),
 			LastRoll:        event.LastRoll,
 		})
 	}
@@ -2355,7 +2732,11 @@ func (room *roomRecord) resolveLanding(playerIndex int) []eventDraft {
 }
 
 func (room *roomRecord) movePlayerBy(playerIndex int, distance int) {
-	room.Players[playerIndex].Position = (room.Players[playerIndex].Position + distance) % boardTileCount
+	nextPosition := (room.Players[playerIndex].Position + distance) % boardTileCount
+	if nextPosition < 0 {
+		nextPosition += boardTileCount
+	}
+	room.Players[playerIndex].Position = nextPosition
 }
 
 func (room *roomRecord) movePlayerTo(playerIndex int, targetIndex int) {
@@ -2365,6 +2746,14 @@ func (room *roomRecord) movePlayerTo(playerIndex int, targetIndex int) {
 func (room *roomRecord) releasePlayerFromJail(playerIndex int) {
 	room.Players[playerIndex].InJail = false
 	room.Players[playerIndex].JailTurnsServed = 0
+}
+
+func (room *roomRecord) returnHeldCardToDeck(cardID string) {
+	card, ok := cardDefinitions[cardID]
+	if !ok {
+		return
+	}
+	room.discardCard(card)
 }
 
 func (room *roomRecord) drawCard(deckKind string) cardDefinition {
@@ -2427,10 +2816,60 @@ func (room *roomRecord) resolveCardDraw(playerIndex int, tile tileDetails, deckK
 		room.discardCard(card)
 		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
 		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	case "relative-move":
+		drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded"})
+		room.discardCard(card)
+		room.movePlayerBy(playerIndex, card.RelativeMove)
+		return append(drafts, room.resolveLanding(playerIndex)...)
+	case "nearest-railway":
+		drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded"})
+		room.discardCard(card)
+		room.movePlayerTo(playerIndex, nextRailwayIndex(room.Players[playerIndex].Position))
+		return append(drafts, room.resolveLanding(playerIndex)...)
+	case "lose-cash":
+		return room.resolveCardCashCharge(playerIndex, tile, card, summary)
+	case "repair-fee":
+		repairCost := room.totalImprovementLevels(playerIndex) * card.PerLevelAmount
+		if repairCost == 0 {
+			drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded", Amount: 0, CashAfter: room.Players[playerIndex].Cash})
+			room.discardCard(card)
+			nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+			return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+		}
+		chargedCard := card
+		chargedCard.Amount = repairCost
+		return room.resolveCardCashCharge(playerIndex, tile, chargedCard, summary)
+	case "gain-per-opponent":
+		gainAmount := (room.countActivePlayers() - 1) * card.Amount
+		room.Players[playerIndex].Cash += gainAmount
+		drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, Amount: gainAmount, CashAfter: room.Players[playerIndex].Cash, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded"})
+		room.discardCard(card)
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
 	default:
 		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
 		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
 	}
+}
+
+func (room *roomRecord) resolveCardCashCharge(playerIndex int, tile tileDetails, card cardDefinition, summary string) []eventDraft {
+	player := room.Players[playerIndex]
+	if room.Players[playerIndex].Cash < card.Amount {
+		room.TurnState = "awaiting-deficit-resolution"
+		room.PendingPayment = &PendingPayment{Amount: card.Amount, Reason: "card", CreditorKind: "bank", SourceTileID: tile.ID, SourceTileLabel: card.Title}
+		room.PendingAction = fmt.Sprintf("%s 现金不足以支付 %d 卡牌费用，请抵押地产或宣告破产。", player.Name, card.Amount)
+		room.discardCard(card)
+		return []eventDraft{
+			{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded", Amount: -card.Amount, CashAfter: room.Players[playerIndex].Cash},
+			{Type: "deficit-started", Summary: fmt.Sprintf("%s 需补缴 %d 卡牌费用。", player.Name, card.Amount), PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: card.Title, Amount: card.Amount, CashAfter: room.Players[playerIndex].Cash, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title},
+		}
+	}
+
+	room.Players[playerIndex].Cash -= card.Amount
+	drafts := []eventDraft{{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded", Amount: -card.Amount, CashAfter: room.Players[playerIndex].Cash}}
+	room.discardCard(card)
+	nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+	return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
 }
 
 func (room *roomRecord) settlePendingPayment(playerIndex int) []eventDraft {
@@ -2462,6 +2901,12 @@ func (room *roomRecord) settlePendingPayment(playerIndex int) []eventDraft {
 		room.PendingPayment = nil
 		return drafts
 	}
+	if payment.Reason == "card" {
+		drafts = append(drafts, eventDraft{Type: "tax-paid", Summary: fmt.Sprintf("%s 补齐了卡牌费用。", room.Players[playerIndex].Name), PlayerID: room.Players[playerIndex].ID, TileID: payment.SourceTileID, TileLabel: payment.SourceTileLabel, Amount: payment.Amount, CashAfter: room.Players[playerIndex].Cash})
+		room.PendingPayment = nil
+		nextPlayerID := room.advanceTurnFromPlayer(room.Players[playerIndex].ID)
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	}
 	drafts = append(drafts, eventDraft{Type: "tax-paid", Summary: fmt.Sprintf("%s 补齐了税费。", room.Players[playerIndex].Name), PlayerID: room.Players[playerIndex].ID, TileID: payment.SourceTileID, TileLabel: payment.SourceTileLabel, Amount: payment.Amount, CashAfter: room.Players[playerIndex].Cash})
 	room.PendingPayment = nil
 	nextPlayerID := room.advanceTurnFromPlayer(room.Players[playerIndex].ID)
@@ -2484,6 +2929,146 @@ func removeFirst(values []string, target string) []string {
 		}
 	}
 	return values
+}
+
+func appendUniqueStrings(values []string, additions []string) []string {
+	seen := make(map[string]struct{}, len(values)+len(additions))
+	for _, value := range values {
+		seen[value] = struct{}{}
+	}
+	for _, value := range additions {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		values = append(values, value)
+		seen[value] = struct{}{}
+	}
+	return values
+}
+
+func removeValues(values []string, removals []string) []string {
+	if len(removals) == 0 {
+		return values
+	}
+	blocked := make(map[string]struct{}, len(removals))
+	for _, value := range removals {
+		blocked[value] = struct{}{}
+	}
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := blocked[value]; ok {
+			continue
+		}
+		filtered = append(filtered, value)
+	}
+	return filtered
+}
+
+func normalizeIDs(values []string) []string {
+	normalized := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		normalized = append(normalized, trimmed)
+		seen[trimmed] = struct{}{}
+	}
+	return normalized
+}
+
+func (room roomRecord) validateTradeAssets(playerIndex int, tileIDs []string, cardIDs []string) error {
+	tileIDs = normalizeIDs(tileIDs)
+	cardIDs = normalizeIDs(cardIDs)
+	for _, tileID := range tileIDs {
+		if !containsPlayer(room.Players[playerIndex].Properties, tileID) {
+			return fmt.Errorf("player does not own trade property %s", tileID)
+		}
+		if !room.canTradeProperty(playerIndex, tileID) {
+			return fmt.Errorf("property %s cannot be traded while its color group has improvements", tileID)
+		}
+	}
+	for _, cardID := range cardIDs {
+		if !containsPlayer(room.Players[playerIndex].HeldCardIDs, cardID) {
+			return fmt.Errorf("player does not hold trade card %s", cardID)
+		}
+	}
+	return nil
+}
+
+func (room roomRecord) canTradeProperty(playerIndex int, tileID string) bool {
+	rule, ok := developmentRules[tileID]
+	if !ok {
+		return true
+	}
+	for _, groupTileID := range room.groupTileIDs(rule.ColorGroup) {
+		if room.currentImprovementLevel(playerIndex, groupTileID) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (room *roomRecord) transferTradeAssets(fromIndex int, toIndex int, tileIDs []string, cardIDs []string) {
+	tileIDs = normalizeIDs(tileIDs)
+	cardIDs = normalizeIDs(cardIDs)
+	room.Players[fromIndex].Properties = removeValues(room.Players[fromIndex].Properties, tileIDs)
+	room.Players[toIndex].Properties = appendUniqueStrings(room.Players[toIndex].Properties, tileIDs)
+
+	mortgagedToTransfer := []string{}
+	for _, tileID := range tileIDs {
+		if containsPlayer(room.Players[fromIndex].MortgagedProperties, tileID) {
+			mortgagedToTransfer = append(mortgagedToTransfer, tileID)
+		}
+	}
+	room.Players[fromIndex].MortgagedProperties = removeValues(room.Players[fromIndex].MortgagedProperties, mortgagedToTransfer)
+	room.Players[toIndex].MortgagedProperties = appendUniqueStrings(room.Players[toIndex].MortgagedProperties, mortgagedToTransfer)
+
+	room.Players[fromIndex].HeldCardIDs = removeValues(room.Players[fromIndex].HeldCardIDs, cardIDs)
+	room.Players[toIndex].HeldCardIDs = appendUniqueStrings(room.Players[toIndex].HeldCardIDs, cardIDs)
+}
+
+func sortedImprovementTileIDs(improvements map[string]int) []string {
+	if len(improvements) == 0 {
+		return nil
+	}
+	tileIDs := make([]string, 0, len(improvements))
+	for tileID, level := range improvements {
+		if level > 0 {
+			tileIDs = append(tileIDs, tileID)
+		}
+	}
+	sort.Strings(tileIDs)
+	return tileIDs
+}
+
+func bankruptcySummary(bankruptPlayerName string, creditorPlayerID string, creditorPlayerName string) string {
+	if creditorPlayerID == "" {
+		return fmt.Sprintf("%s 向银行破产，资产已清算。", bankruptPlayerName)
+	}
+	return fmt.Sprintf("%s 向 %s 破产，资产已转移。", bankruptPlayerName, creditorPlayerName)
+}
+
+func nextRailwayIndex(currentPosition int) int {
+	railwayIndices := []int{5, 15, 25, 35}
+	for _, index := range railwayIndices {
+		if index > currentPosition {
+			return index
+		}
+	}
+	return railwayIndices[0]
+}
+
+func (room roomRecord) totalImprovementLevels(playerIndex int) int {
+	total := 0
+	for _, level := range room.Players[playerIndex].PropertyImprovements {
+		total += level
+	}
+	return total
 }
 
 func (room *roomRecord) ensureImprovementMap(playerIndex int) {
@@ -2570,6 +3155,26 @@ func (room roomRecord) rentForTile(ownerIndex int, tile tileDetails) int {
 func tileForIDMust(tileID string) tileDetails {
 	tile, _ := tileForID(tileID)
 	return tile
+}
+
+func copyStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	copyOfValues := make([]string, len(values))
+	copy(copyOfValues, values)
+	return copyOfValues
+}
+
+func copyIntMap(values map[string]int) map[string]int {
+	if len(values) == 0 {
+		return nil
+	}
+	copyOfValues := make(map[string]int, len(values))
+	for key, value := range values {
+		copyOfValues[key] = value
+	}
+	return copyOfValues
 }
 
 func (room roomRecord) countActivePlayers() int {

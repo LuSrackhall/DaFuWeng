@@ -115,20 +115,61 @@ export const sampleProjection: ProjectionSnapshot = {
   pendingProperty: null,
   pendingAuction: null,
   pendingPayment: null,
+  pendingTrade: null,
   chanceDeck: {
-    drawPile: ["chance-jail-card", "chance-go-to-jail", "chance-advance-airport", "chance-bonus-50"],
-    discardPile: []
+    drawPile: [
+      "chance-jail-card",
+      "chance-go-to-jail",
+      "chance-advance-airport",
+      "chance-bonus-50",
+      "chance-move-back-three",
+      "chance-nearest-railway",
+      "chance-pay-bank-75",
+    ],
+    discardPile: [],
   },
   communityDeck: {
-    drawPile: ["community-bonus-100", "community-jail-card", "community-go-start", "community-bonus-50"],
-    discardPile: []
+    drawPile: [
+      "community-bonus-100",
+      "community-jail-card",
+      "community-go-start",
+      "community-bonus-50",
+      "community-repair-fee",
+      "community-player-count-bonus",
+      "community-pay-bank-75",
+    ],
+    discardPile: [],
   },
   lastRoll: [0, 0],
   players: samplePlayers,
   recentEvents: [
-    { id: "evt-1", type: "room-created", sequence: 1, snapshotVersion: 1, summary: "房主创建了演示房间。" },
-    { id: "evt-2", type: "player-joined", sequence: 2, snapshotVersion: 2, summary: "玩家二加入了演示房间。" },
-    { id: "evt-3", type: "player-joined", sequence: 3, snapshotVersion: 3, summary: "玩家三加入了演示房间。" },
-    { id: "evt-4", type: "room-started", sequence: 4, snapshotVersion: 4, summary: "房主开始了演示对局。" }
-  ]
+    {
+      id: "evt-1",
+      type: "room-created",
+      sequence: 1,
+      snapshotVersion: 1,
+      summary: "房主创建了演示房间。",
+    },
+    {
+      id: "evt-2",
+      type: "player-joined",
+      sequence: 2,
+      snapshotVersion: 2,
+      summary: "玩家二加入了演示房间。",
+    },
+    {
+      id: "evt-3",
+      type: "player-joined",
+      sequence: 3,
+      snapshotVersion: 3,
+      summary: "玩家三加入了演示房间。",
+    },
+    {
+      id: "evt-4",
+      type: "room-started",
+      sequence: 4,
+      snapshotVersion: 4,
+      summary: "房主开始了演示对局。",
+    },
+  ],
 };

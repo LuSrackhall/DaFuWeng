@@ -179,3 +179,77 @@ test("jailed turn enters decision state and can release by doubles", async ({ br
   await expect(viewerPage.getByText(/位置: 16/)).toBeVisible();
   await viewerPage.close();
 });
+
+test("cash trade proposal syncs and settles across two pages", async ({
+  browser,
+  page,
+}) => {
+  await page.goto("/");
+
+  await page.getByLabel("房主昵称").fill("交易房主");
+  await page.getByRole("button", { name: "创建房间" }).click();
+  await expect(page.getByText(/已创建房间 room-/)).toBeVisible();
+  const headingText = await page
+    .locator("h3.panel__title")
+    .first()
+    .textContent();
+  const roomId = headingText?.replace("房间 ", "") ?? "";
+  expect(roomId).toMatch(/^room-/);
+
+  await page.getByLabel("加入房间").fill(roomId);
+  await page.getByLabel("玩家昵称").fill("交易玩家");
+  await page.getByRole("button", { name: "加入房间" }).click();
+  await page.getByRole("button", { name: "开始当前房间" }).click();
+  await expect(page).toHaveURL(new RegExp(`/room/${roomId}$`));
+
+  const viewerPage = await browser.newPage();
+  await viewerPage.goto(`/room/${roomId}`);
+  await expect(viewerPage.getByText("等待当前玩家掷骰")).toBeVisible();
+
+  const proposalStatus = await page.evaluate(async (currentRoomId) => {
+    const snapshotResponse = await fetch(
+      `http://127.0.0.1:8080/api/rooms/${currentRoomId}`,
+    );
+    const snapshot = await snapshotResponse.json();
+    const counterparty = snapshot.players.find(
+      (player: { id: string }) => player.id !== snapshot.currentTurnPlayerId,
+    );
+    const response = await fetch(
+      `http://127.0.0.1:8080/api/rooms/${currentRoomId}/trade/propose`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          playerId: snapshot.currentTurnPlayerId,
+          idempotencyKey: crypto.randomUUID(),
+          counterpartyPlayerId: counterparty.id,
+          offeredCash: 100,
+          requestedCash: 50,
+          offeredTileIds: [],
+          requestedTileIds: [],
+          offeredCardIds: [],
+          requestedCardIds: [],
+        }),
+      },
+    );
+    return {
+      status: response.status,
+      body: await response.text(),
+    };
+  }, roomId);
+  expect(proposalStatus.status, proposalStatus.body).toBe(200);
+
+  await page.reload();
+  await expect(viewerPage.getByText(/待响应交易/)).toBeVisible();
+  await expect(page.getByText(/待响应交易/)).toBeVisible();
+
+  await viewerPage.getByRole("button", { name: "接受交易" }).click();
+  await expect(viewerPage.getByText(/已同步权威交易结果/)).toBeVisible();
+  await expect(viewerPage.getByText(/现金: 1550/)).toBeVisible();
+
+  await expect(page.getByText(/现金: 1450/)).toBeVisible();
+  await expect(page.getByText("等待当前玩家掷骰")).toBeVisible();
+  await viewerPage.close();
+});

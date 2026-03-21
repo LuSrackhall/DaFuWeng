@@ -7,6 +7,7 @@ from typing import Any, Iterable
 CONVENTIONAL_COMMIT_RE = re.compile(
     r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+"
 )
+CHINESE_TEXT_RE = re.compile(r"[\u4e00-\u9fff]")
 
 BANNED_COMMAND_PATTERNS = [
     "git reset --hard",
@@ -130,6 +131,10 @@ def main() -> None:
             message = match.group(1).strip()
             if not CONVENTIONAL_COMMIT_RE.match(message):
                 ask("Commit message is not in conventional commit format.")
+                return
+            subject = message.split(":", 1)[1].strip() if ":" in message else message
+            if not CHINESE_TEXT_RE.search(subject):
+                ask("Prefer a Chinese subject in the conventional commit message for this repository.")
                 return
         else:
             ask(

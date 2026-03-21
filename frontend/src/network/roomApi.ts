@@ -9,14 +9,16 @@ import type {
   PayJailFineRequest,
   MortgagePropertyRequest,
   ProjectionSnapshot,
+  ProposeTradeRequest,
   PurchasePropertyRequest,
+  ResolveTradeRequest,
   RollDiceRequest,
   RoomEventCatchUpResponse,
   RoomEventStreamEnvelope,
   StartGameRequest,
   SubmitAuctionBidRequest,
   SellImprovementRequest,
-  UseJailCardRequest
+  UseJailCardRequest,
 } from "@dafuweng/contracts";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
@@ -165,6 +167,27 @@ export function sellImprovement(roomId: string, payload: SellImprovementRequest)
   return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/sell`, {
     method: "POST",
     body: JSON.stringify(payload)
+  });
+}
+
+export function proposeTrade(roomId: string, payload: ProposeTradeRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/trade/propose`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function acceptTrade(roomId: string, payload: ResolveTradeRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/trade/accept`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function rejectTrade(roomId: string, payload: ResolveTradeRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/trade/reject`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

@@ -1,6 +1,13 @@
 export type RoomState = "lobby" | "starting" | "in-game" | "paused-recovery" | "finished";
 
-export type TurnState = "awaiting-roll" | "awaiting-property-decision" | "awaiting-auction" | "awaiting-jail-decision" | "awaiting-deficit-resolution" | "post-roll-pending";
+export type TurnState =
+  | "awaiting-roll"
+  | "awaiting-property-decision"
+  | "awaiting-auction"
+  | "awaiting-jail-decision"
+  | "awaiting-deficit-resolution"
+  | "awaiting-trade-response"
+  | "post-roll-pending";
 
 export type DeckKind = "chance" | "community";
 
@@ -31,6 +38,9 @@ export type RoomEventType =
   | "property-mortgaged"
   | "improvement-built"
   | "improvement-sold"
+  | "trade-proposed"
+  | "trade-accepted"
+  | "trade-rejected"
   | "bankruptcy-declared"
   | "room-finished"
   | "turn-advanced";
@@ -55,13 +65,25 @@ export type PendingAuction = {
 
 export type PendingPayment = {
   amount: number;
-  reason: "tax" | "jail" | "rent";
+  reason: "tax" | "jail" | "rent" | "card";
   creditorKind: "bank" | "player";
   creditorPlayerId?: string;
   sourceTileId?: string;
   sourceTileLabel?: string;
   resumeRoll?: [number, number];
   releaseFromJail?: boolean;
+};
+
+export type PendingTrade = {
+  proposerPlayerId: string;
+  counterpartyPlayerId: string;
+  offeredCash: number;
+  requestedCash: number;
+  offeredTileIds: string[];
+  requestedTileIds: string[];
+  offeredCardIds: string[];
+  requestedCardIds: string[];
+  snapshotVersion: number;
 };
 
 export type CardDeckState = {
@@ -123,6 +145,19 @@ export type ProjectionEvent = {
   releaseMethod?: "roll" | "fine" | "card";
   failedAttemptCount?: number;
   improvementLevel?: number;
+  offeredCash?: number;
+  requestedCash?: number;
+  offeredTileIds?: string[];
+  requestedTileIds?: string[];
+  offeredCardIds?: string[];
+  requestedCardIds?: string[];
+  tradeSnapshotVersion?: number;
+  transferredPropertyIds?: string[];
+  transferredMortgagedPropertyIds?: string[];
+  transferredCardIds?: string[];
+  returnedCardIds?: string[];
+  clearedImprovementTileIds?: string[];
+  cashAfterByPlayer?: Record<string, number>;
   lastRoll?: [number, number];
 };
 
@@ -138,6 +173,7 @@ export type ProjectionSnapshot = {
   pendingProperty: PendingPropertyDecision | null;
   pendingAuction: PendingAuction | null;
   pendingPayment: PendingPayment | null;
+  pendingTrade: PendingTrade | null;
   chanceDeck: CardDeckState;
   communityDeck: CardDeckState;
   lastRoll: [number, number];
@@ -238,6 +274,23 @@ export type SellImprovementRequest = {
   tileId: string;
 };
 
+export type ProposeTradeRequest = {
+  playerId: string;
+  idempotencyKey: string;
+  counterpartyPlayerId: string;
+  offeredCash: number;
+  requestedCash: number;
+  offeredTileIds: string[];
+  requestedTileIds: string[];
+  offeredCardIds: string[];
+  requestedCardIds: string[];
+};
+
+export type ResolveTradeRequest = {
+  playerId: string;
+  idempotencyKey: string;
+};
+
 export type RollDiceCommand = {
   kind: "roll-dice";
   roomId: string;
@@ -326,6 +379,34 @@ export type SellImprovementCommand = {
   tileId: string;
 };
 
+export type ProposeTradeCommand = {
+  kind: "propose-trade";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+  counterpartyPlayerId: string;
+  offeredCash: number;
+  requestedCash: number;
+  offeredTileIds: string[];
+  requestedTileIds: string[];
+  offeredCardIds: string[];
+  requestedCardIds: string[];
+};
+
+export type AcceptTradeCommand = {
+  kind: "accept-trade";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+};
+
+export type RejectTradeCommand = {
+  kind: "reject-trade";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+};
+
 export type GameCommand =
   | CreateRoomCommand
   | JoinRoomCommand
@@ -341,7 +422,10 @@ export type GameCommand =
   | MortgagePropertyCommand
   | DeclareBankruptcyCommand
   | BuildImprovementCommand
-  | SellImprovementCommand;
+  | SellImprovementCommand
+  | ProposeTradeCommand
+  | AcceptTradeCommand
+  | RejectTradeCommand;
 
 export type RoomEventCatchUpResponse = {
   roomId: string;
