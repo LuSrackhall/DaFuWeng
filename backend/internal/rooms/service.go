@@ -118,7 +118,10 @@ type Player struct {
 	Position   int      `json:"position"`
 	Properties []string `json:"properties"`
 	MortgagedProperties []string `json:"mortgagedProperties,omitempty"`
+	PropertyImprovements map[string]int `json:"propertyImprovements,omitempty"`
 	InJail     bool     `json:"inJail,omitempty"`
+	JailTurnsServed int  `json:"jailTurnsServed,omitempty"`
+	HeldCardIDs []string `json:"heldCardIds,omitempty"`
 	IsBankrupt bool     `json:"isBankrupt,omitempty"`
 	Ready      bool     `json:"ready,omitempty"`
 }
@@ -148,6 +151,22 @@ type PendingPayment struct {
 	CreditorPlayerID string `json:"creditorPlayerId,omitempty"`
 	SourceTileID    string `json:"sourceTileId,omitempty"`
 	SourceTileLabel string `json:"sourceTileLabel,omitempty"`
+	ResumeRoll      [2]int `json:"resumeRoll,omitempty"`
+	ReleaseFromJail bool   `json:"releaseFromJail,omitempty"`
+}
+
+type cardDeckState struct {
+	DrawPile    []string `json:"drawPile"`
+	DiscardPile []string `json:"discardPile"`
+}
+
+type cardDefinition struct {
+	ID         string
+	DeckKind   string
+	Title      string
+	EffectType string
+	Amount     int
+	TargetIndex int
 }
 
 type Event struct {
@@ -168,6 +187,13 @@ type Event struct {
 	PlayerPosition  int    `json:"playerPosition,omitempty"`
 	CashAfter       int    `json:"cashAfter,omitempty"`
 	OwnerCashAfter  int    `json:"ownerCashAfter,omitempty"`
+	DeckKind        string `json:"deckKind,omitempty"`
+	CardID          string `json:"cardId,omitempty"`
+	CardTitle       string `json:"cardTitle,omitempty"`
+	CardDisposition string `json:"cardDisposition,omitempty"`
+	ReleaseMethod   string `json:"releaseMethod,omitempty"`
+	FailedAttemptCount int `json:"failedAttemptCount,omitempty"`
+	ImprovementLevel int `json:"improvementLevel,omitempty"`
 	LastRoll        [2]int `json:"lastRoll,omitempty"`
 }
 
@@ -183,6 +209,8 @@ type RoomResponse struct {
 	PendingProperty     *PendingProperty `json:"pendingProperty"`
 	PendingAuction      *PendingAuction  `json:"pendingAuction"`
 	PendingPayment      *PendingPayment  `json:"pendingPayment"`
+	ChanceDeck          cardDeckState    `json:"chanceDeck"`
+	CommunityDeck       cardDeckState    `json:"communityDeck"`
 	LastRoll            [2]int           `json:"lastRoll"`
 	RecentEvents        []Event          `json:"recentEvents"`
 	Players             []Player         `json:"players"`
@@ -242,7 +270,16 @@ type tileDetails struct {
 	Label       string
 	Price       int
 	Rent        int
+	ColorGroup  string
+	BuildCost   int
+	RentByLevel []int
 	Purchasable bool
+}
+
+type developmentRule struct {
+	ColorGroup  string
+	BuildCost   int
+	RentByLevel []int
 }
 
 type roomRecord struct {
@@ -257,6 +294,8 @@ type roomRecord struct {
 	PendingProperty     *PendingProperty
 	PendingAuction      *PendingAuction
 	PendingPayment      *PendingPayment
+	ChanceDeck          cardDeckState
+	CommunityDeck       cardDeckState
 	LastRoll            [2]int
 	Players             []Player
 	RecentEvents        []Event
@@ -277,7 +316,54 @@ type eventDraft struct {
 	PlayerPosition int
 	CashAfter      int
 	OwnerCashAfter int
+	DeckKind       string
+	CardID         string
+	CardTitle      string
+	CardDisposition string
+	ReleaseMethod  string
+	FailedAttemptCount int
+	ImprovementLevel int
 	LastRoll       [2]int
+}
+
+var chanceDeckOrder = []string{"chance-jail-card", "chance-go-to-jail", "chance-advance-airport", "chance-bonus-50"}
+
+var communityDeckOrder = []string{"community-bonus-100", "community-jail-card", "community-go-start", "community-bonus-50"}
+
+var cardDefinitions = map[string]cardDefinition{
+	"chance-jail-card": {ID: "chance-jail-card", DeckKind: "chance", Title: "保释特赦", EffectType: "held-jail-card"},
+	"chance-go-to-jail": {ID: "chance-go-to-jail", DeckKind: "chance", Title: "立即入狱", EffectType: "go-to-jail"},
+	"chance-advance-airport": {ID: "chance-advance-airport", DeckKind: "chance", Title: "前往机场路", EffectType: "move", TargetIndex: 34},
+	"chance-bonus-50": {ID: "chance-bonus-50", DeckKind: "chance", Title: "意外收入", EffectType: "gain-cash", Amount: 50},
+	"community-bonus-100": {ID: "community-bonus-100", DeckKind: "community", Title: "年终分红", EffectType: "gain-cash", Amount: 100},
+	"community-jail-card": {ID: "community-jail-card", DeckKind: "community", Title: "免费出狱", EffectType: "held-jail-card"},
+	"community-go-start": {ID: "community-go-start", DeckKind: "community", Title: "回到起点", EffectType: "move-to-start", Amount: 200, TargetIndex: 0},
+	"community-bonus-50": {ID: "community-bonus-50", DeckKind: "community", Title: "银行返利", EffectType: "gain-cash", Amount: 50},
+}
+
+var developmentRules = map[string]developmentRule{
+	"tile-1":  {ColorGroup: "old-town", BuildCost: 55, RentByLevel: []int{12, 60, 180, 540, 960, 1500}},
+	"tile-3":  {ColorGroup: "old-town", BuildCost: 65, RentByLevel: []int{16, 80, 240, 720, 1280, 2000}},
+	"tile-6":  {ColorGroup: "lakeside", BuildCost: 80, RentByLevel: []int{22, 110, 330, 990, 1760, 2750}},
+	"tile-8":  {ColorGroup: "lakeside", BuildCost: 90, RentByLevel: []int{26, 130, 390, 1170, 2080, 3250}},
+	"tile-9":  {ColorGroup: "lakeside", BuildCost: 95, RentByLevel: []int{28, 140, 420, 1260, 2240, 3500}},
+	"tile-11": {ColorGroup: "campus", BuildCost: 105, RentByLevel: []int{32, 160, 480, 1440, 2560, 4000}},
+	"tile-13": {ColorGroup: "campus", BuildCost: 115, RentByLevel: []int{36, 180, 540, 1620, 2880, 4500}},
+	"tile-14": {ColorGroup: "campus", BuildCost: 120, RentByLevel: []int{38, 190, 570, 1710, 3040, 4750}},
+	"tile-16": {ColorGroup: "theater", BuildCost: 130, RentByLevel: []int{42, 210, 630, 1890, 3360, 5250}},
+	"tile-18": {ColorGroup: "theater", BuildCost: 140, RentByLevel: []int{46, 230, 690, 2070, 3680, 5750}},
+	"tile-19": {ColorGroup: "theater", BuildCost: 145, RentByLevel: []int{48, 240, 720, 2160, 3840, 6000}},
+	"tile-21": {ColorGroup: "industry", BuildCost: 155, RentByLevel: []int{52, 260, 780, 2340, 4160, 6500}},
+	"tile-23": {ColorGroup: "industry", BuildCost: 165, RentByLevel: []int{56, 280, 840, 2520, 4480, 7000}},
+	"tile-24": {ColorGroup: "industry", BuildCost: 170, RentByLevel: []int{58, 290, 870, 2610, 4640, 7250}},
+	"tile-26": {ColorGroup: "market", BuildCost: 180, RentByLevel: []int{62, 310, 930, 2790, 4960, 7750}},
+	"tile-28": {ColorGroup: "market", BuildCost: 190, RentByLevel: []int{66, 330, 990, 2970, 5280, 8250}},
+	"tile-29": {ColorGroup: "market", BuildCost: 195, RentByLevel: []int{68, 340, 1020, 3060, 5440, 8500}},
+	"tile-31": {ColorGroup: "future", BuildCost: 205, RentByLevel: []int{72, 360, 1080, 3240, 5760, 9000}},
+	"tile-32": {ColorGroup: "future", BuildCost: 210, RentByLevel: []int{74, 370, 1110, 3330, 5920, 9250}},
+	"tile-34": {ColorGroup: "future", BuildCost: 220, RentByLevel: []int{78, 390, 1170, 3510, 6240, 9750}},
+	"tile-37": {ColorGroup: "summit", BuildCost: 235, RentByLevel: []int{84, 420, 1260, 3780, 6720, 10500}},
+	"tile-39": {ColorGroup: "summit", BuildCost: 245, RentByLevel: []int{88, 440, 1320, 3960, 7040, 11000}},
 }
 
 type Service struct {
@@ -395,11 +481,23 @@ func (service *Service) HandleRoomRoute(writer http.ResponseWriter, request *htt
 		case parts[1] == "jail-release" && request.Method == http.MethodPost:
 			service.handleJailRelease(writer, request, roomID)
 			return
+		case parts[1] == "jail-roll" && request.Method == http.MethodPost:
+			service.handleAttemptJailRoll(writer, request, roomID)
+			return
+		case parts[1] == "jail-card" && request.Method == http.MethodPost:
+			service.handleUseJailCard(writer, request, roomID)
+			return
 		case parts[1] == "mortgage" && request.Method == http.MethodPost:
 			service.handleMortgageProperty(writer, request, roomID)
 			return
 		case parts[1] == "bankruptcy" && request.Method == http.MethodPost:
 			service.handleDeclareBankruptcy(writer, request, roomID)
+			return
+		case parts[1] == "build" && request.Method == http.MethodPost:
+			service.handleBuildImprovement(writer, request, roomID)
+			return
+		case parts[1] == "sell" && request.Method == http.MethodPost:
+			service.handleSellImprovement(writer, request, roomID)
 			return
 		}
 	}
@@ -628,6 +726,38 @@ func (service *Service) handleJailRelease(writer http.ResponseWriter, request *h
 	writeJSON(writer, http.StatusOK, room.toResponse())
 }
 
+func (service *Service) handleAttemptJailRoll(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload PropertyDecisionRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid jail roll payload")
+		return
+	}
+
+	room, err := service.attemptJailRoll(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
+func (service *Service) handleUseJailCard(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload PropertyDecisionRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid jail card payload")
+		return
+	}
+
+	room, err := service.useJailCard(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
 func (service *Service) handleMortgageProperty(writer http.ResponseWriter, request *http.Request, roomID string) {
 	var payload MortgagePropertyRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
@@ -660,6 +790,38 @@ func (service *Service) handleDeclareBankruptcy(writer http.ResponseWriter, requ
 	writeJSON(writer, http.StatusOK, room.toResponse())
 }
 
+func (service *Service) handleBuildImprovement(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload MortgagePropertyRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid build payload")
+		return
+	}
+
+	room, err := service.buildImprovement(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey), strings.TrimSpace(payload.TileID))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
+func (service *Service) handleSellImprovement(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload MortgagePropertyRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid sell payload")
+		return
+	}
+
+	room, err := service.sellImprovement(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey), strings.TrimSpace(payload.TileID))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
 func (service *Service) createRoom(hostName string) roomRecord {
 	service.mu.Lock()
 	defer service.mu.Unlock()
@@ -681,6 +843,8 @@ func (service *Service) createRoom(hostName string) roomRecord {
 		PendingProperty:     nil,
 		PendingAuction:      nil,
 		PendingPayment:      nil,
+		ChanceDeck:          newDeckState(chanceDeckOrder),
+		CommunityDeck:       newDeckState(communityDeckOrder),
 		LastRoll:            [2]int{0, 0},
 		Players:             []Player{hostPlayer},
 	}
@@ -785,6 +949,8 @@ func (service *Service) startRoom(roomID string, hostID string) (roomRecord, err
 	room.PendingProperty = nil
 	room.PendingAuction = nil
 	room.PendingPayment = nil
+	room.ChanceDeck = newDeckState(chanceDeckOrder)
+	room.CommunityDeck = newDeckState(communityDeckOrder)
 	room.CurrentTurnPlayerID = room.Players[0].ID
 	room.LastRoll = [2]int{0, 0}
 	service.commitRoomMutation(&room, []eventDraft{{Type: "room-started", Summary: "房主开始了对局。"}})
@@ -827,76 +993,10 @@ func (service *Service) rollDice(roomID string, playerID string, idempotencyKey 
 	}
 
 	dice := service.diceRoller.Roll()
-	total := dice[0] + dice[1]
-	room.Players[playerIndex].Position = (room.Players[playerIndex].Position + total) % boardTileCount
 	room.LastRoll = dice
-	player := room.Players[playerIndex]
-	tile := tileForIndex(player.Position)
-	drafts := []eventDraft{
-		{Type: "dice-rolled", Summary: fmt.Sprintf("%s 掷出 %d + %d。", player.Name, dice[0], dice[1]), PlayerID: player.ID, LastRoll: dice},
-		{Type: "player-moved", Summary: fmt.Sprintf("%s 移动到 %s。", player.Name, tile.Label), PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, PlayerPosition: player.Position},
-	}
-
-	if handled, handledDrafts := room.resolveSpecialTile(playerIndex, tile); handled {
-		drafts = append(drafts, handledDrafts...)
-		service.commitRoomMutation(&room, drafts)
-		service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
-			RoomID:          room.RoomID,
-			PlayerID:        playerID,
-			CommandKind:     "roll-dice",
-			IdempotencyKey:  idempotencyKey,
-			Snapshot:        room.toPersistedSnapshot(),
-			RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
-		})
-		return room, nil
-	}
-
-	if tile.Purchasable && !room.tileIsOwned(tile.ID) {
-		room.TurnState = "awaiting-property-decision"
-		room.PendingAction = fmt.Sprintf("可购买 %s，价格 %d。", tile.Label, tile.Price)
-		room.PendingProperty = &PendingProperty{TileID: tile.ID, TileIndex: tile.Index, Label: tile.Label, Price: tile.Price}
-		drafts = append(drafts, eventDraft{
-			Type:      "property-offered",
-			Summary:   fmt.Sprintf("%s 可选择购买 %s。", player.Name, tile.Label),
-			PlayerID:  player.ID,
-			TileID:    tile.ID,
-			TileIndex: tile.Index,
-			TileLabel: tile.Label,
-			TilePrice: tile.Price,
-		})
-	} else if ownerIndex := findPropertyOwnerIndex(room.Players, tile.ID); ownerIndex != -1 && room.Players[ownerIndex].ID != player.ID {
-		rent := tile.Rent
-		room.Players[playerIndex].Cash -= rent
-		room.Players[ownerIndex].Cash += rent
-		payer := room.Players[playerIndex]
-		owner := room.Players[ownerIndex]
-		drafts = append(drafts, eventDraft{
-			Type:           "rent-charged",
-			Summary:        fmt.Sprintf("%s 向 %s 支付了 %d 租金。", payer.Name, owner.Name, rent),
-			PlayerID:       payer.ID,
-			OwnerPlayerID:  owner.ID,
-			TileID:         tile.ID,
-			TileIndex:      tile.Index,
-			TileLabel:      tile.Label,
-			TilePrice:      tile.Price,
-			Amount:         rent,
-			CashAfter:      payer.Cash,
-			OwnerCashAfter: owner.Cash,
-		})
-		nextPlayerID := room.advanceTurn()
-		drafts = append(drafts, eventDraft{
-			Type:         "turn-advanced",
-			Summary:      "轮到下一位玩家行动。",
-			NextPlayerID: nextPlayerID,
-		})
-	} else {
-		nextPlayerID := room.advanceTurn()
-		drafts = append(drafts, eventDraft{
-			Type:         "turn-advanced",
-			Summary:      "轮到下一位玩家行动。",
-			NextPlayerID: nextPlayerID,
-		})
-	}
+	drafts := []eventDraft{{Type: "dice-rolled", Summary: fmt.Sprintf("%s 掷出 %d + %d。", room.Players[playerIndex].Name, dice[0], dice[1]), PlayerID: playerID, LastRoll: dice}}
+	room.movePlayerBy(playerIndex, dice[0]+dice[1])
+	drafts = append(drafts, room.resolveLanding(playerIndex)...)
 
 	service.commitRoomMutation(&room, drafts)
 	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
@@ -929,8 +1029,8 @@ func (service *Service) payJailFine(roomID string, playerID string, idempotencyK
 	if !ok {
 		return roomRecord{}, fmt.Errorf("room not found")
 	}
-	if room.TurnState != "awaiting-jail-release" {
-		return roomRecord{}, fmt.Errorf("room is not waiting for jail release")
+	if room.TurnState != "awaiting-jail-decision" {
+		return roomRecord{}, fmt.Errorf("room is not waiting for jail decision")
 	}
 	if room.CurrentTurnPlayerID != playerID {
 		return roomRecord{}, fmt.Errorf("only current jailed player can pay the fine")
@@ -942,18 +1042,34 @@ func (service *Service) payJailFine(roomID string, playerID string, idempotencyK
 	if !room.Players[playerIndex].InJail {
 		return roomRecord{}, fmt.Errorf("player is not in jail")
 	}
-	room.Players[playerIndex].Cash -= jailFine
-	room.Players[playerIndex].InJail = false
-	room.TurnState = "awaiting-roll"
-	room.PendingAction = "等待当前玩家掷骰"
-
-	service.commitRoomMutation(&room, []eventDraft{{
-		Type:      "jail-fine-paid",
-		Summary:   fmt.Sprintf("%s 支付了 %d 罚金并离开监狱。", room.Players[playerIndex].Name, jailFine),
-		PlayerID:  playerID,
-		Amount:    jailFine,
-		CashAfter: room.Players[playerIndex].Cash,
-	}})
+	if room.Players[playerIndex].Cash < jailFine {
+		room.TurnState = "awaiting-deficit-resolution"
+		room.PendingPayment = &PendingPayment{Amount: jailFine, Reason: "jail", CreditorKind: "bank", SourceTileID: fmt.Sprintf("tile-%d", jailTileIndex), SourceTileLabel: boardLabels[jailTileIndex], ReleaseFromJail: true}
+		room.PendingAction = fmt.Sprintf("%s 现金不足以支付 %d 罚金，请抵押地产或宣告破产。", room.Players[playerIndex].Name, jailFine)
+		service.commitRoomMutation(&room, []eventDraft{{
+			Type:      "deficit-started",
+			Summary:   fmt.Sprintf("%s 需补缴 %d 监狱罚金。", room.Players[playerIndex].Name, jailFine),
+			PlayerID:  playerID,
+			TileID:    fmt.Sprintf("tile-%d", jailTileIndex),
+			TileIndex: jailTileIndex,
+			TileLabel: boardLabels[jailTileIndex],
+			Amount:    jailFine,
+			CashAfter: room.Players[playerIndex].Cash,
+		}})
+	} else {
+		room.Players[playerIndex].Cash -= jailFine
+		room.releasePlayerFromJail(playerIndex)
+		room.TurnState = "awaiting-roll"
+		room.PendingAction = "等待当前玩家掷骰"
+		service.commitRoomMutation(&room, []eventDraft{{
+			Type:      "jail-fine-paid",
+			Summary:   fmt.Sprintf("%s 支付了 %d 罚金并离开监狱。", room.Players[playerIndex].Name, jailFine),
+			PlayerID:  playerID,
+			Amount:    jailFine,
+			CashAfter: room.Players[playerIndex].Cash,
+			ReleaseMethod: "fine",
+		}})
+	}
 	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
 		RoomID:          room.RoomID,
 		PlayerID:        playerID,
@@ -963,6 +1079,123 @@ func (service *Service) payJailFine(roomID string, playerID string, idempotencyK
 		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
 	})
 
+	return room, nil
+}
+
+func (service *Service) attemptJailRoll(roomID string, playerID string, idempotencyKey string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" {
+		return roomRecord{}, fmt.Errorf("playerId is required")
+	}
+	if idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("idempotencyKey is required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "attempt-jail-roll", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-jail-decision" {
+		return roomRecord{}, fmt.Errorf("room is not waiting for jail decision")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current jailed player can attempt a jail roll")
+	}
+	playerIndex := findPlayerIndex(room.Players, playerID)
+	if playerIndex == -1 {
+		return roomRecord{}, fmt.Errorf("player not found")
+	}
+	if !room.Players[playerIndex].InJail {
+		return roomRecord{}, fmt.Errorf("player is not in jail")
+	}
+
+	dice := service.diceRoller.Roll()
+	room.LastRoll = dice
+	drafts := []eventDraft{{
+		Type:      "jail-roll-attempted",
+		Summary:   fmt.Sprintf("%s 尝试掷骰出狱，结果 %d + %d。", room.Players[playerIndex].Name, dice[0], dice[1]),
+		PlayerID:  playerID,
+		LastRoll:  dice,
+		FailedAttemptCount: room.Players[playerIndex].JailTurnsServed,
+	}}
+
+	if dice[0] == dice[1] {
+		room.releasePlayerFromJail(playerIndex)
+		drafts[0].ReleaseMethod = "roll"
+		room.movePlayerBy(playerIndex, dice[0]+dice[1])
+		drafts = append(drafts, room.resolveLanding(playerIndex)...)
+	} else {
+		room.Players[playerIndex].JailTurnsServed++
+		drafts[0].FailedAttemptCount = room.Players[playerIndex].JailTurnsServed
+		if room.Players[playerIndex].JailTurnsServed >= 3 {
+			if room.Players[playerIndex].Cash < jailFine {
+				room.TurnState = "awaiting-deficit-resolution"
+				room.PendingPayment = &PendingPayment{Amount: jailFine, Reason: "jail", CreditorKind: "bank", SourceTileID: fmt.Sprintf("tile-%d", jailTileIndex), SourceTileLabel: boardLabels[jailTileIndex], ReleaseFromJail: true}
+				room.PendingAction = fmt.Sprintf("%s 第三次出狱失败，需支付 %d 罚金。", room.Players[playerIndex].Name, jailFine)
+				drafts = append(drafts, eventDraft{Type: "deficit-started", Summary: fmt.Sprintf("%s 第三次出狱失败，需补缴 %d 罚金。", room.Players[playerIndex].Name, jailFine), PlayerID: playerID, TileID: fmt.Sprintf("tile-%d", jailTileIndex), TileIndex: jailTileIndex, TileLabel: boardLabels[jailTileIndex], Amount: jailFine, CashAfter: room.Players[playerIndex].Cash})
+			} else {
+				room.Players[playerIndex].Cash -= jailFine
+				room.releasePlayerFromJail(playerIndex)
+				drafts = append(drafts, eventDraft{Type: "jail-fine-paid", Summary: fmt.Sprintf("%s 第三次出狱失败后支付了 %d 罚金。", room.Players[playerIndex].Name, jailFine), PlayerID: playerID, Amount: jailFine, CashAfter: room.Players[playerIndex].Cash, ReleaseMethod: "fine"})
+				room.movePlayerBy(playerIndex, dice[0]+dice[1])
+				drafts = append(drafts, room.resolveLanding(playerIndex)...)
+			}
+		} else {
+			nextPlayerID := room.advanceTurnFromPlayer(playerID)
+			drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+		}
+	}
+
+	service.commitRoomMutation(&room, drafts)
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "attempt-jail-roll", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
+	return room, nil
+}
+
+func (service *Service) useJailCard(roomID string, playerID string, idempotencyKey string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" {
+		return roomRecord{}, fmt.Errorf("playerId is required")
+	}
+	if idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("idempotencyKey is required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "use-jail-card", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-jail-decision" {
+		return roomRecord{}, fmt.Errorf("room is not waiting for jail decision")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current jailed player can use a release card")
+	}
+	playerIndex := findPlayerIndex(room.Players, playerID)
+	if playerIndex == -1 {
+		return roomRecord{}, fmt.Errorf("player not found")
+	}
+	cardID, ok := firstHeldJailCard(room.Players[playerIndex].HeldCardIDs)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("player does not hold a release card")
+	}
+	card := cardDefinitions[cardID]
+	room.Players[playerIndex].HeldCardIDs = removeFirst(room.Players[playerIndex].HeldCardIDs, cardID)
+	room.discardCard(card)
+	room.releasePlayerFromJail(playerIndex)
+	room.TurnState = "awaiting-roll"
+	room.PendingAction = "等待当前玩家掷骰"
+	service.commitRoomMutation(&room, []eventDraft{{Type: "jail-card-used", Summary: fmt.Sprintf("%s 使用了 %s。", room.Players[playerIndex].Name, card.Title), PlayerID: playerID, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "returned", ReleaseMethod: "card"}})
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "use-jail-card", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
 	return room, nil
 }
 
@@ -1023,21 +1256,10 @@ func (service *Service) mortgageProperty(roomID string, playerID string, idempot
 	}}
 
 	if room.Players[playerIndex].Cash >= room.PendingPayment.Amount {
-		room.Players[playerIndex].Cash -= room.PendingPayment.Amount
-		drafts = append(drafts, eventDraft{
-			Type:      "tax-paid",
-			Summary:   fmt.Sprintf("%s 补齐了税费。", room.Players[playerIndex].Name),
-			PlayerID:  playerID,
-			TileID:    room.PendingPayment.SourceTileID,
-			TileLabel: room.PendingPayment.SourceTileLabel,
-			Amount:    room.PendingPayment.Amount,
-			CashAfter: room.Players[playerIndex].Cash,
-		})
-		room.PendingPayment = nil
-		nextPlayerID := room.advanceTurnFromPlayer(playerID)
-		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+		settledDrafts := room.settlePendingPayment(playerIndex)
+		drafts = append(drafts, settledDrafts...)
 	} else {
-		room.PendingAction = fmt.Sprintf("仍需支付 %d 税费，请继续抵押或宣告破产。", room.PendingPayment.Amount-room.Players[playerIndex].Cash)
+		room.PendingAction = fmt.Sprintf("仍需支付 %d，请继续抵押或宣告破产。", room.PendingPayment.Amount-room.Players[playerIndex].Cash)
 	}
 
 	service.commitRoomMutation(&room, drafts)
@@ -1085,6 +1307,8 @@ func (service *Service) declareBankruptcy(roomID string, playerID string, idempo
 	room.Players[playerIndex].Cash = 0
 	room.Players[playerIndex].Properties = []string{}
 	room.Players[playerIndex].MortgagedProperties = []string{}
+	room.Players[playerIndex].HeldCardIDs = []string{}
+	room.Players[playerIndex].JailTurnsServed = 0
 	room.Players[playerIndex].InJail = false
 	room.Players[playerIndex].IsBankrupt = true
 	room.PendingPayment = nil
@@ -1117,6 +1341,113 @@ func (service *Service) declareBankruptcy(roomID string, playerID string, idempo
 		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
 	})
 
+	return room, nil
+}
+
+func (service *Service) buildImprovement(roomID string, playerID string, idempotencyKey string, tileID string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" || idempotencyKey == "" || tileID == "" {
+		return roomRecord{}, fmt.Errorf("playerId, idempotencyKey, and tileId are required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "build-improvement", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.State != "in-game" || room.TurnState != "awaiting-roll" {
+		return roomRecord{}, fmt.Errorf("room is not ready for improvements")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current turn player can build improvements")
+	}
+	playerIndex := findPlayerIndex(room.Players, playerID)
+	if playerIndex == -1 {
+		return roomRecord{}, fmt.Errorf("player not found")
+	}
+	rule, ok := developmentRules[tileID]
+	if !ok {
+		return roomRecord{}, fmt.Errorf("property cannot be improved")
+	}
+	if !containsPlayer(room.Players[playerIndex].Properties, tileID) {
+		return roomRecord{}, fmt.Errorf("player does not own the property")
+	}
+	if containsPlayer(room.Players[playerIndex].MortgagedProperties, tileID) {
+		return roomRecord{}, fmt.Errorf("cannot improve a mortgaged property")
+	}
+	if !room.playerOwnsFullGroup(playerIndex, rule.ColorGroup) {
+		return roomRecord{}, fmt.Errorf("player must own the full color group")
+	}
+	if room.groupHasMortgages(playerIndex, rule.ColorGroup) {
+		return roomRecord{}, fmt.Errorf("cannot improve a mortgaged color group")
+	}
+	if room.currentImprovementLevel(playerIndex, tileID) >= 5 {
+		return roomRecord{}, fmt.Errorf("property is already at max improvement level")
+	}
+	if !room.canBuildEvenly(playerIndex, tileID, rule.ColorGroup) {
+		return roomRecord{}, fmt.Errorf("improvements must be built evenly across the group")
+	}
+	if room.Players[playerIndex].Cash < rule.BuildCost {
+		return roomRecord{}, fmt.Errorf("player cannot afford the improvement")
+	}
+	room.ensureImprovementMap(playerIndex)
+	room.Players[playerIndex].Cash -= rule.BuildCost
+	room.Players[playerIndex].PropertyImprovements[tileID] = room.currentImprovementLevel(playerIndex, tileID) + 1
+	level := room.currentImprovementLevel(playerIndex, tileID)
+	service.commitRoomMutation(&room, []eventDraft{{Type: "improvement-built", Summary: fmt.Sprintf("%s 在 %s 建造了等级 %d。", room.Players[playerIndex].Name, tileForIDMust(tileID).Label, level), PlayerID: playerID, TileID: tileID, TileIndex: tileForIDMust(tileID).Index, TileLabel: tileForIDMust(tileID).Label, Amount: rule.BuildCost, CashAfter: room.Players[playerIndex].Cash, ImprovementLevel: level}})
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "build-improvement", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
+	return room, nil
+}
+
+func (service *Service) sellImprovement(roomID string, playerID string, idempotencyKey string, tileID string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" || idempotencyKey == "" || tileID == "" {
+		return roomRecord{}, fmt.Errorf("playerId, idempotencyKey, and tileId are required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "sell-improvement", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.State != "in-game" || room.TurnState != "awaiting-roll" {
+		return roomRecord{}, fmt.Errorf("room is not ready for improvement sales")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current turn player can sell improvements")
+	}
+	playerIndex := findPlayerIndex(room.Players, playerID)
+	if playerIndex == -1 {
+		return roomRecord{}, fmt.Errorf("player not found")
+	}
+	rule, ok := developmentRules[tileID]
+	if !ok {
+		return roomRecord{}, fmt.Errorf("property cannot be improved")
+	}
+	level := room.currentImprovementLevel(playerIndex, tileID)
+	if level == 0 {
+		return roomRecord{}, fmt.Errorf("property has no improvements to sell")
+	}
+	if !room.canSellEvenly(playerIndex, tileID, rule.ColorGroup) {
+		return roomRecord{}, fmt.Errorf("improvements must be sold evenly across the group")
+	}
+	room.ensureImprovementMap(playerIndex)
+	room.Players[playerIndex].PropertyImprovements[tileID] = level - 1
+	if room.Players[playerIndex].PropertyImprovements[tileID] == 0 {
+		delete(room.Players[playerIndex].PropertyImprovements, tileID)
+	}
+	saleValue := rule.BuildCost / 2
+	room.Players[playerIndex].Cash += saleValue
+	service.commitRoomMutation(&room, []eventDraft{{Type: "improvement-sold", Summary: fmt.Sprintf("%s 卖掉了 %s 的一层建筑。", room.Players[playerIndex].Name, tileForIDMust(tileID).Label), PlayerID: playerID, TileID: tileID, TileIndex: tileForIDMust(tileID).Index, TileLabel: tileForIDMust(tileID).Label, Amount: saleValue, CashAfter: room.Players[playerIndex].Cash, ImprovementLevel: level - 1}})
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "sell-improvement", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
 	return room, nil
 }
 
@@ -1387,6 +1718,13 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 			PlayerPosition:  draft.PlayerPosition,
 			CashAfter:       draft.CashAfter,
 			OwnerCashAfter:  draft.OwnerCashAfter,
+			DeckKind:        draft.DeckKind,
+			CardID:          draft.CardID,
+			CardTitle:       draft.CardTitle,
+			CardDisposition: draft.CardDisposition,
+			ReleaseMethod:   draft.ReleaseMethod,
+			FailedAttemptCount: draft.FailedAttemptCount,
+			ImprovementLevel: draft.ImprovementLevel,
 			LastRoll:        draft.LastRoll,
 		}
 		room.RecentEvents = append(room.RecentEvents, event)
@@ -1409,6 +1747,13 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 			PlayerPosition:  event.PlayerPosition,
 			CashAfter:       event.CashAfter,
 			OwnerCashAfter:  event.OwnerCashAfter,
+			DeckKind:        event.DeckKind,
+			CardID:          event.CardID,
+			CardTitle:       event.CardTitle,
+			CardDisposition: event.CardDisposition,
+			ReleaseMethod:   event.ReleaseMethod,
+			FailedAttemptCount: event.FailedAttemptCount,
+			ImprovementLevel: event.ImprovementLevel,
 			LastRoll:        event.LastRoll,
 		})
 	}
@@ -1425,6 +1770,8 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 	var pendingProperty *PendingProperty
 	var pendingAuction *PendingAuction
 	var pendingPayment *PendingPayment
+	var chanceDeck cardDeckState
+	var communityDeck cardDeckState
 	_ = json.Unmarshal(snapshot.PlayersJSON, &players)
 	if len(snapshot.PendingPropertyJSON) > 0 && string(snapshot.PendingPropertyJSON) != "null" {
 		var decoded PendingProperty
@@ -1444,6 +1791,8 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 			pendingPayment = &decoded
 		}
 	}
+	_ = json.Unmarshal(snapshot.ChanceDeckJSON, &chanceDeck)
+	_ = json.Unmarshal(snapshot.CommunityDeckJSON, &communityDeck)
 
 	events := toRoomEvents(service.store.ListRoomEvents(snapshot.RoomID))
 	return roomRecord{
@@ -1458,6 +1807,8 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 		PendingProperty:     pendingProperty,
 		PendingAuction:      pendingAuction,
 		PendingPayment:      pendingPayment,
+		ChanceDeck:          chanceDeck,
+		CommunityDeck:       communityDeck,
 		LastRoll:            snapshot.LastRoll,
 		Players:             players,
 		RecentEvents:        tailEvents(events, 10),
@@ -1475,6 +1826,8 @@ func (service *Service) newPlayer(name string) Player {
 		Position:   0,
 		Properties: []string{},
 		MortgagedProperties: []string{},
+		PropertyImprovements: map[string]int{},
+		HeldCardIDs: []string{},
 	}
 }
 
@@ -1499,6 +1852,8 @@ func (service *Service) seedDemoRoom() {
 		PendingProperty:     nil,
 		PendingAuction:      nil,
 		PendingPayment:      nil,
+		ChanceDeck:          newDeckState(chanceDeckOrder),
+		CommunityDeck:       newDeckState(communityDeckOrder),
 		LastRoll:            [2]int{0, 0},
 		Players:             []Player{host, second, third},
 	}
@@ -1559,8 +1914,8 @@ func (room *roomRecord) advanceTurnFromPlayer(playerID string) string {
 	}
 	room.CurrentTurnPlayerID = room.Players[nextIndex].ID
 	if room.Players[nextIndex].InJail {
-		room.TurnState = "awaiting-jail-release"
-		room.PendingAction = fmt.Sprintf("%s 在监狱中，需支付 %d 罚金后再掷骰。", room.Players[nextIndex].Name, jailFine)
+		room.TurnState = "awaiting-jail-decision"
+		room.PendingAction = fmt.Sprintf("%s 在监狱中，可尝试掷骰出狱、使用出狱卡或支付 %d 罚金。", room.Players[nextIndex].Name, jailFine)
 	} else {
 		room.TurnState = "awaiting-roll"
 		room.PendingAction = "等待当前玩家掷骰"
@@ -1576,6 +1931,7 @@ func (room *roomRecord) resolveSpecialTile(playerIndex int, tile tileDetails) (b
 	if tile.Label == "去监狱" {
 		room.Players[playerIndex].Position = jailTileIndex
 		room.Players[playerIndex].InJail = true
+		room.Players[playerIndex].JailTurnsServed = 0
 		drafts := []eventDraft{{
 			Type:           "player-jailed",
 			Summary:        fmt.Sprintf("%s 被送入监狱。", player.Name),
@@ -1621,36 +1977,10 @@ func (room *roomRecord) resolveSpecialTile(playerIndex int, tile tileDetails) (b
 		}}
 	}
 	if strings.Contains(tile.Label, "命运") {
-		room.Players[playerIndex].Cash += 100
-		drafts := []eventDraft{{
-			Type:      "card-resolved",
-			Summary:   fmt.Sprintf("%s 抽到命运卡，获得 100。", player.Name),
-			PlayerID:  player.ID,
-			TileID:    tile.ID,
-			TileIndex: tile.Index,
-			TileLabel: tile.Label,
-			Amount:    100,
-			CashAfter: room.Players[playerIndex].Cash,
-		}}
-		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
-		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
-		return true, drafts
+		return true, room.resolveCardDraw(playerIndex, tile, "community")
 	}
 	if strings.Contains(tile.Label, "机会") {
-		room.Players[playerIndex].Cash -= 50
-		drafts := []eventDraft{{
-			Type:      "card-resolved",
-			Summary:   fmt.Sprintf("%s 抽到机会卡，支付 50。", player.Name),
-			PlayerID:  player.ID,
-			TileID:    tile.ID,
-			TileIndex: tile.Index,
-			TileLabel: tile.Label,
-			Amount:    -50,
-			CashAfter: room.Players[playerIndex].Cash,
-		}}
-		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
-		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
-		return true, drafts
+		return true, room.resolveCardDraw(playerIndex, tile, "chance")
 	}
 	return false, nil
 }
@@ -1671,6 +2001,8 @@ func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 	pendingPropertyJSON, _ := json.Marshal(room.PendingProperty)
 	pendingAuctionJSON, _ := json.Marshal(room.PendingAuction)
 	pendingPaymentJSON, _ := json.Marshal(room.PendingPayment)
+	chanceDeckJSON, _ := json.Marshal(room.ChanceDeck)
+	communityDeckJSON, _ := json.Marshal(room.CommunityDeck)
 	return pocketbase.PersistedRoomSnapshot{
 		RoomID:              room.RoomID,
 		RoomState:           room.State,
@@ -1683,6 +2015,8 @@ func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 		PendingPropertyJSON: pendingPropertyJSON,
 		PendingAuctionJSON:  pendingAuctionJSON,
 		PendingPaymentJSON:  pendingPaymentJSON,
+		ChanceDeckJSON:      chanceDeckJSON,
+		CommunityDeckJSON:   communityDeckJSON,
 		LastRoll:            room.LastRoll,
 		PlayersJSON:         playersJSON,
 	}
@@ -1701,6 +2035,8 @@ func (room roomRecord) toResponse() RoomResponse {
 		PendingProperty:     room.PendingProperty,
 		PendingAuction:      room.PendingAuction,
 		PendingPayment:      room.PendingPayment,
+		ChanceDeck:          room.ChanceDeck,
+		CommunityDeck:       room.CommunityDeck,
 		LastRoll:            room.LastRoll,
 		RecentEvents:        room.RecentEvents,
 		Players:             room.Players,
@@ -1712,10 +2048,18 @@ func tileForIndex(index int) tileDetails {
 	price := 0
 	rent := 0
 	purchasable := false
+	colorGroup := ""
+	buildCost := 0
+	rentByLevel := []int(nil)
 	if index > 0 && index%5 != 0 && !isSpecialTileLabel(label) {
 		price = 100 + index*10
 		rent = 10 + index*2
 		purchasable = true
+	}
+	if rule, ok := developmentRules[fmt.Sprintf("tile-%d", index)]; ok {
+		colorGroup = rule.ColorGroup
+		buildCost = rule.BuildCost
+		rentByLevel = append([]int{}, rule.RentByLevel...)
 	}
 
 	return tileDetails{
@@ -1724,6 +2068,9 @@ func tileForIndex(index int) tileDetails {
 		Label:       label,
 		Price:       price,
 		Rent:        rent,
+		ColorGroup:  colorGroup,
+		BuildCost:   buildCost,
+		RentByLevel: rentByLevel,
 		Purchasable: purchasable,
 	}
 }
@@ -1760,6 +2107,13 @@ func toPersistedEvents(roomID string, events []Event) []pocketbase.PersistedRoom
 			PlayerPosition:  event.PlayerPosition,
 			CashAfter:       event.CashAfter,
 			OwnerCashAfter:  event.OwnerCashAfter,
+			DeckKind:        event.DeckKind,
+			CardID:          event.CardID,
+			CardTitle:       event.CardTitle,
+			CardDisposition: event.CardDisposition,
+			ReleaseMethod:   event.ReleaseMethod,
+			FailedAttemptCount: event.FailedAttemptCount,
+			ImprovementLevel: event.ImprovementLevel,
 			LastRoll:        event.LastRoll,
 		})
 	}
@@ -1787,6 +2141,13 @@ func toRoomEvents(events []pocketbase.PersistedRoomEvent) []Event {
 			PlayerPosition:  event.PlayerPosition,
 			CashAfter:       event.CashAfter,
 			OwnerCashAfter:  event.OwnerCashAfter,
+			DeckKind:        event.DeckKind,
+			CardID:          event.CardID,
+			CardTitle:       event.CardTitle,
+			CardDisposition: event.CardDisposition,
+			ReleaseMethod:   event.ReleaseMethod,
+			FailedAttemptCount: event.FailedAttemptCount,
+			ImprovementLevel: event.ImprovementLevel,
 			LastRoll:        event.LastRoll,
 		})
 	}
@@ -1952,6 +2313,263 @@ func (room *roomRecord) activeAuctionPlayerIDs() []string {
 		}
 	}
 	return active
+}
+
+func newDeckState(order []string) cardDeckState {
+	drawPile := make([]string, len(order))
+	copy(drawPile, order)
+	return cardDeckState{DrawPile: drawPile, DiscardPile: []string{}}
+}
+
+func (room *roomRecord) resolveLanding(playerIndex int) []eventDraft {
+	player := room.Players[playerIndex]
+	tile := tileForIndex(player.Position)
+	drafts := []eventDraft{{Type: "player-moved", Summary: fmt.Sprintf("%s 移动到 %s。", player.Name, tile.Label), PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, PlayerPosition: player.Position}}
+	if handled, specialDrafts := room.resolveSpecialTile(playerIndex, tile); handled {
+		return append(drafts, specialDrafts...)
+	}
+	if tile.Purchasable && !room.tileIsOwned(tile.ID) {
+		room.TurnState = "awaiting-property-decision"
+		room.PendingAction = fmt.Sprintf("可购买 %s，价格 %d。", tile.Label, tile.Price)
+		room.PendingProperty = &PendingProperty{TileID: tile.ID, TileIndex: tile.Index, Label: tile.Label, Price: tile.Price}
+		return append(drafts, eventDraft{Type: "property-offered", Summary: fmt.Sprintf("%s 可选择购买 %s。", player.Name, tile.Label), PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, TilePrice: tile.Price})
+	}
+	if ownerIndex := findPropertyOwnerIndex(room.Players, tile.ID); ownerIndex != -1 && room.Players[ownerIndex].ID != player.ID {
+		rent := room.rentForTile(ownerIndex, tile)
+		if room.Players[playerIndex].Cash < rent {
+			room.TurnState = "awaiting-deficit-resolution"
+			room.PendingPayment = &PendingPayment{Amount: rent, Reason: "rent", CreditorKind: "player", CreditorPlayerID: room.Players[ownerIndex].ID, SourceTileID: tile.ID, SourceTileLabel: tile.Label}
+			room.PendingAction = fmt.Sprintf("%s 现金不足以支付 %d 租金，请抵押地产或宣告破产。", room.Players[playerIndex].Name, rent)
+			return append(drafts, eventDraft{Type: "deficit-started", Summary: fmt.Sprintf("%s 需向 %s 支付 %d 租金。", room.Players[playerIndex].Name, room.Players[ownerIndex].Name, rent), PlayerID: room.Players[playerIndex].ID, OwnerPlayerID: room.Players[ownerIndex].ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, TilePrice: tile.Price, Amount: rent, CashAfter: room.Players[playerIndex].Cash, ImprovementLevel: room.currentImprovementLevel(ownerIndex, tile.ID)})
+		}
+		room.Players[playerIndex].Cash -= rent
+		room.Players[ownerIndex].Cash += rent
+		payer := room.Players[playerIndex]
+		owner := room.Players[ownerIndex]
+		drafts = append(drafts, eventDraft{Type: "rent-charged", Summary: fmt.Sprintf("%s 向 %s 支付了 %d 租金。", payer.Name, owner.Name, rent), PlayerID: payer.ID, OwnerPlayerID: owner.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, TilePrice: tile.Price, Amount: rent, CashAfter: payer.Cash, OwnerCashAfter: owner.Cash, ImprovementLevel: room.currentImprovementLevel(ownerIndex, tile.ID)})
+		nextPlayerID := room.advanceTurn()
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	}
+	nextPlayerID := room.advanceTurn()
+	return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+}
+
+func (room *roomRecord) movePlayerBy(playerIndex int, distance int) {
+	room.Players[playerIndex].Position = (room.Players[playerIndex].Position + distance) % boardTileCount
+}
+
+func (room *roomRecord) movePlayerTo(playerIndex int, targetIndex int) {
+	room.Players[playerIndex].Position = targetIndex
+}
+
+func (room *roomRecord) releasePlayerFromJail(playerIndex int) {
+	room.Players[playerIndex].InJail = false
+	room.Players[playerIndex].JailTurnsServed = 0
+}
+
+func (room *roomRecord) drawCard(deckKind string) cardDefinition {
+	deck := &room.ChanceDeck
+	if deckKind == "community" {
+		deck = &room.CommunityDeck
+	}
+	if len(deck.DrawPile) == 0 {
+		deck.DrawPile = append([]string{}, deck.DiscardPile...)
+		deck.DiscardPile = []string{}
+	}
+	cardID := deck.DrawPile[0]
+	deck.DrawPile = deck.DrawPile[1:]
+	return cardDefinitions[cardID]
+}
+
+func (room *roomRecord) discardCard(card cardDefinition) {
+	if card.DeckKind == "community" {
+		room.CommunityDeck.DiscardPile = append(room.CommunityDeck.DiscardPile, card.ID)
+		return
+	}
+	room.ChanceDeck.DiscardPile = append(room.ChanceDeck.DiscardPile, card.ID)
+}
+
+func (room *roomRecord) resolveCardDraw(playerIndex int, tile tileDetails, deckKind string) []eventDraft {
+	player := room.Players[playerIndex]
+	card := room.drawCard(deckKind)
+	summary := fmt.Sprintf("%s 抽到 %s。", player.Name, card.Title)
+	drafts := []eventDraft{}
+	switch card.EffectType {
+	case "gain-cash":
+		room.Players[playerIndex].Cash += card.Amount
+		drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, Amount: card.Amount, CashAfter: room.Players[playerIndex].Cash, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded"})
+		room.discardCard(card)
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	case "held-jail-card":
+		room.Players[playerIndex].HeldCardIDs = append(room.Players[playerIndex].HeldCardIDs, card.ID)
+		drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, CashAfter: room.Players[playerIndex].Cash, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "held"})
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	case "go-to-jail":
+		drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, CashAfter: room.Players[playerIndex].Cash, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded"})
+		room.discardCard(card)
+		room.movePlayerTo(playerIndex, jailTileIndex)
+		room.Players[playerIndex].InJail = true
+		room.Players[playerIndex].JailTurnsServed = 0
+		drafts = append(drafts, eventDraft{Type: "player-jailed", Summary: fmt.Sprintf("%s 被送入监狱。", player.Name), PlayerID: player.ID, TileID: fmt.Sprintf("tile-%d", jailTileIndex), TileIndex: jailTileIndex, TileLabel: boardLabels[jailTileIndex], PlayerPosition: jailTileIndex})
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	case "move":
+		drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded"})
+		room.discardCard(card)
+		room.movePlayerTo(playerIndex, card.TargetIndex)
+		return append(drafts, room.resolveLanding(playerIndex)...)
+	case "move-to-start":
+		room.movePlayerTo(playerIndex, card.TargetIndex)
+		room.Players[playerIndex].Cash += card.Amount
+		drafts = append(drafts, eventDraft{Type: "card-resolved", Summary: summary, PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, DeckKind: card.DeckKind, CardID: card.ID, CardTitle: card.Title, CardDisposition: "discarded", Amount: card.Amount, CashAfter: room.Players[playerIndex].Cash, PlayerPosition: card.TargetIndex})
+		room.discardCard(card)
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	default:
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	}
+}
+
+func (room *roomRecord) settlePendingPayment(playerIndex int) []eventDraft {
+	payment := room.PendingPayment
+	if payment == nil {
+		return nil
+	}
+	room.Players[playerIndex].Cash -= payment.Amount
+	drafts := []eventDraft{}
+	if payment.Reason == "rent" {
+		ownerIndex := findPlayerIndex(room.Players, payment.CreditorPlayerID)
+		ownerCashAfter := 0
+		if ownerIndex != -1 {
+			room.Players[ownerIndex].Cash += payment.Amount
+			ownerCashAfter = room.Players[ownerIndex].Cash
+		}
+		drafts = append(drafts, eventDraft{Type: "rent-charged", Summary: fmt.Sprintf("%s 补齐了租金。", room.Players[playerIndex].Name), PlayerID: room.Players[playerIndex].ID, OwnerPlayerID: payment.CreditorPlayerID, TileID: payment.SourceTileID, TileLabel: payment.SourceTileLabel, Amount: payment.Amount, CashAfter: room.Players[playerIndex].Cash, OwnerCashAfter: ownerCashAfter})
+		room.PendingPayment = nil
+		nextPlayerID := room.advanceTurnFromPlayer(room.Players[playerIndex].ID)
+		return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	}
+	if payment.Reason == "jail" {
+		if payment.ReleaseFromJail {
+			room.releasePlayerFromJail(playerIndex)
+			room.TurnState = "awaiting-roll"
+			room.PendingAction = "等待当前玩家掷骰"
+		}
+		drafts = append(drafts, eventDraft{Type: "jail-fine-paid", Summary: fmt.Sprintf("%s 补齐了监狱罚金。", room.Players[playerIndex].Name), PlayerID: room.Players[playerIndex].ID, Amount: payment.Amount, CashAfter: room.Players[playerIndex].Cash, ReleaseMethod: "fine"})
+		room.PendingPayment = nil
+		return drafts
+	}
+	drafts = append(drafts, eventDraft{Type: "tax-paid", Summary: fmt.Sprintf("%s 补齐了税费。", room.Players[playerIndex].Name), PlayerID: room.Players[playerIndex].ID, TileID: payment.SourceTileID, TileLabel: payment.SourceTileLabel, Amount: payment.Amount, CashAfter: room.Players[playerIndex].Cash})
+	room.PendingPayment = nil
+	nextPlayerID := room.advanceTurnFromPlayer(room.Players[playerIndex].ID)
+	return append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+}
+
+func firstHeldJailCard(cardIDs []string) (string, bool) {
+	for _, cardID := range cardIDs {
+		if card, ok := cardDefinitions[cardID]; ok && card.EffectType == "held-jail-card" {
+			return cardID, true
+		}
+	}
+	return "", false
+}
+
+func removeFirst(values []string, target string) []string {
+	for index, value := range values {
+		if value == target {
+			return append(values[:index], values[index+1:]...)
+		}
+	}
+	return values
+}
+
+func (room *roomRecord) ensureImprovementMap(playerIndex int) {
+	if room.Players[playerIndex].PropertyImprovements == nil {
+		room.Players[playerIndex].PropertyImprovements = map[string]int{}
+	}
+}
+
+func (room roomRecord) currentImprovementLevel(playerIndex int, tileID string) int {
+	if room.Players[playerIndex].PropertyImprovements == nil {
+		return 0
+	}
+	return room.Players[playerIndex].PropertyImprovements[tileID]
+}
+
+func (room roomRecord) playerOwnsFullGroup(playerIndex int, colorGroup string) bool {
+	for tileID, rule := range developmentRules {
+		if rule.ColorGroup != colorGroup {
+			continue
+		}
+		if !containsPlayer(room.Players[playerIndex].Properties, tileID) {
+			return false
+		}
+	}
+	return true
+}
+
+func (room roomRecord) groupHasMortgages(playerIndex int, colorGroup string) bool {
+	for _, tileID := range room.groupTileIDs(colorGroup) {
+		if containsPlayer(room.Players[playerIndex].MortgagedProperties, tileID) {
+			return true
+		}
+	}
+	return false
+}
+
+func (room roomRecord) groupTileIDs(colorGroup string) []string {
+	ids := []string{}
+	for tileID, rule := range developmentRules {
+		if rule.ColorGroup == colorGroup {
+			ids = append(ids, tileID)
+		}
+	}
+	return ids
+}
+
+func (room roomRecord) canBuildEvenly(playerIndex int, tileID string, colorGroup string) bool {
+	targetLevel := room.currentImprovementLevel(playerIndex, tileID)
+	minimum := targetLevel
+	for _, groupTileID := range room.groupTileIDs(colorGroup) {
+		level := room.currentImprovementLevel(playerIndex, groupTileID)
+		if level < minimum {
+			minimum = level
+		}
+	}
+	return targetLevel == minimum
+}
+
+func (room roomRecord) canSellEvenly(playerIndex int, tileID string, colorGroup string) bool {
+	targetLevel := room.currentImprovementLevel(playerIndex, tileID)
+	maximum := targetLevel
+	for _, groupTileID := range room.groupTileIDs(colorGroup) {
+		level := room.currentImprovementLevel(playerIndex, groupTileID)
+		if level > maximum {
+			maximum = level
+		}
+	}
+	return targetLevel == maximum
+}
+
+func (room roomRecord) rentForTile(ownerIndex int, tile tileDetails) int {
+	if rule, ok := developmentRules[tile.ID]; ok {
+		level := room.currentImprovementLevel(ownerIndex, tile.ID)
+		if level > 0 && level < len(rule.RentByLevel) {
+			return rule.RentByLevel[level]
+		}
+		if room.playerOwnsFullGroup(ownerIndex, rule.ColorGroup) {
+			return tile.Rent * 2
+		}
+	}
+	return tile.Rent
+}
+
+func tileForIDMust(tileID string) tileDetails {
+	tile, _ := tileForID(tileID)
+	return tile
 }
 
 func (room roomRecord) countActivePlayers() int {

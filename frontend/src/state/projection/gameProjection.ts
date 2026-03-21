@@ -3,7 +3,7 @@ import type { PlayerState, ProjectionEvent, ProjectionSnapshot, RoomEventCatchUp
 import { sampleProjection } from "@dafuweng/board-config";
 import { getRoom, getRoomEvents, subscribeRoomEventStream } from "../../network/roomApi";
 
-type PlayerSummary = Pick<PlayerState, "id" | "name" | "cash" | "position" | "properties" | "mortgagedProperties" | "inJail" | "isBankrupt">;
+type PlayerSummary = Pick<PlayerState, "id" | "name" | "cash" | "position" | "properties" | "mortgagedProperties" | "inJail" | "jailTurnsServed" | "heldCardIds" | "isBankrupt">;
 
 type ProjectionView = ProjectionSnapshot & {
   currentTurnPlayerName: string;
@@ -51,6 +51,27 @@ function updatePlayer(
   return players.map((player) => (player.id === playerId ? updater(player) : player));
 }
 
+function updateDeck(snapshot: ProjectionSnapshot, deckKind: "chance" | "community", cardId: string | undefined, disposition: string | undefined) {
+  if (!cardId) {
+    return snapshot;
+  }
+
+  const key = deckKind === "chance" ? "chanceDeck" : "communityDeck";
+  const deck = snapshot[key];
+  const nextDrawPile = deck.drawPile.filter((candidate, index) => candidate !== cardId || index !== deck.drawPile.indexOf(cardId));
+  const nextDiscardPile = disposition === "discarded" || disposition === "returned"
+    ? [...deck.discardPile, cardId]
+    : deck.discardPile;
+
+  return {
+    ...snapshot,
+    [key]: {
+      drawPile: nextDrawPile,
+      discardPile: nextDiscardPile
+    }
+  };
+}
+
 export function applyRoomEvents(snapshot: ProjectionSnapshot, events: ProjectionEvent[]): ProjectionSnapshot {
   let nextSnapshot: ProjectionSnapshot = {
     ...snapshot,
@@ -75,6 +96,8 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           pendingProperty: null,
           pendingAuction: null,
           pendingPayment: null,
+          chanceDeck: nextSnapshot.chanceDeck,
+          communityDeck: nextSnapshot.communityDeck,
           pendingActionLabel: "等待当前玩家掷骰"
         };
         break;
@@ -232,13 +255,54 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           })
         };
         break;
-      case "card-resolved":
+      case "improvement-built":
         nextSnapshot = {
           ...nextSnapshot,
           players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
             ...player,
             cash: event.cashAfter ?? player.cash,
-            position: event.playerPosition ?? player.position
+            propertyImprovements: event.tileId
+              ? {
+                  ...(player.propertyImprovements ?? {}),
+                  [event.tileId]: event.improvementLevel ?? ((player.propertyImprovements ?? {})[event.tileId] ?? 0) + 1
+                }
+              : (player.propertyImprovements ?? {})
+          }))
+        };
+        break;
+      case "improvement-sold":
+        nextSnapshot = {
+          ...nextSnapshot,
+          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => {
+            const nextImprovements = { ...(player.propertyImprovements ?? {}) };
+            if (event.tileId) {
+              const nextLevel = event.improvementLevel ?? 0;
+              if (nextLevel > 0) {
+                nextImprovements[event.tileId] = nextLevel;
+              } else {
+                delete nextImprovements[event.tileId];
+              }
+            }
+
+            return {
+              ...player,
+              cash: event.cashAfter ?? player.cash,
+              propertyImprovements: nextImprovements
+            };
+          })
+        };
+        break;
+      case "card-resolved":
+        nextSnapshot = updateDeck(nextSnapshot, (event.deckKind as "chance" | "community") ?? "chance", event.cardId, event.cardDisposition);
+        nextSnapshot = {
+          ...nextSnapshot,
+          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
+            ...player,
+            cash: event.cashAfter ?? player.cash,
+            position: event.playerPosition ?? player.position,
+            heldCardIds: event.cardDisposition === "held" && event.cardId && !(player.heldCardIds ?? []).includes(event.cardId)
+              ? [...(player.heldCardIds ?? []), event.cardId]
+              : (player.heldCardIds ?? [])
           }))
         };
         break;
@@ -261,8 +325,9 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           pendingPayment: event.amount !== undefined
             ? {
                 amount: event.amount,
-                reason: "tax",
+                reason: event.ownerPlayerId ? "rent" : event.tileLabel === "监狱" ? "jail" : "tax",
                 creditorKind: "bank",
+                creditorPlayerId: event.ownerPlayerId,
                 sourceTileId: event.tileId,
                 sourceTileLabel: event.tileLabel
               }
@@ -302,7 +367,32 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
             ...player,
             inJail: true,
+            jailTurnsServed: 0,
             position: event.playerPosition ?? player.position
+          }))
+        };
+        break;
+      case "jail-roll-attempted":
+        nextSnapshot = {
+          ...nextSnapshot,
+          lastRoll: event.lastRoll ?? nextSnapshot.lastRoll,
+          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
+            ...player,
+            jailTurnsServed: event.releaseMethod === "roll" ? 0 : (event.failedAttemptCount ?? player.jailTurnsServed ?? 0)
+          }))
+        };
+        break;
+      case "jail-card-used":
+        nextSnapshot = updateDeck(nextSnapshot, (event.deckKind as "chance" | "community") ?? "chance", event.cardId, event.cardDisposition);
+        nextSnapshot = {
+          ...nextSnapshot,
+          turnState: "awaiting-roll",
+          pendingActionLabel: "等待当前玩家掷骰",
+          players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
+            ...player,
+            inJail: false,
+            jailTurnsServed: 0,
+            heldCardIds: event.cardId ? (player.heldCardIds ?? []).filter((cardId) => cardId !== event.cardId) : (player.heldCardIds ?? [])
           }))
         };
         break;
@@ -315,6 +405,7 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
           players: updatePlayer(nextSnapshot.players, event.playerId, (player) => ({
             ...player,
             inJail: false,
+            jailTurnsServed: 0,
             cash: event.cashAfter ?? player.cash
           }))
         };
@@ -334,12 +425,12 @@ export function applyRoomEvents(snapshot: ProjectionSnapshot, events: Projection
         nextSnapshot = {
           ...nextSnapshot,
           currentTurnPlayerId: event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId,
-          turnState: nextSnapshot.players.find((player) => player.id === (event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId))?.inJail ? "awaiting-jail-release" : "awaiting-roll",
+          turnState: nextSnapshot.players.find((player) => player.id === (event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId))?.inJail ? "awaiting-jail-decision" : "awaiting-roll",
           pendingProperty: null,
           pendingAuction: null,
           pendingPayment: null,
           pendingActionLabel: nextSnapshot.players.find((player) => player.id === (event.nextPlayerId ?? nextSnapshot.currentTurnPlayerId))?.inJail
-            ? "当前玩家在监狱中，需支付罚金后再掷骰。"
+            ? "当前玩家在监狱中，可尝试掷骰出狱、使用出狱卡或支付罚金。"
             : "等待当前玩家掷骰"
         };
         break;

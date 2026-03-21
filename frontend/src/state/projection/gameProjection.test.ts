@@ -130,10 +130,20 @@ describe("toProjectionView", () => {
         playerPosition: 10
       },
       {
-        id: "evt-12",
-        type: "jail-fine-paid",
+        id: "evt-11b",
+        type: "jail-roll-attempted",
         sequence: 12,
         snapshotVersion: 12,
+        summary: "房主 尝试掷骰出狱，结果 2 + 3。",
+        playerId: "p1",
+        failedAttemptCount: 1,
+        lastRoll: [2, 3]
+      },
+      {
+        id: "evt-12",
+        type: "jail-fine-paid",
+        sequence: 13,
+        snapshotVersion: 13,
         summary: "房主 支付了 50 罚金并离开监狱。",
         playerId: "p1",
         cashAfter: 1450
@@ -141,18 +151,65 @@ describe("toProjectionView", () => {
       {
         id: "evt-13",
         type: "card-resolved",
-        sequence: 13,
-        snapshotVersion: 13,
+        sequence: 14,
+        snapshotVersion: 14,
         summary: "玩家二 抽到命运卡，获得 100。",
         playerId: "p2",
         cashAfter: 1460,
-        amount: 100
+        amount: 100,
+        deckKind: "community",
+        cardId: "community-bonus-100",
+        cardTitle: "年终分红",
+        cardDisposition: "discarded"
       }
     ]);
 
     expect(updated.players[0]?.inJail).toBe(false);
     expect(updated.players[0]?.cash).toBe(1450);
     expect(updated.players[1]?.cash).toBe(1460);
+    expect(updated.communityDeck.discardPile).toContain("community-bonus-100");
+  });
+
+  test("applies held jail card and release card usage", () => {
+    const updated = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-18",
+        type: "card-resolved",
+        sequence: 18,
+        snapshotVersion: 18,
+        summary: "房主 抽到 免费出狱。",
+        playerId: "p1",
+        deckKind: "chance",
+        cardId: "chance-jail-card",
+        cardTitle: "保释特赦",
+        cardDisposition: "held"
+      },
+      {
+        id: "evt-19",
+        type: "player-jailed",
+        sequence: 19,
+        snapshotVersion: 19,
+        summary: "房主 被送入监狱。",
+        playerId: "p1",
+        playerPosition: 10
+      },
+      {
+        id: "evt-20",
+        type: "jail-card-used",
+        sequence: 20,
+        snapshotVersion: 20,
+        summary: "房主 使用了 保释特赦。",
+        playerId: "p1",
+        deckKind: "chance",
+        cardId: "chance-jail-card",
+        cardTitle: "保释特赦",
+        cardDisposition: "returned"
+      }
+    ]);
+
+    expect(updated.players[0]?.heldCardIds).toEqual([]);
+    expect(updated.players[0]?.inJail).toBe(false);
+    expect(updated.chanceDeck.discardPile).toContain("chance-jail-card");
   });
 
   test("applies deficit, mortgage, and bankruptcy events", () => {
@@ -208,5 +265,56 @@ describe("toProjectionView", () => {
     expect(updated.players[0]?.mortgagedProperties).toEqual([]);
     expect(updated.players[0]?.isBankrupt).toBe(true);
     expect(updated.players[0]?.cash).toBe(0);
+  });
+
+  test("applies improvement build, sell, and rent deficit events", () => {
+    const updated = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-21",
+        type: "improvement-built",
+        sequence: 21,
+        snapshotVersion: 21,
+        summary: "房主 在 南城路 建造了等级 2。",
+        playerId: "p1",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "南城路",
+        cashAfter: 1445,
+        improvementLevel: 2
+      },
+      {
+        id: "evt-22",
+        type: "improvement-sold",
+        sequence: 22,
+        snapshotVersion: 22,
+        summary: "房主 卖掉了 南城路 的一层建筑。",
+        playerId: "p1",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "南城路",
+        cashAfter: 1472,
+        improvementLevel: 1
+      },
+      {
+        id: "evt-23",
+        type: "deficit-started",
+        sequence: 23,
+        snapshotVersion: 23,
+        summary: "玩家二 需向 房主 支付 60 租金。",
+        playerId: "p2",
+        ownerPlayerId: "p1",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "南城路",
+        amount: 60,
+        cashAfter: 20,
+        improvementLevel: 1
+      }
+    ]);
+
+    expect(updated.players[0]?.propertyImprovements?.["tile-1"]).toBe(1);
+    expect(updated.players[0]?.cash).toBe(1472);
+    expect(updated.pendingPayment?.reason).toBe("rent");
+    expect(updated.pendingPayment?.creditorPlayerId).toBe("p1");
   });
 });

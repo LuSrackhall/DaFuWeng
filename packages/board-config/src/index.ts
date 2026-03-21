@@ -1,5 +1,30 @@
 import type { BoardTile, ProjectionSnapshot, PlayerState } from "@dafuweng/contracts";
 
+const colorGroups: Record<number, string | undefined> = {
+  1: "old-town",
+  3: "old-town",
+  6: "lakeside",
+  8: "lakeside",
+  9: "lakeside",
+  11: "campus",
+  13: "campus",
+  14: "campus",
+  16: "theater",
+  18: "theater",
+  19: "theater",
+  21: "industry",
+  23: "industry",
+  24: "industry",
+  26: "market",
+  28: "market",
+  29: "market",
+  31: "future",
+  32: "future",
+  34: "future",
+  37: "summit",
+  39: "summit"
+};
+
 const outerRingLabels = [
   "起点",
   "南城路",
@@ -61,15 +86,21 @@ export const sampleBoard: BoardTile[] = outerRingLabels.map((label, index) => ({
               : label.includes("局")
                 ? "utility"
                 : "property",
+  colorGroup: colorGroups[index],
+  buildCost: colorGroups[index] ? Math.floor((100 + index * 10) / 2) : undefined,
+  rentByLevel: colorGroups[index] ? (() => {
+    const baseRent = 10 + index * 2;
+    return [baseRent, baseRent * 5, baseRent * 15, baseRent * 45, baseRent * 80, baseRent * 125];
+  })() : undefined,
   price: index > 0 && index % 5 !== 0 ? 100 + index * 10 : undefined,
   rent: index > 0 && index % 5 !== 0 ? 10 + index * 2 : undefined
 }));
 
 export const samplePlayers: PlayerState[] = [
-  { id: "p1", name: "房主", cash: 1500, position: 6, properties: ["tile-1", "tile-6"] },
-  { id: "p2", name: "玩家二", cash: 1360, position: 13, properties: ["tile-8"] },
-  { id: "p3", name: "玩家三", cash: 1240, position: 18, properties: ["tile-16", "tile-19"] },
-  { id: "p4", name: "玩家四", cash: 980, position: 25, properties: [] }
+  { id: "p1", name: "房主", cash: 1500, position: 6, properties: ["tile-1", "tile-6"], propertyImprovements: { "tile-1": 1 }, heldCardIds: [] },
+  { id: "p2", name: "玩家二", cash: 1360, position: 13, properties: ["tile-8"], propertyImprovements: {}, heldCardIds: [] },
+  { id: "p3", name: "玩家三", cash: 1240, position: 18, properties: ["tile-16", "tile-19"], propertyImprovements: { "tile-16": 2 }, heldCardIds: [] },
+  { id: "p4", name: "玩家四", cash: 980, position: 25, properties: [], propertyImprovements: {}, heldCardIds: [] }
 ];
 
 export const sampleProjection: ProjectionSnapshot = {
@@ -84,6 +115,14 @@ export const sampleProjection: ProjectionSnapshot = {
   pendingProperty: null,
   pendingAuction: null,
   pendingPayment: null,
+  chanceDeck: {
+    drawPile: ["chance-jail-card", "chance-go-to-jail", "chance-advance-airport", "chance-bonus-50"],
+    discardPile: []
+  },
+  communityDeck: {
+    drawPile: ["community-bonus-100", "community-jail-card", "community-go-start", "community-bonus-50"],
+    discardPile: []
+  },
   lastRoll: [0, 0],
   players: samplePlayers,
   recentEvents: [

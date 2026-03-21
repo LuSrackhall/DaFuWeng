@@ -400,7 +400,11 @@ func TestCommunityTileResolvesDeterministicCardEffect(t *testing.T) {
 	players := resolved["players"].([]any)
 	host := players[0].(map[string]any)
 	if host["cash"] != float64(1600) {
-		t.Fatalf("expected host cash 1600 after community card, got %v", host["cash"])
+		t.Fatalf("expected host cash 1600 after first community deck card, got %v", host["cash"])
+	}
+	communityDeck := resolved["communityDeck"].(map[string]any)
+	if len(communityDeck["drawPile"].([]any)) != 3 {
+		t.Fatalf("expected community draw pile to shrink after card draw")
 	}
 }
 
@@ -426,7 +430,7 @@ func TestGoToJailAndPayFineFlow(t *testing.T) {
 	rollFor(secondPlayerID, "s2")
 	rollFor(hostID, "h3")
 	jailed := rollFor(secondPlayerID, "s3")
-	if jailed["turnState"] != "awaiting-jail-release" {
+	if jailed["turnState"] != "awaiting-jail-decision" {
 		t.Fatalf("expected next jailed turn to require release, got %v", jailed["turnState"])
 	}
 	players := jailed["players"].([]any)
@@ -453,6 +457,92 @@ func TestGoToJailAndPayFineFlow(t *testing.T) {
 	}
 	if releasedHost["cash"] != float64(1450) {
 		t.Fatalf("expected host cash 1450 after paying jail fine, got %v", releasedHost["cash"])
+	}
+}
+
+func TestChanceDeckCanHoldAndUseJailCard(t *testing.T) {
+	_, mux, dataPath := newServiceForTestWithDice(t, [2]int{4, 3})
+	roomID, hostID, _, _ := createStartedRoom(t, mux)
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "chance-card"})
+	rollRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	if rollRecorder.Code != http.StatusOK {
+		t.Fatalf("expected chance card roll status 200, got %d", rollRecorder.Code)
+	}
+	var drawn map[string]any
+	_ = json.Unmarshal(rollRecorder.Body.Bytes(), &drawn)
+	players := drawn["players"].([]any)
+	host := players[0].(map[string]any)
+	if len(host["heldCardIds"].([]any)) != 1 {
+		t.Fatalf("expected host to hold one jail card, got %v", host["heldCardIds"])
+	}
+
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].InJail = true
+		players[0].Position = 10
+		players[0].JailTurnsServed = 1
+		return players
+	})
+	store := pocketbase.NewClient(pocketbase.ClientConfig{BaseURL: "http://127.0.0.1:8090", DataPath: dataPath})
+	snapshot, ok := store.LoadRoomState(roomID)
+	if !ok {
+		t.Fatalf("expected room snapshot to exist")
+	}
+	snapshot.TurnState = "awaiting-jail-decision"
+	snapshot.CurrentTurnPlayerID = hostID
+	snapshot.PendingActionLabel = "测试用监狱状态"
+	store.SaveRoomState(snapshot)
+	mux = reloadMuxWithDice(t, dataPath, [2]int{4, 3})
+
+	usePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "use-card"})
+	useRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(useRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/jail-card", bytes.NewReader(usePayload)))
+	if useRecorder.Code != http.StatusOK {
+		t.Fatalf("expected jail card use status 200, got %d", useRecorder.Code)
+	}
+	var released map[string]any
+	_ = json.Unmarshal(useRecorder.Body.Bytes(), &released)
+	releasedHost := released["players"].([]any)[0].(map[string]any)
+	if releasedHost["inJail"] == true {
+		t.Fatalf("expected jail card to release host")
+	}
+	if rawHeldCards, ok := releasedHost["heldCardIds"]; ok && len(rawHeldCards.([]any)) != 0 {
+		t.Fatalf("expected held card list to be cleared after use")
+	}
+}
+
+func TestJailRollAttemptFailureIncrementsCounter(t *testing.T) {
+	_, mux, dataPath := newServiceForTestWithDice(t, [2]int{2, 3})
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].InJail = true
+		players[0].Position = 10
+		players[0].JailTurnsServed = 0
+		return players
+	})
+	store := pocketbase.NewClient(pocketbase.ClientConfig{BaseURL: "http://127.0.0.1:8090", DataPath: dataPath})
+	snapshot, _ := store.LoadRoomState(roomID)
+	snapshot.TurnState = "awaiting-jail-decision"
+	snapshot.CurrentTurnPlayerID = hostID
+	store.SaveRoomState(snapshot)
+	mux = reloadMuxWithDice(t, dataPath, [2]int{2, 3})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "jail-roll-1"})
+	rollRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/jail-roll", bytes.NewReader(rollPayload)))
+	if rollRecorder.Code != http.StatusOK {
+		t.Fatalf("expected jail roll status 200, got %d", rollRecorder.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rollRecorder.Body.Bytes(), &body)
+	players := body["players"].([]any)
+	host := players[0].(map[string]any)
+	if host["jailTurnsServed"] != float64(1) {
+		t.Fatalf("expected failed jail roll to increment counter, got %v", host["jailTurnsServed"])
+	}
+	if body["currentTurnPlayerId"] != secondPlayerID {
+		t.Fatalf("expected turn to advance after failed jail roll, got %v", body["currentTurnPlayerId"])
 	}
 }
 
@@ -607,5 +697,94 @@ func TestTaxDeficitCanEndInBankruptcy(t *testing.T) {
 	}
 	if host["cash"] != float64(0) {
 		t.Fatalf("expected bankrupt host cash to be 0, got %v", host["cash"])
+	}
+}
+
+func TestBuildImprovementAndImprovedRent(t *testing.T) {
+	_, mux, dataPath := newServiceForTest(t)
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Properties = []string{"tile-1", "tile-3"}
+		players[0].PropertyImprovements = map[string]int{}
+		players[1].Position = 35
+		return players
+	})
+	mux = reloadMuxWithDice(t, dataPath, [2]int{3, 3})
+
+	buildPayload1, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "build-1", "tileId": "tile-1"})
+	buildRecorder1 := httptest.NewRecorder()
+	mux.ServeHTTP(buildRecorder1, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/build", bytes.NewReader(buildPayload1)))
+	if buildRecorder1.Code != http.StatusOK {
+		t.Fatalf("expected first build status 200, got %d", buildRecorder1.Code)
+	}
+
+	buildPayload2, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "build-2", "tileId": "tile-3"})
+	buildRecorder2 := httptest.NewRecorder()
+	mux.ServeHTTP(buildRecorder2, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/build", bytes.NewReader(buildPayload2)))
+	if buildRecorder2.Code != http.StatusOK {
+		t.Fatalf("expected second build status 200, got %d", buildRecorder2.Code)
+	}
+
+	store := pocketbase.NewClient(pocketbase.ClientConfig{BaseURL: "http://127.0.0.1:8090", DataPath: dataPath})
+	snapshot, _ := store.LoadRoomState(roomID)
+	snapshot.CurrentTurnPlayerID = secondPlayerID
+	store.SaveRoomState(snapshot)
+	mux = reloadMuxWithDice(t, dataPath, [2]int{3, 3})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-1"})
+	rollRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	if rollRecorder.Code != http.StatusOK {
+		t.Fatalf("expected improved rent roll status 200, got %d", rollRecorder.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rollRecorder.Body.Bytes(), &body)
+	players := body["players"].([]any)
+	host := players[0].(map[string]any)
+	second := players[1].(map[string]any)
+	if host["cash"] != float64(1440) {
+		t.Fatalf("expected host cash 1440 after improved rent, got %v", host["cash"])
+	}
+	if second["cash"] != float64(1440) {
+		t.Fatalf("expected second cash 1440 after improved rent, got %v", second["cash"])
+	}
+	if body["turnState"] != "awaiting-roll" {
+		t.Fatalf("expected room to continue after improved rent, got %v", body["turnState"])
+	}
+}
+
+func TestImprovedRentCanEnterDeficitRecovery(t *testing.T) {
+	_, mux, dataPath := newServiceForTest(t)
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Properties = []string{"tile-1", "tile-3"}
+		players[0].PropertyImprovements = map[string]int{"tile-1": 1, "tile-3": 1}
+		players[1].Position = 35
+		players[1].Cash = 20
+		return players
+	})
+	store := pocketbase.NewClient(pocketbase.ClientConfig{BaseURL: "http://127.0.0.1:8090", DataPath: dataPath})
+	snapshot, _ := store.LoadRoomState(roomID)
+	snapshot.CurrentTurnPlayerID = secondPlayerID
+	store.SaveRoomState(snapshot)
+	mux = reloadMuxWithDice(t, dataPath, [2]int{3, 3})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-deficit"})
+	rollRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	if rollRecorder.Code != http.StatusOK {
+		t.Fatalf("expected improved rent deficit roll status 200, got %d", rollRecorder.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rollRecorder.Body.Bytes(), &body)
+	if body["turnState"] != "awaiting-deficit-resolution" {
+		t.Fatalf("expected improved rent to enter deficit recovery, got %v", body["turnState"])
+	}
+	pendingPayment := body["pendingPayment"].(map[string]any)
+	if pendingPayment["reason"] != "rent" {
+		t.Fatalf("expected pending payment reason rent, got %v", pendingPayment["reason"])
+	}
+	if pendingPayment["creditorPlayerId"] != hostID {
+		t.Fatalf("expected host to be rent creditor, got %v", pendingPayment["creditorPlayerId"])
 	}
 }

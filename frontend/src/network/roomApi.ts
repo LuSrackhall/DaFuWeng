@@ -1,4 +1,6 @@
 import type {
+  AttemptJailRollRequest,
+  BuildImprovementRequest,
   CreateRoomRequest,
   DeclareBankruptcyRequest,
   DeclinePropertyRequest,
@@ -12,7 +14,9 @@ import type {
   RoomEventCatchUpResponse,
   RoomEventStreamEnvelope,
   StartGameRequest,
-  SubmitAuctionBidRequest
+  SubmitAuctionBidRequest,
+  SellImprovementRequest,
+  UseJailCardRequest
 } from "@dafuweng/contracts";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
@@ -122,6 +126,20 @@ export function payJailFine(roomId: string, payload: PayJailFineRequest) {
   });
 }
 
+export function attemptJailRoll(roomId: string, payload: AttemptJailRollRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/jail-roll`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function useJailCard(roomId: string, payload: UseJailCardRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/jail-card`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function mortgageProperty(roomId: string, payload: MortgagePropertyRequest) {
   return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/mortgage`, {
     method: "POST",
@@ -131,6 +149,20 @@ export function mortgageProperty(roomId: string, payload: MortgagePropertyReques
 
 export function declareBankruptcy(roomId: string, payload: DeclareBankruptcyRequest) {
   return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/bankruptcy`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function buildImprovement(roomId: string, payload: BuildImprovementRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/build`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sellImprovement(roomId: string, payload: SellImprovementRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/sell`, {
     method: "POST",
     body: JSON.stringify(payload)
   });

@@ -1,6 +1,10 @@
 export type RoomState = "lobby" | "starting" | "in-game" | "paused-recovery" | "finished";
 
-export type TurnState = "awaiting-roll" | "awaiting-property-decision" | "awaiting-auction" | "awaiting-jail-release" | "awaiting-deficit-resolution" | "post-roll-pending";
+export type TurnState = "awaiting-roll" | "awaiting-property-decision" | "awaiting-auction" | "awaiting-jail-decision" | "awaiting-deficit-resolution" | "post-roll-pending";
+
+export type DeckKind = "chance" | "community";
+
+export type CardDisposition = "discarded" | "held" | "returned";
 
 export type RoomEventType =
   | "room-created"
@@ -19,10 +23,14 @@ export type RoomEventType =
   | "auction-ended-unsold"
   | "card-resolved"
   | "player-jailed"
+  | "jail-roll-attempted"
+  | "jail-card-used"
   | "jail-fine-paid"
   | "tax-paid"
   | "deficit-started"
   | "property-mortgaged"
+  | "improvement-built"
+  | "improvement-sold"
   | "bankruptcy-declared"
   | "room-finished"
   | "turn-advanced";
@@ -47,11 +55,18 @@ export type PendingAuction = {
 
 export type PendingPayment = {
   amount: number;
-  reason: "tax";
+  reason: "tax" | "jail" | "rent";
   creditorKind: "bank" | "player";
   creditorPlayerId?: string;
   sourceTileId?: string;
   sourceTileLabel?: string;
+  resumeRoll?: [number, number];
+  releaseFromJail?: boolean;
+};
+
+export type CardDeckState = {
+  drawPile: string[];
+  discardPile: string[];
 };
 
 export type TileType = "corner" | "property" | "chance" | "community" | "tax" | "jail" | "utility" | "railway";
@@ -61,6 +76,9 @@ export type BoardTile = {
   index: number;
   label: string;
   type: TileType;
+  colorGroup?: string;
+  buildCost?: number;
+  rentByLevel?: number[];
   rent?: number;
   price?: number;
 };
@@ -72,7 +90,10 @@ export type PlayerState = {
   position: number;
   properties: string[];
   mortgagedProperties?: string[];
+  propertyImprovements?: Record<string, number>;
   inJail?: boolean;
+  jailTurnsServed?: number;
+  heldCardIds?: string[];
   isBankrupt?: boolean;
   ready?: boolean;
 };
@@ -95,6 +116,13 @@ export type ProjectionEvent = {
   cashAfter?: number;
   ownerCashAfter?: number;
   roomState?: RoomState;
+  deckKind?: DeckKind;
+  cardId?: string;
+  cardTitle?: string;
+  cardDisposition?: CardDisposition;
+  releaseMethod?: "roll" | "fine" | "card";
+  failedAttemptCount?: number;
+  improvementLevel?: number;
   lastRoll?: [number, number];
 };
 
@@ -110,6 +138,8 @@ export type ProjectionSnapshot = {
   pendingProperty: PendingPropertyDecision | null;
   pendingAuction: PendingAuction | null;
   pendingPayment: PendingPayment | null;
+  chanceDeck: CardDeckState;
+  communityDeck: CardDeckState;
   lastRoll: [number, number];
   players: PlayerState[];
   recentEvents: ProjectionEvent[];
@@ -175,6 +205,16 @@ export type PayJailFineRequest = {
   idempotencyKey: string;
 };
 
+export type AttemptJailRollRequest = {
+  playerId: string;
+  idempotencyKey: string;
+};
+
+export type UseJailCardRequest = {
+  playerId: string;
+  idempotencyKey: string;
+};
+
 export type MortgagePropertyRequest = {
   playerId: string;
   idempotencyKey: string;
@@ -184,6 +224,18 @@ export type MortgagePropertyRequest = {
 export type DeclareBankruptcyRequest = {
   playerId: string;
   idempotencyKey: string;
+};
+
+export type BuildImprovementRequest = {
+  playerId: string;
+  idempotencyKey: string;
+  tileId: string;
+};
+
+export type SellImprovementRequest = {
+  playerId: string;
+  idempotencyKey: string;
+  tileId: string;
 };
 
 export type RollDiceCommand = {
@@ -229,6 +281,20 @@ export type PayJailFineCommand = {
   idempotencyKey: string;
 };
 
+export type AttemptJailRollCommand = {
+  kind: "attempt-jail-roll";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+};
+
+export type UseJailCardCommand = {
+  kind: "use-jail-card";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+};
+
 export type MortgagePropertyCommand = {
   kind: "mortgage-property";
   roomId: string;
@@ -244,6 +310,22 @@ export type DeclareBankruptcyCommand = {
   idempotencyKey: string;
 };
 
+export type BuildImprovementCommand = {
+  kind: "build-improvement";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+  tileId: string;
+};
+
+export type SellImprovementCommand = {
+  kind: "sell-improvement";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+  tileId: string;
+};
+
 export type GameCommand =
   | CreateRoomCommand
   | JoinRoomCommand
@@ -254,8 +336,12 @@ export type GameCommand =
   | SubmitAuctionBidCommand
   | PassAuctionCommand
   | PayJailFineCommand
+  | AttemptJailRollCommand
+  | UseJailCardCommand
   | MortgagePropertyCommand
-  | DeclareBankruptcyCommand;
+  | DeclareBankruptcyCommand
+  | BuildImprovementCommand
+  | SellImprovementCommand;
 
 export type RoomEventCatchUpResponse = {
   roomId: string;

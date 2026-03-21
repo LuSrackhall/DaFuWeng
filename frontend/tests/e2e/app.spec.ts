@@ -133,3 +133,49 @@ test("decline property enters auction and settles through bid plus pass", async 
   await expect(viewerPage.getByText(/地产: 1/)).toBeVisible();
   await viewerPage.close();
 });
+
+test("jailed turn enters decision state and can release by doubles", async ({ browser, page }) => {
+  await page.goto("/");
+
+  await page.getByLabel("房主昵称").fill("监狱房主");
+  await page.getByRole("button", { name: "创建房间" }).click();
+  await expect(page.getByText(/已创建房间 room-/)).toBeVisible();
+  const headingText = await page.locator("h3.panel__title").first().textContent();
+  const roomId = headingText?.replace("房间 ", "") ?? "";
+  expect(roomId).toMatch(/^room-/);
+
+  await page.getByLabel("加入房间").fill(roomId);
+  await page.getByLabel("玩家昵称").fill("监狱玩家");
+  await page.getByRole("button", { name: "加入房间" }).click();
+  await page.getByRole("button", { name: "开始当前房间" }).click();
+  await expect(page).toHaveURL(new RegExp(`/room/${roomId}$`));
+
+  const viewerPage = await browser.newPage();
+  await viewerPage.goto(`/room/${roomId}`);
+  await expect(viewerPage.getByText("等待当前玩家掷骰")).toBeVisible();
+
+  for (let index = 0; index < 4; index += 1) {
+    await page.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
+    await expect(page.getByRole("button", { name: "购买地产" })).toBeVisible();
+    await page.getByRole("button", { name: "购买地产" }).click();
+    await expect(page.getByText(/已同步权威买地结果/)).toBeVisible();
+
+    await viewerPage.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
+    await expect(viewerPage.getByText(/支付了/)).toBeVisible();
+  }
+
+  await page.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
+  await expect(page.getByText(/被送入监狱/)).toBeVisible();
+
+  await viewerPage.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
+  await expect(viewerPage.getByText(/被送入监狱/)).toBeVisible();
+
+  await expect(page.getByText(/可尝试掷骰出狱、使用出狱卡或支付罚金/)).toBeVisible();
+  await page.getByRole("button", { name: "尝试掷骰出狱" }).click();
+  await expect(page.getByText(/已同步权威出狱掷骰结果/)).toBeVisible();
+  await expect(page.getByText(/位置: 16/)).toBeVisible();
+  await expect(page.getByText(/状态: 自由/)).toBeVisible();
+
+  await expect(viewerPage.getByText(/位置: 16/)).toBeVisible();
+  await viewerPage.close();
+});
