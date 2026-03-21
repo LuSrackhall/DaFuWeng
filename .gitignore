@@ -19,3 +19,4 @@ apps/desktop-tauri/src-tauri/target/
 apps/desktop-tauri/src-tauri/gen/
 
 release-notes.md
+.github/hooks/runtime/

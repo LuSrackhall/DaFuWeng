@@ -33,6 +33,7 @@ Use this skill when working on automated versioning, release orchestration, or d
 5. Involve the right roles.
    - Use `Monopoly Tech Lead` for architecture and CI shape.
    - Use `Monopoly QA Lead` for release gates.
+   - Use `Monopoly Versioning Manager` for semantic version impact, changelog facts, and release governance review.
    - Use `Monopoly Release Marketer` for Chinese and English launch copy.
 
 ## Output

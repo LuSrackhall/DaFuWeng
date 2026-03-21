@@ -31,8 +31,14 @@
 - Do not mix unrelated user-owned local edits into agent commits. If the workspace is dirty because of unrelated changes, commit only the files that belong to the current slice and report the remaining dirty paths clearly.
 - Prefer conventional commit messages with Chinese subjects, for example `feat: 完成双边交易闭环` or `fix: 修正卡牌欠款回放`.
 - Treat commit and push as normal workflow decisions, not user-only actions, when the implementation slice is complete and validated.
+- For substantial work, initialize repository workflow state with `python3 .github/hooks/scripts/role_rotation.py init --mode <planning|implementation|release> --change <active-change>` before editing files.
+- After every required agent or subagent handoff, record the outcome with `python3 .github/hooks/scripts/role_rotation.py complete --role "<role name>" --note "<summary>"` or explicitly waive the role with `python3 .github/hooks/scripts/role_rotation.py waive --role "<role name>" --reason "<reason>"`.
+- Do not attempt repository edits, commits, pushes, or release-like commands while workflow state is uninitialized, in `analysis` mode, or missing required roles.
+- Use `python3 .github/hooks/scripts/role_rotation.py status --json` whenever you need to inspect the remaining workflow gates.
 - In every conversation, explicitly clarify current progress and provide a role-by-role summary of which AI roles or subagents were used, what each one did, and which work remained with the main coding agent.
 - If no extra AI roles were used in the round, state that explicitly in the progress summary.
+- For Monopoly gameplay changes, prefer the sequence Product Manager -> UI UX Director -> Monopoly Rules Expert -> Tech Lead -> Senior Implementer -> QA Lead -> Simulated Player, with Monopoly Pixi Scene Engineer added when Pixi scene work is central.
+- Before commit or release handoff, use Monopoly Versioning Manager to review semantic version impact, commit classification, and release facts.
 
 ## Engineering Rules
 
@@ -48,6 +54,7 @@
 - Preserve board readability on desktop, tablet, and phone layouts.
 - Use expressive typography, strong visual hierarchy, and intentional motion.
 - Gameplay feedback must make turn order, dice results, tile effects, cash movement, ownership, and pending decisions immediately clear.
+- Prefer PixiJS for board rendering, camera movement, piece animation, and scene-driven feedback whenever the task concerns the board itself. Keep dense management actions in DOM overlays instead of forcing everything into canvas.
 
 ## Testing And Quality
 

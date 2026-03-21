@@ -24,6 +24,11 @@ Use this skill when a milestone is close to release and needs a player-focused g
    - Bugs that break rules or progression are blockers.
    - Confusing ownership, turn feedback, or cash flow are release-significant even if technically functional.
 5. Produce a ship, ship-with-risk, or hold recommendation.
+6. Record the release gate outcome in repository workflow state.
+   - Mark completed roles with `.github/hooks/scripts/role_rotation.py complete --role "Monopoly QA Lead" --note "<summary>"` and `.github/hooks/scripts/role_rotation.py complete --role "Monopoly Simulated Player" --note "<summary>"`.
+   - If a release role is intentionally skipped, record the waiver and reason instead of bypassing the gate.
+7. Hand release facts to the versioning role.
+   - Use the `Monopoly Versioning Manager` agent before commit or release handoff so semantic version impact and changelog facts match the validated player experience.
 
 ## Output
 
