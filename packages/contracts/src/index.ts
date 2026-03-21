@@ -1,6 +1,6 @@
 export type RoomState = "lobby" | "starting" | "in-game" | "paused-recovery" | "finished";
 
-export type TurnState = "awaiting-roll" | "awaiting-property-decision" | "post-roll-pending";
+export type TurnState = "awaiting-roll" | "awaiting-property-decision" | "awaiting-auction" | "awaiting-jail-release" | "post-roll-pending";
 
 export type RoomEventType =
   | "room-created"
@@ -11,6 +11,15 @@ export type RoomEventType =
   | "property-offered"
   | "property-purchased"
   | "property-declined"
+  | "rent-charged"
+  | "auction-started"
+  | "auction-bid-submitted"
+  | "auction-pass-submitted"
+  | "auction-settled"
+  | "auction-ended-unsold"
+  | "card-resolved"
+  | "player-jailed"
+  | "jail-fine-paid"
   | "turn-advanced";
 
 export type PendingPropertyDecision = {
@@ -18,6 +27,17 @@ export type PendingPropertyDecision = {
   tileIndex: number;
   label: string;
   price: number;
+};
+
+export type PendingAuction = {
+  tileId: string;
+  tileIndex: number;
+  label: string;
+  price: number;
+  initiatorPlayerId: string;
+  highestBid: number;
+  highestBidderId: string | null;
+  passedPlayerIds: string[];
 };
 
 export type TileType = "corner" | "property" | "chance" | "community" | "tax" | "jail" | "utility" | "railway";
@@ -37,6 +57,7 @@ export type PlayerState = {
   cash: number;
   position: number;
   properties: string[];
+  inJail?: boolean;
   ready?: boolean;
 };
 
@@ -47,13 +68,16 @@ export type ProjectionEvent = {
   snapshotVersion: number;
   summary: string;
   playerId?: string;
+  ownerPlayerId?: string;
   nextPlayerId?: string;
   tileId?: string;
   tileIndex?: number;
   tileLabel?: string;
   tilePrice?: number;
+  amount?: number;
   playerPosition?: number;
   cashAfter?: number;
+  ownerCashAfter?: number;
   lastRoll?: [number, number];
 };
 
@@ -67,6 +91,7 @@ export type ProjectionSnapshot = {
   currentTurnPlayerId: string;
   pendingActionLabel: string;
   pendingProperty: PendingPropertyDecision | null;
+  pendingAuction: PendingAuction | null;
   lastRoll: [number, number];
   players: PlayerState[];
   recentEvents: ProjectionEvent[];
@@ -116,6 +141,22 @@ export type DeclinePropertyRequest = {
   idempotencyKey: string;
 };
 
+export type SubmitAuctionBidRequest = {
+  playerId: string;
+  idempotencyKey: string;
+  amount: number;
+};
+
+export type PassAuctionRequest = {
+  playerId: string;
+  idempotencyKey: string;
+};
+
+export type PayJailFineRequest = {
+  playerId: string;
+  idempotencyKey: string;
+};
+
 export type RollDiceCommand = {
   kind: "roll-dice";
   roomId: string;
@@ -137,13 +178,38 @@ export type DeclinePropertyCommand = {
   idempotencyKey: string;
 };
 
+export type SubmitAuctionBidCommand = {
+  kind: "submit-auction-bid";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+  amount: number;
+};
+
+export type PassAuctionCommand = {
+  kind: "pass-auction";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+};
+
+export type PayJailFineCommand = {
+  kind: "pay-jail-fine";
+  roomId: string;
+  playerId: string;
+  idempotencyKey: string;
+};
+
 export type GameCommand =
   | CreateRoomCommand
   | JoinRoomCommand
   | StartGameCommand
   | RollDiceCommand
   | PurchasePropertyCommand
-  | DeclinePropertyCommand;
+  | DeclinePropertyCommand
+  | SubmitAuctionBidCommand
+  | PassAuctionCommand
+  | PayJailFineCommand;
 
 export type RoomEventCatchUpResponse = {
   roomId: string;
@@ -152,6 +218,16 @@ export type RoomEventCatchUpResponse = {
   events: ProjectionEvent[];
   snapshot: ProjectionSnapshot | null;
 };
+
+export type RoomEventStreamEnvelope =
+  | {
+      kind: "event";
+      event: ProjectionEvent;
+    }
+  | {
+      kind: "snapshot";
+      snapshot: ProjectionSnapshot;
+    };
 
 export type RoomSummary = {
   roomId: string;

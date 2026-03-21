@@ -22,6 +22,7 @@ type PersistedRoomSnapshot struct {
 	CurrentTurnPlayerID string
 	PendingActionLabel  string
 	PendingPropertyJSON []byte
+	PendingAuctionJSON  []byte
 	LastRoll            [2]int
 	PlayersJSON         []byte
 }
@@ -34,13 +35,16 @@ type PersistedRoomEvent struct {
 	SnapshotVersion int
 	Summary  string
 	PlayerID string
+	OwnerPlayerID string
 	NextPlayerID string
 	TileID   string
 	TileIndex int
 	TileLabel string
 	TilePrice int
+	Amount int
 	PlayerPosition int
 	CashAfter int
+	OwnerCashAfter int
 	LastRoll [2]int
 }
 

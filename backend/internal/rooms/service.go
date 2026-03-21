@@ -17,6 +17,8 @@ import (
 const (
 	boardTileCount      = 40
 	maxEventCatchUpSpan = 20
+	jailTileIndex       = 10
+	jailFine            = 50
 )
 
 var boardLabels = []string{
@@ -114,6 +116,7 @@ type Player struct {
 	Cash       int      `json:"cash"`
 	Position   int      `json:"position"`
 	Properties []string `json:"properties"`
+	InJail     bool     `json:"inJail,omitempty"`
 	Ready      bool     `json:"ready,omitempty"`
 }
 
@@ -124,6 +127,17 @@ type PendingProperty struct {
 	Price     int    `json:"price"`
 }
 
+type PendingAuction struct {
+	TileID           string   `json:"tileId"`
+	TileIndex        int      `json:"tileIndex"`
+	Label            string   `json:"label"`
+	Price            int      `json:"price"`
+	InitiatorPlayerID string  `json:"initiatorPlayerId"`
+	HighestBid       int      `json:"highestBid"`
+	HighestBidderID  string   `json:"highestBidderId,omitempty"`
+	PassedPlayerIDs  []string `json:"passedPlayerIds"`
+}
+
 type Event struct {
 	ID              string `json:"id"`
 	Type            string `json:"type"`
@@ -131,13 +145,16 @@ type Event struct {
 	SnapshotVersion int    `json:"snapshotVersion"`
 	Summary         string `json:"summary"`
 	PlayerID        string `json:"playerId,omitempty"`
+	OwnerPlayerID   string `json:"ownerPlayerId,omitempty"`
 	NextPlayerID    string `json:"nextPlayerId,omitempty"`
 	TileID          string `json:"tileId,omitempty"`
 	TileIndex       int    `json:"tileIndex,omitempty"`
 	TileLabel       string `json:"tileLabel,omitempty"`
 	TilePrice       int    `json:"tilePrice,omitempty"`
+	Amount          int    `json:"amount,omitempty"`
 	PlayerPosition  int    `json:"playerPosition,omitempty"`
 	CashAfter       int    `json:"cashAfter,omitempty"`
+	OwnerCashAfter  int    `json:"ownerCashAfter,omitempty"`
 	LastRoll        [2]int `json:"lastRoll,omitempty"`
 }
 
@@ -151,6 +168,7 @@ type RoomResponse struct {
 	CurrentTurnPlayerID string           `json:"currentTurnPlayerId"`
 	PendingAction       string           `json:"pendingActionLabel"`
 	PendingProperty     *PendingProperty `json:"pendingProperty"`
+	PendingAuction      *PendingAuction  `json:"pendingAuction"`
 	LastRoll            [2]int           `json:"lastRoll"`
 	RecentEvents        []Event          `json:"recentEvents"`
 	Players             []Player         `json:"players"`
@@ -162,6 +180,12 @@ type RoomEventCatchUpResponse struct {
 	LatestSequence int           `json:"latestSequence"`
 	Events         []Event       `json:"events"`
 	Snapshot       *RoomResponse `json:"snapshot"`
+}
+
+type roomStreamEnvelope struct {
+	Kind     string        `json:"kind"`
+	Event    *Event        `json:"event,omitempty"`
+	Snapshot *RoomResponse `json:"snapshot,omitempty"`
 }
 
 type CreateRoomRequest struct {
@@ -186,11 +210,18 @@ type PropertyDecisionRequest struct {
 	IdempotencyKey string `json:"idempotencyKey"`
 }
 
+type AuctionBidRequest struct {
+	PlayerID       string `json:"playerId"`
+	IdempotencyKey string `json:"idempotencyKey"`
+	Amount         int    `json:"amount"`
+}
+
 type tileDetails struct {
 	ID          string
 	Index       int
 	Label       string
 	Price       int
+	Rent        int
 	Purchasable bool
 }
 
@@ -204,6 +235,7 @@ type roomRecord struct {
 	CurrentTurnPlayerID string
 	PendingAction       string
 	PendingProperty     *PendingProperty
+	PendingAuction      *PendingAuction
 	LastRoll            [2]int
 	Players             []Player
 	RecentEvents        []Event
@@ -213,22 +245,28 @@ type eventDraft struct {
 	Type           string
 	Summary        string
 	PlayerID       string
+	OwnerPlayerID  string
 	NextPlayerID   string
 	TileID         string
 	TileIndex      int
 	TileLabel      string
 	TilePrice      int
+	Amount         int
 	PlayerPosition int
 	CashAfter      int
+	OwnerCashAfter int
 	LastRoll       [2]int
 }
 
 type Service struct {
 	mu           sync.Mutex
+	streamMu     sync.Mutex
 	store        *pocketbase.Client
 	diceRoller   DiceRoller
 	nextRoomID   int
 	nextPlayerID int
+	nextStreamID int
+	streamSubscribers map[string]map[int]chan roomStreamEnvelope
 }
 
 func NewService(store *pocketbase.Client) *Service {
@@ -241,6 +279,7 @@ func NewServiceWithDependencies(store *pocketbase.Client, diceRoller DiceRoller)
 		diceRoller:   diceRoller,
 		nextRoomID:   1,
 		nextPlayerID: 1,
+		streamSubscribers: make(map[string]map[int]chan roomStreamEnvelope),
 	}
 	service.seedDemoRoom()
 	service.syncCounters()
@@ -307,6 +346,9 @@ func (service *Service) HandleRoomRoute(writer http.ResponseWriter, request *htt
 		case parts[1] == "events" && request.Method == http.MethodGet:
 			service.handleRoomEvents(writer, request, roomID)
 			return
+		case parts[1] == "stream" && request.Method == http.MethodGet:
+			service.handleRoomStream(writer, request, roomID)
+			return
 		case parts[1] == "join" && request.Method == http.MethodPost:
 			service.handleJoinRoom(writer, request, roomID)
 			return
@@ -321,6 +363,15 @@ func (service *Service) HandleRoomRoute(writer http.ResponseWriter, request *htt
 			return
 		case parts[1] == "decline" && request.Method == http.MethodPost:
 			service.handleDeclineProperty(writer, request, roomID)
+			return
+		case parts[1] == "bid" && request.Method == http.MethodPost:
+			service.handleAuctionBid(writer, request, roomID)
+			return
+		case parts[1] == "pass" && request.Method == http.MethodPost:
+			service.handleAuctionPass(writer, request, roomID)
+			return
+		case parts[1] == "jail-release" && request.Method == http.MethodPost:
+			service.handleJailRelease(writer, request, roomID)
 			return
 		}
 	}
@@ -346,6 +397,79 @@ func (service *Service) handleRoomEvents(writer http.ResponseWriter, request *ht
 	}
 
 	writeJSON(writer, http.StatusOK, response)
+}
+
+func (service *Service) handleRoomStream(writer http.ResponseWriter, request *http.Request, roomID string) {
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	writer.Header().Set("Cache-Control", "no-cache")
+	writer.Header().Set("Connection", "keep-alive")
+	writer.Header().Set("Content-Type", "text/event-stream")
+	writer.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := writer.(http.Flusher)
+	if !ok {
+		writeError(writer, http.StatusInternalServerError, "streaming unsupported")
+		return
+	}
+
+	afterSequence := 0
+	if raw := strings.TrimSpace(request.URL.Query().Get("afterSequence")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(writer, http.StatusBadRequest, "afterSequence must be an integer")
+			return
+		}
+		afterSequence = parsed
+	}
+
+	subscriberID, stream := service.addRoomStreamSubscriber(roomID)
+	defer service.removeRoomStreamSubscriber(roomID, subscriberID)
+
+	bootstrap, err := service.catchUpRoomEvents(roomID, afterSequence)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if bootstrap.Snapshot != nil {
+		if err := writeSSE(writer, "snapshot", roomStreamEnvelope{Kind: "snapshot", Snapshot: bootstrap.Snapshot}); err != nil {
+			return
+		}
+	}
+	for _, event := range bootstrap.Events {
+		streamEvent := event
+		if err := writeSSE(writer, "room-event", roomStreamEnvelope{Kind: "event", Event: &streamEvent}); err != nil {
+			return
+		}
+	}
+	flusher.Flush()
+
+	keepAliveTicker := time.NewTicker(15 * time.Second)
+	defer keepAliveTicker.Stop()
+
+	for {
+		select {
+		case <-request.Context().Done():
+			return
+		case envelope, ok := <-stream:
+			if !ok {
+				return
+			}
+			eventName := "room-event"
+			if envelope.Kind == "snapshot" {
+				eventName = "snapshot"
+			}
+			if err := writeSSE(writer, eventName, envelope); err != nil {
+				return
+			}
+			flusher.Flush()
+		case <-keepAliveTicker.C:
+			if _, err := writer.Write([]byte(": keepalive\n\n")); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
 }
 
 func (service *Service) handleJoinRoom(writer http.ResponseWriter, request *http.Request, roomID string) {
@@ -428,6 +552,54 @@ func (service *Service) handleDeclineProperty(writer http.ResponseWriter, reques
 	writeJSON(writer, http.StatusOK, room.toResponse())
 }
 
+func (service *Service) handleAuctionBid(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload AuctionBidRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid bid payload")
+		return
+	}
+
+	room, err := service.submitAuctionBid(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey), payload.Amount)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
+func (service *Service) handleAuctionPass(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload PropertyDecisionRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid auction pass payload")
+		return
+	}
+
+	room, err := service.passAuction(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
+func (service *Service) handleJailRelease(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload PropertyDecisionRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid jail release payload")
+		return
+	}
+
+	room, err := service.payJailFine(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
 func (service *Service) createRoom(hostName string) roomRecord {
 	service.mu.Lock()
 	defer service.mu.Unlock()
@@ -447,6 +619,7 @@ func (service *Service) createRoom(hostName string) roomRecord {
 		CurrentTurnPlayerID: hostPlayer.ID,
 		PendingAction:       "等待更多玩家加入",
 		PendingProperty:     nil,
+		PendingAuction:      nil,
 		LastRoll:            [2]int{0, 0},
 		Players:             []Player{hostPlayer},
 	}
@@ -549,6 +722,7 @@ func (service *Service) startRoom(roomID string, hostID string) (roomRecord, err
 	room.TurnState = "awaiting-roll"
 	room.PendingAction = "等待当前玩家掷骰"
 	room.PendingProperty = nil
+	room.PendingAuction = nil
 	room.CurrentTurnPlayerID = room.Players[0].ID
 	room.LastRoll = [2]int{0, 0}
 	service.commitRoomMutation(&room, []eventDraft{{Type: "room-started", Summary: "房主开始了对局。"}})
@@ -601,6 +775,20 @@ func (service *Service) rollDice(roomID string, playerID string, idempotencyKey 
 		{Type: "player-moved", Summary: fmt.Sprintf("%s 移动到 %s。", player.Name, tile.Label), PlayerID: player.ID, TileID: tile.ID, TileIndex: tile.Index, TileLabel: tile.Label, PlayerPosition: player.Position},
 	}
 
+	if handled, handledDrafts := room.resolveSpecialTile(playerIndex, tile); handled {
+		drafts = append(drafts, handledDrafts...)
+		service.commitRoomMutation(&room, drafts)
+		service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
+			RoomID:          room.RoomID,
+			PlayerID:        playerID,
+			CommandKind:     "roll-dice",
+			IdempotencyKey:  idempotencyKey,
+			Snapshot:        room.toPersistedSnapshot(),
+			RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
+		})
+		return room, nil
+	}
+
 	if tile.Purchasable && !room.tileIsOwned(tile.ID) {
 		room.TurnState = "awaiting-property-decision"
 		room.PendingAction = fmt.Sprintf("可购买 %s，价格 %d。", tile.Label, tile.Price)
@@ -613,6 +801,31 @@ func (service *Service) rollDice(roomID string, playerID string, idempotencyKey 
 			TileIndex: tile.Index,
 			TileLabel: tile.Label,
 			TilePrice: tile.Price,
+		})
+	} else if ownerIndex := findPropertyOwnerIndex(room.Players, tile.ID); ownerIndex != -1 && room.Players[ownerIndex].ID != player.ID {
+		rent := tile.Rent
+		room.Players[playerIndex].Cash -= rent
+		room.Players[ownerIndex].Cash += rent
+		payer := room.Players[playerIndex]
+		owner := room.Players[ownerIndex]
+		drafts = append(drafts, eventDraft{
+			Type:           "rent-charged",
+			Summary:        fmt.Sprintf("%s 向 %s 支付了 %d 租金。", payer.Name, owner.Name, rent),
+			PlayerID:       payer.ID,
+			OwnerPlayerID:  owner.ID,
+			TileID:         tile.ID,
+			TileIndex:      tile.Index,
+			TileLabel:      tile.Label,
+			TilePrice:      tile.Price,
+			Amount:         rent,
+			CashAfter:      payer.Cash,
+			OwnerCashAfter: owner.Cash,
+		})
+		nextPlayerID := room.advanceTurn()
+		drafts = append(drafts, eventDraft{
+			Type:         "turn-advanced",
+			Summary:      "轮到下一位玩家行动。",
+			NextPlayerID: nextPlayerID,
 		})
 	} else {
 		nextPlayerID := room.advanceTurn()
@@ -628,6 +841,61 @@ func (service *Service) rollDice(roomID string, playerID string, idempotencyKey 
 		RoomID:          room.RoomID,
 		PlayerID:        playerID,
 		CommandKind:     "roll-dice",
+		IdempotencyKey:  idempotencyKey,
+		Snapshot:        room.toPersistedSnapshot(),
+		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
+	})
+
+	return room, nil
+}
+
+func (service *Service) payJailFine(roomID string, playerID string, idempotencyKey string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" {
+		return roomRecord{}, fmt.Errorf("playerId is required")
+	}
+	if idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("idempotencyKey is required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "pay-jail-fine", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-jail-release" {
+		return roomRecord{}, fmt.Errorf("room is not waiting for jail release")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current jailed player can pay the fine")
+	}
+	playerIndex := findPlayerIndex(room.Players, playerID)
+	if playerIndex == -1 {
+		return roomRecord{}, fmt.Errorf("player not found")
+	}
+	if !room.Players[playerIndex].InJail {
+		return roomRecord{}, fmt.Errorf("player is not in jail")
+	}
+	room.Players[playerIndex].Cash -= jailFine
+	room.Players[playerIndex].InJail = false
+	room.TurnState = "awaiting-roll"
+	room.PendingAction = "等待当前玩家掷骰"
+
+	service.commitRoomMutation(&room, []eventDraft{{
+		Type:      "jail-fine-paid",
+		Summary:   fmt.Sprintf("%s 支付了 %d 罚金并离开监狱。", room.Players[playerIndex].Name, jailFine),
+		PlayerID:  playerID,
+		Amount:    jailFine,
+		CashAfter: room.Players[playerIndex].Cash,
+	}})
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
+		RoomID:          room.RoomID,
+		PlayerID:        playerID,
+		CommandKind:     "pay-jail-fine",
 		IdempotencyKey:  idempotencyKey,
 		Snapshot:        room.toPersistedSnapshot(),
 		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
@@ -705,7 +973,14 @@ func (service *Service) resolvePropertyDecision(roomID string, playerID string, 
 			TilePrice: pending.Price,
 			CashAfter: currentPlayer.Cash,
 		})
+		nextPlayerID := room.advanceTurn()
+		drafts = append(drafts, eventDraft{
+			Type:         "turn-advanced",
+			Summary:      "轮到下一位玩家行动。",
+			NextPlayerID: nextPlayerID,
+		})
 	} else {
+		room.startAuction(pending, currentPlayer.ID)
 		drafts = append(drafts, eventDraft{
 			Type:      "property-declined",
 			Summary:   fmt.Sprintf("%s 放弃了 %s。", currentPlayer.Name, pending.Label),
@@ -715,20 +990,156 @@ func (service *Service) resolvePropertyDecision(roomID string, playerID string, 
 			TileLabel: pending.Label,
 			TilePrice: pending.Price,
 		})
+		drafts = append(drafts, eventDraft{
+			Type:         "auction-started",
+			Summary:      fmt.Sprintf("%s 进入拍卖。", pending.Label),
+			PlayerID:     currentPlayer.ID,
+			NextPlayerID: room.CurrentTurnPlayerID,
+			TileID:       pending.TileID,
+			TileIndex:    pending.TileIndex,
+			TileLabel:    pending.Label,
+			TilePrice:    pending.Price,
+		})
 	}
-
-	nextPlayerID := room.advanceTurn()
-	drafts = append(drafts, eventDraft{
-		Type:         "turn-advanced",
-		Summary:      "轮到下一位玩家行动。",
-		NextPlayerID: nextPlayerID,
-	})
 
 	service.commitRoomMutation(&room, drafts)
 	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
 		RoomID:          room.RoomID,
 		PlayerID:        playerID,
 		CommandKind:     commandKind,
+		IdempotencyKey:  idempotencyKey,
+		Snapshot:        room.toPersistedSnapshot(),
+		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
+	})
+
+	return room, nil
+}
+
+func (service *Service) submitAuctionBid(roomID string, playerID string, idempotencyKey string, amount int) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" {
+		return roomRecord{}, fmt.Errorf("playerId is required")
+	}
+	if idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("idempotencyKey is required")
+	}
+	if amount <= 0 {
+		return roomRecord{}, fmt.Errorf("amount must be positive")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "submit-auction-bid", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-auction" || room.PendingAuction == nil {
+		return roomRecord{}, fmt.Errorf("room is not waiting for an auction bid")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current auction player can bid")
+	}
+	playerIndex := findPlayerIndex(room.Players, playerID)
+	if playerIndex == -1 {
+		return roomRecord{}, fmt.Errorf("player not found")
+	}
+	if room.Players[playerIndex].Cash < amount {
+		return roomRecord{}, fmt.Errorf("player cannot afford the bid")
+	}
+	if amount <= room.PendingAuction.HighestBid {
+		return roomRecord{}, fmt.Errorf("bid must exceed current highest bid")
+	}
+
+	room.PendingAuction.HighestBid = amount
+	room.PendingAuction.HighestBidderID = playerID
+	drafts := []eventDraft{{
+		Type:         "auction-bid-submitted",
+		Summary:      fmt.Sprintf("%s 出价 %d。", room.Players[playerIndex].Name, amount),
+		PlayerID:     playerID,
+		NextPlayerID: room.nextAuctionPlayerID(playerID),
+		TileID:       room.PendingAuction.TileID,
+		TileIndex:    room.PendingAuction.TileIndex,
+		TileLabel:    room.PendingAuction.Label,
+		TilePrice:    room.PendingAuction.Price,
+		Amount:       amount,
+	}}
+
+	if room.auctionShouldSettle() {
+		room.finalizeAuction(&drafts)
+	} else {
+		room.CurrentTurnPlayerID = room.nextAuctionPlayerID(playerID)
+		room.PendingAction = fmt.Sprintf("拍卖进行中，当前最高出价 %d。", room.PendingAuction.HighestBid)
+	}
+
+	service.commitRoomMutation(&room, drafts)
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
+		RoomID:          room.RoomID,
+		PlayerID:        playerID,
+		CommandKind:     "submit-auction-bid",
+		IdempotencyKey:  idempotencyKey,
+		Snapshot:        room.toPersistedSnapshot(),
+		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
+	})
+
+	return room, nil
+}
+
+func (service *Service) passAuction(roomID string, playerID string, idempotencyKey string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" {
+		return roomRecord{}, fmt.Errorf("playerId is required")
+	}
+	if idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("idempotencyKey is required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "pass-auction", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-auction" || room.PendingAuction == nil {
+		return roomRecord{}, fmt.Errorf("room is not waiting for an auction pass")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current auction player can pass")
+	}
+	if containsPlayer(room.PendingAuction.PassedPlayerIDs, playerID) {
+		return roomRecord{}, fmt.Errorf("player already passed the auction")
+	}
+
+	room.PendingAuction.PassedPlayerIDs = append(room.PendingAuction.PassedPlayerIDs, playerID)
+	nextPlayerID := room.nextAuctionPlayerID(playerID)
+	drafts := []eventDraft{{
+		Type:         "auction-pass-submitted",
+		Summary:      fmt.Sprintf("%s 放弃继续出价。", room.playerName(playerID)),
+		PlayerID:     playerID,
+		NextPlayerID: nextPlayerID,
+		TileID:       room.PendingAuction.TileID,
+		TileIndex:    room.PendingAuction.TileIndex,
+		TileLabel:    room.PendingAuction.Label,
+		TilePrice:    room.PendingAuction.Price,
+	}}
+
+	if room.auctionShouldSettle() || nextPlayerID == "" {
+		room.finalizeAuction(&drafts)
+	} else {
+		room.CurrentTurnPlayerID = nextPlayerID
+		room.PendingAction = fmt.Sprintf("拍卖进行中，当前最高出价 %d。", room.PendingAuction.HighestBid)
+	}
+
+	service.commitRoomMutation(&room, drafts)
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
+		RoomID:          room.RoomID,
+		PlayerID:        playerID,
+		CommandKind:     "pass-auction",
 		IdempotencyKey:  idempotencyKey,
 		Snapshot:        room.toPersistedSnapshot(),
 		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
@@ -749,13 +1160,16 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 			SnapshotVersion: room.SnapshotVersion,
 			Summary:         draft.Summary,
 			PlayerID:        draft.PlayerID,
+			OwnerPlayerID:   draft.OwnerPlayerID,
 			NextPlayerID:    draft.NextPlayerID,
 			TileID:          draft.TileID,
 			TileIndex:       draft.TileIndex,
 			TileLabel:       draft.TileLabel,
 			TilePrice:       draft.TilePrice,
+			Amount:          draft.Amount,
 			PlayerPosition:  draft.PlayerPosition,
 			CashAfter:       draft.CashAfter,
+			OwnerCashAfter:  draft.OwnerCashAfter,
 			LastRoll:        draft.LastRoll,
 		}
 		room.RecentEvents = append(room.RecentEvents, event)
@@ -767,13 +1181,16 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 			SnapshotVersion: event.SnapshotVersion,
 			Summary:         event.Summary,
 			PlayerID:        event.PlayerID,
+			OwnerPlayerID:   event.OwnerPlayerID,
 			NextPlayerID:    event.NextPlayerID,
 			TileID:          event.TileID,
 			TileIndex:       event.TileIndex,
 			TileLabel:       event.TileLabel,
 			TilePrice:       event.TilePrice,
+			Amount:          event.Amount,
 			PlayerPosition:  event.PlayerPosition,
 			CashAfter:       event.CashAfter,
+			OwnerCashAfter:  event.OwnerCashAfter,
 			LastRoll:        event.LastRoll,
 		})
 	}
@@ -782,16 +1199,24 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 	if len(persistedEvents) > 0 {
 		service.store.AppendRoomEvents(room.RoomID, persistedEvents)
 	}
+	service.broadcastRoomEvents(persistedEvents)
 }
 
 func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) roomRecord {
 	var players []Player
 	var pendingProperty *PendingProperty
+	var pendingAuction *PendingAuction
 	_ = json.Unmarshal(snapshot.PlayersJSON, &players)
 	if len(snapshot.PendingPropertyJSON) > 0 && string(snapshot.PendingPropertyJSON) != "null" {
 		var decoded PendingProperty
 		if err := json.Unmarshal(snapshot.PendingPropertyJSON, &decoded); err == nil {
 			pendingProperty = &decoded
+		}
+	}
+	if len(snapshot.PendingAuctionJSON) > 0 && string(snapshot.PendingAuctionJSON) != "null" {
+		var decoded PendingAuction
+		if err := json.Unmarshal(snapshot.PendingAuctionJSON, &decoded); err == nil {
+			pendingAuction = &decoded
 		}
 	}
 
@@ -806,6 +1231,7 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 		CurrentTurnPlayerID: snapshot.CurrentTurnPlayerID,
 		PendingAction:       snapshot.PendingActionLabel,
 		PendingProperty:     pendingProperty,
+		PendingAuction:      pendingAuction,
 		LastRoll:            snapshot.LastRoll,
 		Players:             players,
 		RecentEvents:        tailEvents(events, 10),
@@ -844,6 +1270,7 @@ func (service *Service) seedDemoRoom() {
 		CurrentTurnPlayerID: host.ID,
 		PendingAction:       "等待房主开始游戏",
 		PendingProperty:     nil,
+		PendingAuction:      nil,
 		LastRoll:            [2]int{0, 0},
 		Players:             []Player{host, second, third},
 	}
@@ -890,16 +1317,79 @@ func (service *Service) handlePreflight(writer http.ResponseWriter, request *htt
 }
 
 func (room *roomRecord) advanceTurn() string {
-	currentIndex := findPlayerIndex(room.Players, room.CurrentTurnPlayerID)
+	return room.advanceTurnFromPlayer(room.CurrentTurnPlayerID)
+}
+
+func (room *roomRecord) advanceTurnFromPlayer(playerID string) string {
+	currentIndex := findPlayerIndex(room.Players, playerID)
 	nextIndex := 0
 	if currentIndex >= 0 {
 		nextIndex = (currentIndex + 1) % len(room.Players)
 	}
 	room.CurrentTurnPlayerID = room.Players[nextIndex].ID
-	room.TurnState = "awaiting-roll"
-	room.PendingAction = "等待当前玩家掷骰"
+	if room.Players[nextIndex].InJail {
+		room.TurnState = "awaiting-jail-release"
+		room.PendingAction = fmt.Sprintf("%s 在监狱中，需支付 %d 罚金后再掷骰。", room.Players[nextIndex].Name, jailFine)
+	} else {
+		room.TurnState = "awaiting-roll"
+		room.PendingAction = "等待当前玩家掷骰"
+	}
 	room.PendingProperty = nil
+	room.PendingAuction = nil
 	return room.CurrentTurnPlayerID
+}
+
+func (room *roomRecord) resolveSpecialTile(playerIndex int, tile tileDetails) (bool, []eventDraft) {
+	player := room.Players[playerIndex]
+	if tile.Label == "去监狱" {
+		room.Players[playerIndex].Position = jailTileIndex
+		room.Players[playerIndex].InJail = true
+		drafts := []eventDraft{{
+			Type:           "player-jailed",
+			Summary:        fmt.Sprintf("%s 被送入监狱。", player.Name),
+			PlayerID:       player.ID,
+			TileID:         fmt.Sprintf("tile-%d", jailTileIndex),
+			TileIndex:      jailTileIndex,
+			TileLabel:      boardLabels[jailTileIndex],
+			PlayerPosition: jailTileIndex,
+		}}
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+		return true, drafts
+	}
+	if strings.Contains(tile.Label, "命运") {
+		room.Players[playerIndex].Cash += 100
+		drafts := []eventDraft{{
+			Type:      "card-resolved",
+			Summary:   fmt.Sprintf("%s 抽到命运卡，获得 100。", player.Name),
+			PlayerID:  player.ID,
+			TileID:    tile.ID,
+			TileIndex: tile.Index,
+			TileLabel: tile.Label,
+			Amount:    100,
+			CashAfter: room.Players[playerIndex].Cash,
+		}}
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+		return true, drafts
+	}
+	if strings.Contains(tile.Label, "机会") {
+		room.Players[playerIndex].Cash -= 50
+		drafts := []eventDraft{{
+			Type:      "card-resolved",
+			Summary:   fmt.Sprintf("%s 抽到机会卡，支付 50。", player.Name),
+			PlayerID:  player.ID,
+			TileID:    tile.ID,
+			TileIndex: tile.Index,
+			TileLabel: tile.Label,
+			Amount:    -50,
+			CashAfter: room.Players[playerIndex].Cash,
+		}}
+		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+		return true, drafts
+	}
+	return false, nil
 }
 
 func (room roomRecord) tileIsOwned(tileID string) bool {
@@ -916,6 +1406,7 @@ func (room roomRecord) tileIsOwned(tileID string) bool {
 func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 	playersJSON, _ := json.Marshal(room.Players)
 	pendingPropertyJSON, _ := json.Marshal(room.PendingProperty)
+	pendingAuctionJSON, _ := json.Marshal(room.PendingAuction)
 	return pocketbase.PersistedRoomSnapshot{
 		RoomID:              room.RoomID,
 		RoomState:           room.State,
@@ -926,6 +1417,7 @@ func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 		CurrentTurnPlayerID: room.CurrentTurnPlayerID,
 		PendingActionLabel:  room.PendingAction,
 		PendingPropertyJSON: pendingPropertyJSON,
+		PendingAuctionJSON:  pendingAuctionJSON,
 		LastRoll:            room.LastRoll,
 		PlayersJSON:         playersJSON,
 	}
@@ -942,6 +1434,7 @@ func (room roomRecord) toResponse() RoomResponse {
 		CurrentTurnPlayerID: room.CurrentTurnPlayerID,
 		PendingAction:       room.PendingAction,
 		PendingProperty:     room.PendingProperty,
+		PendingAuction:      room.PendingAuction,
 		LastRoll:            room.LastRoll,
 		RecentEvents:        room.RecentEvents,
 		Players:             room.Players,
@@ -951,9 +1444,11 @@ func (room roomRecord) toResponse() RoomResponse {
 func tileForIndex(index int) tileDetails {
 	label := boardLabels[index]
 	price := 0
+	rent := 0
 	purchasable := false
 	if index > 0 && index%5 != 0 && !isSpecialTileLabel(label) {
 		price = 100 + index*10
+		rent = 10 + index*2
 		purchasable = true
 	}
 
@@ -962,6 +1457,7 @@ func tileForIndex(index int) tileDetails {
 		Index:       index,
 		Label:       label,
 		Price:       price,
+		Rent:        rent,
 		Purchasable: purchasable,
 	}
 }
@@ -987,13 +1483,16 @@ func toPersistedEvents(roomID string, events []Event) []pocketbase.PersistedRoom
 			SnapshotVersion: event.SnapshotVersion,
 			Summary:         event.Summary,
 			PlayerID:        event.PlayerID,
+			OwnerPlayerID:   event.OwnerPlayerID,
 			NextPlayerID:    event.NextPlayerID,
 			TileID:          event.TileID,
 			TileIndex:       event.TileIndex,
 			TileLabel:       event.TileLabel,
 			TilePrice:       event.TilePrice,
+			Amount:          event.Amount,
 			PlayerPosition:  event.PlayerPosition,
 			CashAfter:       event.CashAfter,
+			OwnerCashAfter:  event.OwnerCashAfter,
 			LastRoll:        event.LastRoll,
 		})
 	}
@@ -1010,17 +1509,77 @@ func toRoomEvents(events []pocketbase.PersistedRoomEvent) []Event {
 			SnapshotVersion: event.SnapshotVersion,
 			Summary:         event.Summary,
 			PlayerID:        event.PlayerID,
+			OwnerPlayerID:   event.OwnerPlayerID,
 			NextPlayerID:    event.NextPlayerID,
 			TileID:          event.TileID,
 			TileIndex:       event.TileIndex,
 			TileLabel:       event.TileLabel,
 			TilePrice:       event.TilePrice,
+			Amount:          event.Amount,
 			PlayerPosition:  event.PlayerPosition,
 			CashAfter:       event.CashAfter,
+			OwnerCashAfter:  event.OwnerCashAfter,
 			LastRoll:        event.LastRoll,
 		})
 	}
 	return roomEvents
+}
+
+func (service *Service) addRoomStreamSubscriber(roomID string) (int, chan roomStreamEnvelope) {
+	service.streamMu.Lock()
+	defer service.streamMu.Unlock()
+
+	service.nextStreamID++
+	streamID := service.nextStreamID
+	stream := make(chan roomStreamEnvelope, 32)
+	if service.streamSubscribers[roomID] == nil {
+		service.streamSubscribers[roomID] = make(map[int]chan roomStreamEnvelope)
+	}
+	service.streamSubscribers[roomID][streamID] = stream
+	return streamID, stream
+}
+
+func (service *Service) removeRoomStreamSubscriber(roomID string, streamID int) {
+	service.streamMu.Lock()
+	defer service.streamMu.Unlock()
+
+	subscribers := service.streamSubscribers[roomID]
+	if subscribers == nil {
+		return
+	}
+	stream, ok := subscribers[streamID]
+	if !ok {
+		return
+	}
+	delete(subscribers, streamID)
+	close(stream)
+	if len(subscribers) == 0 {
+		delete(service.streamSubscribers, roomID)
+	}
+}
+
+func (service *Service) broadcastRoomEvents(events []pocketbase.PersistedRoomEvent) {
+	if len(events) == 0 {
+		return
+	}
+
+	service.streamMu.Lock()
+	defer service.streamMu.Unlock()
+
+	for _, persistedEvent := range events {
+		subscribers := service.streamSubscribers[persistedEvent.RoomID]
+		if len(subscribers) == 0 {
+			continue
+		}
+		event := toRoomEvents([]pocketbase.PersistedRoomEvent{persistedEvent})[0]
+		envelope := roomStreamEnvelope{Kind: "event", Event: &event}
+		for _, subscriber := range subscribers {
+			select {
+			case subscriber <- envelope:
+			default:
+			}
+		}
+	}
 }
 
 func tailEvents(events []Event, limit int) []Event {
@@ -1039,6 +1598,146 @@ func findPlayerIndex(players []Player, playerID string) int {
 	return -1
 }
 
+func findPropertyOwnerIndex(players []Player, tileID string) int {
+	for index, player := range players {
+		for _, property := range player.Properties {
+			if property == tileID {
+				return index
+			}
+		}
+	}
+	return -1
+}
+
+func containsPlayer(playerIDs []string, playerID string) bool {
+	for _, candidate := range playerIDs {
+		if candidate == playerID {
+			return true
+		}
+	}
+	return false
+}
+
+func (room *roomRecord) playerName(playerID string) string {
+	index := findPlayerIndex(room.Players, playerID)
+	if index == -1 {
+		return "未知玩家"
+	}
+	return room.Players[index].Name
+}
+
+func (room *roomRecord) startAuction(pending PendingProperty, initiatorPlayerID string) {
+	room.PendingProperty = nil
+	room.PendingAuction = &PendingAuction{
+		TileID:            pending.TileID,
+		TileIndex:         pending.TileIndex,
+		Label:             pending.Label,
+		Price:             pending.Price,
+		InitiatorPlayerID: initiatorPlayerID,
+		HighestBid:        0,
+		HighestBidderID:   "",
+		PassedPlayerIDs:   []string{},
+	}
+	room.TurnState = "awaiting-auction"
+	room.CurrentTurnPlayerID = room.nextPlayerIDAfter(initiatorPlayerID)
+	room.PendingAction = fmt.Sprintf("%s 进入拍卖，轮到 %s 出价或放弃。", pending.Label, room.playerName(room.CurrentTurnPlayerID))
+}
+
+func (room *roomRecord) nextPlayerIDAfter(playerID string) string {
+	currentIndex := findPlayerIndex(room.Players, playerID)
+	if currentIndex == -1 {
+		return room.Players[0].ID
+	}
+	return room.Players[(currentIndex+1)%len(room.Players)].ID
+}
+
+func (room *roomRecord) activeAuctionPlayerIDs() []string {
+	if room.PendingAuction == nil {
+		return nil
+	}
+	active := make([]string, 0, len(room.Players))
+	for _, player := range room.Players {
+		if !containsPlayer(room.PendingAuction.PassedPlayerIDs, player.ID) {
+			active = append(active, player.ID)
+		}
+	}
+	return active
+}
+
+func (room *roomRecord) nextAuctionPlayerID(afterPlayerID string) string {
+	active := room.activeAuctionPlayerIDs()
+	if len(active) == 0 {
+		return ""
+	}
+	for offset := 1; offset <= len(room.Players); offset++ {
+		candidate := room.nextPlayerIDAfterN(afterPlayerID, offset)
+		if containsPlayer(active, candidate) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (room *roomRecord) nextPlayerIDAfterN(playerID string, distance int) string {
+	currentIndex := findPlayerIndex(room.Players, playerID)
+	if currentIndex == -1 {
+		return room.Players[0].ID
+	}
+	return room.Players[(currentIndex+distance)%len(room.Players)].ID
+}
+
+func (room *roomRecord) auctionShouldSettle() bool {
+	if room.PendingAuction == nil {
+		return false
+	}
+	active := room.activeAuctionPlayerIDs()
+	if room.PendingAuction.HighestBidderID == "" {
+		return len(active) == 0
+	}
+	return len(active) == 1 && active[0] == room.PendingAuction.HighestBidderID
+}
+
+func (room *roomRecord) finalizeAuction(drafts *[]eventDraft) {
+	if room.PendingAuction == nil {
+		return
+	}
+	auction := *room.PendingAuction
+	if auction.HighestBidderID != "" {
+		winnerIndex := findPlayerIndex(room.Players, auction.HighestBidderID)
+		if winnerIndex != -1 {
+			room.Players[winnerIndex].Cash -= auction.HighestBid
+			room.Players[winnerIndex].Properties = append(room.Players[winnerIndex].Properties, auction.TileID)
+			*drafts = append(*drafts, eventDraft{
+				Type:      "auction-settled",
+				Summary:   fmt.Sprintf("%s 以 %d 拍得 %s。", room.Players[winnerIndex].Name, auction.HighestBid, auction.Label),
+				PlayerID:  auction.HighestBidderID,
+				TileID:    auction.TileID,
+				TileIndex: auction.TileIndex,
+				TileLabel: auction.Label,
+				TilePrice: auction.Price,
+				Amount:    auction.HighestBid,
+				CashAfter: room.Players[winnerIndex].Cash,
+			})
+		}
+	} else {
+		*drafts = append(*drafts, eventDraft{
+			Type:      "auction-ended-unsold",
+			Summary:   fmt.Sprintf("%s 本轮无人竞拍。", auction.Label),
+			PlayerID:  auction.InitiatorPlayerID,
+			TileID:    auction.TileID,
+			TileIndex: auction.TileIndex,
+			TileLabel: auction.Label,
+			TilePrice: auction.Price,
+		})
+	}
+	nextPlayerID := room.advanceTurnFromPlayer(auction.InitiatorPlayerID)
+	*drafts = append(*drafts, eventDraft{
+		Type:         "turn-advanced",
+		Summary:      "轮到下一位玩家行动。",
+		NextPlayerID: nextPlayerID,
+	})
+}
+
 func writeJSON(writer http.ResponseWriter, statusCode int, payload any) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(statusCode)
@@ -1047,4 +1746,18 @@ func writeJSON(writer http.ResponseWriter, statusCode int, payload any) {
 
 func writeError(writer http.ResponseWriter, statusCode int, message string) {
 	writeJSON(writer, statusCode, map[string]string{"error": message})
+}
+
+func writeSSE(writer http.ResponseWriter, eventName string, payload roomStreamEnvelope) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write([]byte("event: " + eventName + "\n")); err != nil {
+		return err
+	}
+	if _, err := writer.Write([]byte("data: " + string(raw) + "\n\n")); err != nil {
+		return err
+	}
+	return nil
 }

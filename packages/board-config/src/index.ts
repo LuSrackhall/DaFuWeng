@@ -82,6 +82,7 @@ export const sampleProjection: ProjectionSnapshot = {
   currentTurnPlayerId: "p1",
   pendingActionLabel: "等待当前玩家掷骰",
   pendingProperty: null,
+  pendingAuction: null,
   lastRoll: [0, 0],
   players: samplePlayers,
   recentEvents: [

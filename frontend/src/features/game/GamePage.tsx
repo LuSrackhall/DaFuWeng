@@ -1,7 +1,7 @@
 import { sampleBoard } from "@dafuweng/board-config";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { declineProperty, purchaseProperty, rollDice } from "../../network/roomApi";
+import { declineProperty, passAuction, payJailFine, purchaseProperty, rollDice, submitAuctionBid } from "../../network/roomApi";
 import { BoardScene } from "../../scene/board/BoardScene";
 import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
@@ -12,6 +12,7 @@ export function GamePage() {
   const roomId = params.roomId ?? "demo-room";
   const { projection, isFallback, isLoading, error, applySnapshot, refreshProjection } = useGameProjection(roomId);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [auctionBid, setAuctionBid] = useState("200");
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const presentation = usePresentationState(projection.currentTurnPlayerId, projection.players);
   const activePlayer = getActivePlayer(roomId) ?? {
@@ -28,6 +29,17 @@ export function GamePage() {
     && !isSubmittingCommand
     && projection.turnState === "awaiting-property-decision"
     && projection.pendingProperty !== null
+    && activePlayer.playerId === projection.currentTurnPlayerId;
+  const canAuction = !isFallback
+    && !isLoading
+    && !isSubmittingCommand
+    && projection.turnState === "awaiting-auction"
+    && projection.pendingAuction !== null
+    && activePlayer.playerId === projection.currentTurnPlayerId;
+  const canPayJailFine = !isFallback
+    && !isLoading
+    && !isSubmittingCommand
+    && projection.turnState === "awaiting-jail-release"
     && activePlayer.playerId === projection.currentTurnPlayerId;
 
   async function handleRollDice() {
@@ -65,6 +77,47 @@ export function GamePage() {
       setActionMessage(decision === "purchase" ? "已同步权威买地结果。" : "已同步权威放弃结果。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "地产决策失败");
+      await refreshProjection();
+    } finally {
+      setIsSubmittingCommand(false);
+    }
+  }
+
+  async function handleAuction(action: "bid" | "pass") {
+    setIsSubmittingCommand(true);
+    setActionMessage(null);
+
+    try {
+      const request = {
+        playerId: activePlayer.playerId,
+        idempotencyKey: crypto.randomUUID()
+      };
+      const snapshot = action === "bid"
+        ? await submitAuctionBid(roomId, { ...request, amount: Number(auctionBid) })
+        : await passAuction(roomId, request);
+      applySnapshot(snapshot);
+      setActionMessage(action === "bid" ? "已同步权威拍卖出价。" : "已同步权威拍卖放弃。");
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "拍卖操作失败");
+      await refreshProjection();
+    } finally {
+      setIsSubmittingCommand(false);
+    }
+  }
+
+  async function handleJailRelease() {
+    setIsSubmittingCommand(true);
+    setActionMessage(null);
+
+    try {
+      const snapshot = await payJailFine(roomId, {
+        playerId: activePlayer.playerId,
+        idempotencyKey: crypto.randomUUID()
+      });
+      applySnapshot(snapshot);
+      setActionMessage("已同步权威出狱结果。");
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "出狱失败");
       await refreshProjection();
     } finally {
       setIsSubmittingCommand(false);
@@ -120,6 +173,9 @@ export function GamePage() {
           <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
             {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayer.playerName} 身份掷骰`}
           </button>
+          <button className="button button--secondary" type="button" onClick={handleJailRelease} disabled={!canPayJailFine}>
+            支付 50 罚金
+          </button>
         </div>
 
         {projection.pendingProperty ? (
@@ -148,6 +204,27 @@ export function GamePage() {
           </section>
         ) : null}
 
+        {projection.pendingAuction ? (
+          <section className="player-card">
+            <strong>待结算拍卖</strong>
+            <span>{projection.pendingAuction.label}</span>
+            <span>当前最高出价: {projection.pendingAuction.highestBid}</span>
+            <span>已放弃玩家: {projection.pendingAuction.passedPlayerIds.length}</span>
+            <label className="player-card">
+              <strong>出价金额</strong>
+              <input value={auctionBid} onChange={(event) => setAuctionBid(event.target.value)} />
+            </label>
+            <div className="lobby__actions">
+              <button className="button button--primary" type="button" onClick={() => handleAuction("bid")} disabled={!canAuction}>
+                提交出价
+              </button>
+              <button className="button button--secondary" type="button" onClick={() => handleAuction("pass")} disabled={!canAuction}>
+                放弃竞拍
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         <h4 className="panel__title">资产一览</h4>
         <div className="asset-grid">
           {projection.players.map((player) => (
@@ -156,6 +233,7 @@ export function GamePage() {
               <span>现金: {player.cash}</span>
               <span>位置: {player.position}</span>
               <span>地产: {player.properties.length}</span>
+              <span>{player.inJail ? "状态: 监狱中" : "状态: 自由"}</span>
             </article>
           ))}
         </div>
