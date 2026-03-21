@@ -10,7 +10,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "go run ./cmd/api",
+      command: "mkdir -p .tmp && rm -f .tmp/e2e-pocketbase.json && DAFUWENG_FIXED_DICE=3,3 DAFUWENG_POCKETBASE_DATA_PATH=.tmp/e2e-pocketbase.json go run ./cmd/api",
       cwd: "../backend",
       url: "http://127.0.0.1:8080/healthz",
       reuseExistingServer: true,

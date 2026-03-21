@@ -1,8 +1,11 @@
 import type {
   CreateRoomRequest,
+  DeclinePropertyRequest,
   JoinRoomRequest,
   ProjectionSnapshot,
+  PurchasePropertyRequest,
   RollDiceRequest,
+  RoomEventCatchUpResponse,
   StartGameRequest
 } from "@dafuweng/contracts";
 
@@ -41,6 +44,10 @@ export function getRoom(roomId: string) {
   return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}`);
 }
 
+export function getRoomEvents(roomId: string, afterSequence: number) {
+  return requestJson<RoomEventCatchUpResponse>(`/api/rooms/${roomId}/events?afterSequence=${afterSequence}`);
+}
+
 export function createRoom(payload: CreateRoomRequest) {
   return requestJson<ProjectionSnapshot>("/api/rooms", {
     method: "POST",
@@ -64,6 +71,20 @@ export function startRoom(roomId: string, payload: StartGameRequest) {
 
 export function rollDice(roomId: string, payload: RollDiceRequest) {
   return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/roll`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function purchaseProperty(roomId: string, payload: PurchasePropertyRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/purchase`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function declineProperty(roomId: string, payload: DeclinePropertyRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/decline`, {
     method: "POST",
     body: JSON.stringify(payload)
   });

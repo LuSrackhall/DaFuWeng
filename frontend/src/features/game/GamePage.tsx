@@ -1,7 +1,7 @@
 import { sampleBoard } from "@dafuweng/board-config";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { rollDice } from "../../network/roomApi";
+import { declineProperty, purchaseProperty, rollDice } from "../../network/roomApi";
 import { BoardScene } from "../../scene/board/BoardScene";
 import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
@@ -12,7 +12,7 @@ export function GamePage() {
   const roomId = params.roomId ?? "demo-room";
   const { projection, isFallback, isLoading, error, applySnapshot, refreshProjection } = useGameProjection(roomId);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [isRolling, setIsRolling] = useState(false);
+  const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const presentation = usePresentationState(projection.currentTurnPlayerId, projection.players);
   const activePlayer = getActivePlayer(roomId) ?? {
     playerId: projection.currentTurnPlayerId,
@@ -20,12 +20,18 @@ export function GamePage() {
   };
   const canRoll = !isFallback
     && !isLoading
-    && !isRolling
+    && !isSubmittingCommand
     && projection.turnState === "awaiting-roll"
+    && activePlayer.playerId === projection.currentTurnPlayerId;
+  const canResolveProperty = !isFallback
+    && !isLoading
+    && !isSubmittingCommand
+    && projection.turnState === "awaiting-property-decision"
+    && projection.pendingProperty !== null
     && activePlayer.playerId === projection.currentTurnPlayerId;
 
   async function handleRollDice() {
-    setIsRolling(true);
+    setIsSubmittingCommand(true);
     setActionMessage(null);
 
     try {
@@ -39,7 +45,29 @@ export function GamePage() {
       setActionMessage(requestError instanceof Error ? requestError.message : "掷骰失败");
       await refreshProjection();
     } finally {
-      setIsRolling(false);
+      setIsSubmittingCommand(false);
+    }
+  }
+
+  async function handleResolveProperty(decision: "purchase" | "decline") {
+    setIsSubmittingCommand(true);
+    setActionMessage(null);
+
+    try {
+      const request = {
+        playerId: activePlayer.playerId,
+        idempotencyKey: crypto.randomUUID()
+      };
+      const snapshot = decision === "purchase"
+        ? await purchaseProperty(roomId, request)
+        : await declineProperty(roomId, request);
+      applySnapshot(snapshot);
+      setActionMessage(decision === "purchase" ? "已同步权威买地结果。" : "已同步权威放弃结果。");
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "地产决策失败");
+      await refreshProjection();
+    } finally {
+      setIsSubmittingCommand(false);
     }
   }
 
@@ -90,9 +118,35 @@ export function GamePage() {
 
         <div className="lobby__actions">
           <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
-            {isRolling ? "同步中..." : `以 ${activePlayer.playerName} 身份掷骰`}
+            {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayer.playerName} 身份掷骰`}
           </button>
         </div>
+
+        {projection.pendingProperty ? (
+          <section className="player-card">
+            <strong>待决策地产</strong>
+            <span>{projection.pendingProperty.label}</span>
+            <span>价格: {projection.pendingProperty.price}</span>
+            <div className="lobby__actions">
+              <button
+                className="button button--primary"
+                type="button"
+                onClick={() => handleResolveProperty("purchase")}
+                disabled={!canResolveProperty}
+              >
+                购买地产
+              </button>
+              <button
+                className="button button--secondary"
+                type="button"
+                onClick={() => handleResolveProperty("decline")}
+                disabled={!canResolveProperty}
+              >
+                放弃购买
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         <h4 className="panel__title">资产一览</h4>
         <div className="asset-grid">

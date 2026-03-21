@@ -81,12 +81,13 @@ export const sampleProjection: ProjectionSnapshot = {
   turnState: "awaiting-roll",
   currentTurnPlayerId: "p1",
   pendingActionLabel: "等待当前玩家掷骰",
+  pendingProperty: null,
   lastRoll: [0, 0],
   players: samplePlayers,
   recentEvents: [
-    { id: "evt-1", type: "room-created", sequence: 1, summary: "房主创建了演示房间。" },
-    { id: "evt-2", type: "player-joined", sequence: 2, summary: "玩家二加入了演示房间。" },
-    { id: "evt-3", type: "player-joined", sequence: 3, summary: "玩家三加入了演示房间。" },
-    { id: "evt-4", type: "room-started", sequence: 4, summary: "房主开始了演示对局。" }
+    { id: "evt-1", type: "room-created", sequence: 1, snapshotVersion: 1, summary: "房主创建了演示房间。" },
+    { id: "evt-2", type: "player-joined", sequence: 2, snapshotVersion: 2, summary: "玩家二加入了演示房间。" },
+    { id: "evt-3", type: "player-joined", sequence: 3, snapshotVersion: 3, summary: "玩家三加入了演示房间。" },
+    { id: "evt-4", type: "room-started", sequence: 4, snapshotVersion: 4, summary: "房主开始了演示对局。" }
   ]
 };

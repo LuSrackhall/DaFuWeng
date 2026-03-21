@@ -5,12 +5,14 @@ import "os"
 type Config struct {
 	HTTPAddress string
 	PocketBaseURL string
+	PocketBaseDataPath string
 }
 
 func Load() Config {
 	return Config{
 		HTTPAddress: envOrDefault("DAFUWENG_HTTP_ADDR", ":8080"),
 		PocketBaseURL: envOrDefault("DAFUWENG_POCKETBASE_URL", "http://127.0.0.1:8090"),
+		PocketBaseDataPath: envOrDefault("DAFUWENG_POCKETBASE_DATA_PATH", ".data/pocketbase-store.json"),
 	}
 }
 
