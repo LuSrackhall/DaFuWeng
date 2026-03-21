@@ -111,6 +111,11 @@ body {
   cursor: pointer;
 }
 
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .button--primary {
   background: linear-gradient(135deg, #e5bf69, #d27d31);
   color: #1b1305;

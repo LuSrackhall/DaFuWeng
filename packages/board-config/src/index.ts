@@ -76,13 +76,17 @@ export const sampleProjection: ProjectionSnapshot = {
   roomId: "demo-room",
   roomState: "in-game",
   hostId: "p1",
-  currentTurnPlayerId: "p2",
-  pendingActionLabel: "购买或放弃当前地产",
-  lastRoll: [4, 2],
+  snapshotVersion: 4,
+  eventSequence: 4,
+  turnState: "awaiting-roll",
+  currentTurnPlayerId: "p1",
+  pendingActionLabel: "等待当前玩家掷骰",
+  lastRoll: [0, 0],
   players: samplePlayers,
   recentEvents: [
-    { id: "evt-1", summary: "玩家二掷出 4 + 2，停在水电局。" },
-    { id: "evt-2", summary: "房主收到了来自南城路的租金。" },
-    { id: "evt-3", summary: "玩家三从命运卡获得了现金奖励。" }
+    { id: "evt-1", type: "room-created", sequence: 1, summary: "房主创建了演示房间。" },
+    { id: "evt-2", type: "player-joined", sequence: 2, summary: "玩家二加入了演示房间。" },
+    { id: "evt-3", type: "player-joined", sequence: 3, summary: "玩家三加入了演示房间。" },
+    { id: "evt-4", type: "room-started", sequence: 4, summary: "房主开始了演示对局。" }
   ]
 };

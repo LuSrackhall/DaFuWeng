@@ -7,7 +7,8 @@ describe("toProjectionView", () => {
     const projection = toProjectionView(sampleProjection);
 
     expect(projection.roomId).toBe("demo-room");
-    expect(projection.currentTurnPlayerName).toBe("玩家二");
+    expect(projection.currentTurnPlayerName).toBe("房主");
     expect(projection.players).toHaveLength(4);
+    expect(projection.snapshotVersion).toBe(4);
   });
 });

@@ -1,5 +1,14 @@
 export type RoomState = "lobby" | "starting" | "in-game" | "paused-recovery" | "finished";
 
+export type TurnState = "awaiting-roll" | "post-roll-pending";
+
+export type RoomEventType =
+  | "room-created"
+  | "player-joined"
+  | "room-started"
+  | "dice-rolled"
+  | "player-moved";
+
 export type TileType = "corner" | "property" | "chance" | "community" | "tax" | "jail" | "utility" | "railway";
 
 export type BoardTile = {
@@ -22,6 +31,8 @@ export type PlayerState = {
 
 export type ProjectionEvent = {
   id: string;
+  type: RoomEventType;
+  sequence: number;
   summary: string;
 };
 
@@ -29,6 +40,9 @@ export type ProjectionSnapshot = {
   roomId: string;
   roomState: RoomState;
   hostId?: string;
+  snapshotVersion: number;
+  eventSequence: number;
+  turnState: TurnState;
   currentTurnPlayerId: string;
   pendingActionLabel: string;
   lastRoll: [number, number];
@@ -63,6 +77,11 @@ export type StartGameCommand = {
 
 export type StartGameRequest = {
   hostId: string;
+};
+
+export type RollDiceRequest = {
+  playerId: string;
+  idempotencyKey: string;
 };
 
 export type RollDiceCommand = {

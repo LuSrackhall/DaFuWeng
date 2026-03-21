@@ -5,12 +5,14 @@ import (
 	"net/http"
 
 	"github.com/LuSrackhall/DaFuWeng/backend/internal/config"
+	"github.com/LuSrackhall/DaFuWeng/backend/internal/pocketbase"
 	"github.com/LuSrackhall/DaFuWeng/backend/internal/rooms"
 )
 
 func main() {
 	cfg := config.Load()
-	service := rooms.NewService()
+	store := pocketbase.NewClient(pocketbase.ClientConfig{BaseURL: cfg.PocketBaseURL})
+	service := rooms.NewService(store)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, _ *http.Request) {

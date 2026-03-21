@@ -15,6 +15,8 @@ export type GameProjectionState = {
   isFallback: boolean;
   isLoading: boolean;
   error: string | null;
+  applySnapshot: (snapshot: ProjectionSnapshot) => void;
+  refreshProjection: () => Promise<void>;
 };
 
 export function toProjectionView(snapshot: ProjectionSnapshot): ProjectionView {
@@ -30,54 +32,46 @@ export function toProjectionView(snapshot: ProjectionSnapshot): ProjectionView {
 }
 
 export function useGameProjection(roomId: string): GameProjectionState {
-  const [state, setState] = useState<GameProjectionState>({
-    projection: toProjectionView(sampleProjection),
-    isFallback: true,
-    isLoading: true,
-    error: null
-  });
+  const [projection, setProjection] = useState<ProjectionView>(toProjectionView(sampleProjection));
+  const [isFallback, setIsFallback] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refreshProjection() {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const snapshot = await getRoom(roomId);
+      setProjection(toProjectionView(snapshot));
+      setIsFallback(false);
+      setIsLoading(false);
+    } catch (requestError: unknown) {
+      setProjection(toProjectionView({
+        ...sampleProjection,
+        roomId
+      }));
+      setIsFallback(true);
+      setIsLoading(false);
+      setError(requestError instanceof Error ? requestError.message : "无法读取房间状态");
+    }
+  }
 
   useEffect(() => {
-    let active = true;
-    setState((current) => ({
-      ...current,
-      isLoading: true,
-      error: null
-    }));
-
-    getRoom(roomId)
-      .then((snapshot) => {
-        if (!active) {
-          return;
-        }
-
-        setState({
-          projection: toProjectionView(snapshot),
-          isFallback: false,
-          isLoading: false,
-          error: null
-        });
-      })
-      .catch((error: unknown) => {
-        if (!active) {
-          return;
-        }
-
-        setState({
-          projection: toProjectionView({
-            ...sampleProjection,
-            roomId
-          }),
-          isFallback: true,
-          isLoading: false,
-          error: error instanceof Error ? error.message : "无法读取房间状态"
-        });
-      });
-
-    return () => {
-      active = false;
-    };
+    void refreshProjection();
   }, [roomId]);
 
-  return state;
+  return {
+    projection,
+    isFallback,
+    isLoading,
+    error,
+    applySnapshot(snapshot) {
+      setProjection(toProjectionView(snapshot));
+      setIsFallback(false);
+      setIsLoading(false);
+      setError(null);
+    },
+    refreshProjection
+  };
 }

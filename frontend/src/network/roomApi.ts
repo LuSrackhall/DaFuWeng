@@ -2,6 +2,7 @@ import type {
   CreateRoomRequest,
   JoinRoomRequest,
   ProjectionSnapshot,
+  RollDiceRequest,
   StartGameRequest
 } from "@dafuweng/contracts";
 
@@ -56,6 +57,13 @@ export function joinRoom(roomId: string, payload: JoinRoomRequest) {
 
 export function startRoom(roomId: string, payload: StartGameRequest) {
   return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/start`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function rollDice(roomId: string, payload: RollDiceRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/roll`, {
     method: "POST",
     body: JSON.stringify(payload)
   });
