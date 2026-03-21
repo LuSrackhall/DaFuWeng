@@ -11,6 +11,10 @@ The system MUST initialize repository-managed workflow state for substantial wor
 - **WHEN** a new coding session starts in the repository
 - **THEN** the repository SHALL create or reset the workflow state and SHALL expose the role rotation protocol in the session startup message
 
+#### Scenario: Default Monopoly workflow requires a second UI and UX checkpoint
+- **WHEN** a substantial Monopoly workflow session is initialized in planning, implementation, or release mode
+- **THEN** the required role roster SHALL include a second UI and UX review role backed by the local `ui-ux-pro-max` workflow asset
+
 ### Requirement: Code edits are blocked until upstream roles are completed or waived
 The system MUST deny repository-modifying actions until the required upstream roles for the current workflow mode are completed or explicitly waived with a recorded reason.
 

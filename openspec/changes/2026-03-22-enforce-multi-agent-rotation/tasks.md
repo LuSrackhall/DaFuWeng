@@ -24,6 +24,7 @@
 - [x] 4.3 Update the playtest gate skill so release readiness can be recorded into the workflow state.
 - [x] 4.4 Update repository-wide instructions to describe the new mandatory protocol for substantial work.
 - [x] 4.5 Add Monopoly rules, Pixi scene, and versioning specialist roles plus a reusable default workflow prompt.
+- [x] 4.6 Integrate ui-ux-pro-max into the default workflow as a formal second UI/UX expert asset and add a short starter prompt.
 
 ## 5. Verification
 

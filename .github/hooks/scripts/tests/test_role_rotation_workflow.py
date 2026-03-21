@@ -57,6 +57,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
         )
 
         self.assertIn("Monopoly Rules Expert", state["requiredRoles"])
+        self.assertIn("Monopoly UI UX Pro Max", state["requiredRoles"])
         self.assertIn("Monopoly Versioning Manager", state["requiredRoles"])
         self.assertNotIn("Monopoly Pixi Scene Engineer", state["requiredRoles"])
 
@@ -73,6 +74,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
                         "GitHub Copilot Workflow Expert",
                         "Monopoly Product Manager",
                         "Monopoly UI UX Director",
+                        "Monopoly UI UX Pro Max",
                         "Monopoly Tech Lead",
                         "Monopoly Senior Implementer",
                         "Monopoly QA Lead",
@@ -90,6 +92,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
         state = role_rotation_state.load_state()
 
         self.assertEqual(state["version"], 2)
+        self.assertIn("Monopoly UI UX Pro Max", state["requiredRoles"])
         self.assertIn("Monopoly Rules Expert", state["requiredRoles"])
         self.assertIn("Monopoly Versioning Manager", state["requiredRoles"])
 
@@ -118,6 +121,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "GitHub Copilot Workflow Expert",
             "Monopoly Product Manager",
             "Monopoly UI UX Director",
+            "Monopoly UI UX Pro Max",
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
             "Monopoly Senior Implementer",
@@ -150,6 +154,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "GitHub Copilot Workflow Expert",
             "Monopoly Product Manager",
             "Monopoly UI UX Director",
+            "Monopoly UI UX Pro Max",
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
             "Monopoly Senior Implementer",
@@ -179,6 +184,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "GitHub Copilot Workflow Expert",
             "Monopoly Product Manager",
             "Monopoly UI UX Director",
+            "Monopoly UI UX Pro Max",
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
             "Monopoly Senior Implementer",
@@ -212,6 +218,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "GitHub Copilot Workflow Expert",
             "Monopoly Product Manager",
             "Monopoly UI UX Director",
+            "Monopoly UI UX Pro Max",
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
             "Monopoly Senior Implementer",

@@ -13,6 +13,7 @@ This change upgrades the repository from a recommendation-based multi-agent work
 - Upgrade the existing pre-tool policy hook so it blocks code edits, commits, pushes, and release-like commands until the required multi-agent roles are completed or explicitly waived.
 - Update session initialization and multi-agent customization docs so the main coding agent must keep the workflow state in sync as part of normal operation.
 - Expand the roster with a Monopoly rules expert, a Pixi scene engineer, and a versioning manager so gameplay review, scene engineering, and release governance each have a dedicated role.
+- Promote `ui-ux-pro-max` from a local prompt asset into the formal workflow as a required second UI/UX expert reference.
 - Add OpenSpec capability coverage for enforced multi-agent workflow, explicit waivers, and release-ready role gates.
 
 ## Capabilities

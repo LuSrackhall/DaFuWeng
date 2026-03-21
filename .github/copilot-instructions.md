@@ -37,7 +37,8 @@
 - Use `python3 .github/hooks/scripts/role_rotation.py status --json` whenever you need to inspect the remaining workflow gates.
 - In every conversation, explicitly clarify current progress and provide a role-by-role summary of which AI roles or subagents were used, what each one did, and which work remained with the main coding agent.
 - If no extra AI roles were used in the round, state that explicitly in the progress summary.
-- For Monopoly gameplay changes, prefer the sequence Product Manager -> UI UX Director -> Monopoly Rules Expert -> Tech Lead -> Senior Implementer -> QA Lead -> Simulated Player, with Monopoly Pixi Scene Engineer added when Pixi scene work is central.
+- For Monopoly gameplay changes, prefer the sequence Product Manager -> UI UX Director -> Monopoly UI UX Pro Max -> Monopoly Rules Expert -> Tech Lead -> Senior Implementer -> QA Lead -> Simulated Player, with Monopoly Pixi Scene Engineer added when Pixi scene work is central.
+- UI and UX work must use `.github/prompts/ui-ux-pro-max/` as a formal workflow asset, either through Monopoly UI UX Pro Max or as a mandatory reference for Monopoly UI UX Director.
 - Before commit or release handoff, use Monopoly Versioning Manager to review semantic version impact, commit classification, and release facts.
 
 ## Engineering Rules

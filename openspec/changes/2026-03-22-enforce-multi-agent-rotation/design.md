@@ -48,11 +48,13 @@ The state machine will support a small number of workflow modes. Substantial imp
 
 Recommended defaults:
 - `analysis`: no mandatory roles
-- `planning`: Workflow Expert, Product Manager, UI UX Director, Rules Expert, Tech Lead
-- `implementation`: Workflow Expert, Product Manager, UI UX Director, Rules Expert, Tech Lead, Senior Implementer, QA Lead, Simulated Player, Versioning Manager
-- `release`: Workflow Expert, Product Manager, UI UX Director, Rules Expert, Tech Lead, Senior Implementer, QA Lead, Simulated Player, Versioning Manager, Release Marketer
+- `planning`: Workflow Expert, Product Manager, UI UX Director, UI UX Pro Max, Rules Expert, Tech Lead
+- `implementation`: Workflow Expert, Product Manager, UI UX Director, UI UX Pro Max, Rules Expert, Tech Lead, Senior Implementer, QA Lead, Simulated Player, Versioning Manager
+- `release`: Workflow Expert, Product Manager, UI UX Director, UI UX Pro Max, Rules Expert, Tech Lead, Senior Implementer, QA Lead, Simulated Player, Versioning Manager, Release Marketer
 
 The `Monopoly Pixi Scene Engineer` remains a conditional specialist. It is expected for board-scene-heavy frontend work, but not required for every implementation slice.
+
+The `Monopoly UI UX Pro Max` role is a required second-opinion UX checkpoint for default Monopoly workflow decisions and is powered by the local `.github/prompts/ui-ux-pro-max/` asset library.
 
 Why:
 - The manager's request is to force the full role rotation, not merely recommend it.

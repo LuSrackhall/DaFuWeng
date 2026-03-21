@@ -24,36 +24,38 @@ Use this skill when a feature or milestone needs coordinated execution with mini
    - Call the `Monopoly Product Manager` agent when scope, user value, or rules clarity are weak.
 3. Clarify the experience.
    - Call the `Monopoly UI UX Director` agent when board readability, interaction flow, motion, or shell ergonomics matter.
-4. Review Monopoly rules and OpenSpec alignment.
+4. Run the second UI/UX review.
+   - Call the `Monopoly UI UX Pro Max` agent or use the `ui-ux-pro-max-monopoly` skill so UI/UX decisions are challenged by the local pro-max asset library.
+5. Review Monopoly rules and OpenSpec alignment.
    - Call the `Monopoly Rules Expert` agent to validate that proposal, design, and specs still fit the classic Monopoly mental model.
-5. Lock the technical shape.
+6. Lock the technical shape.
    - Call the `Monopoly Tech Lead` agent to define architecture slices, state boundaries, and automation impact.
-6. Route through OpenSpec.
+7. Route through OpenSpec.
    - Create or continue an OpenSpec change before substantial implementation.
    - Ensure proposal, design, and tasks are present before code-heavy work begins.
-7. Add Pixi specialization when board rendering is central.
+8. Add Pixi specialization when board rendering is central.
    - Call the `Monopoly Pixi Scene Engineer` agent when the task primarily concerns Pixi scene structure, camera movement, piece animation, or canvas performance.
-8. Implement in thin slices.
+9. Implement in thin slices.
    - Use the `Monopoly Senior Implementer` agent for code changes and validation.
-9. Build the quality gate.
+10. Build the quality gate.
    - Use the `Monopoly QA Lead` agent to define or review unit, integration, and Playwright coverage.
-10. Simulate the player experience.
+11. Simulate the player experience.
    - Use the `Monopoly Simulated Player` agent before tagging or declaring a milestone ready.
-11. Wait for user confirmation when the change is user-facing or milestone-like.
+12. Wait for user confirmation when the change is user-facing or milestone-like.
    - Treat user approval as a release or commit boundary, not as an AI specialist role.
-12. Review version impact before commit or release handoff.
+13. Review version impact before commit or release handoff.
    - Use the `Monopoly Versioning Manager` agent to confirm semantic version impact, commit classification, and changelog-ready release facts.
-13. Start with workspace hygiene.
+14. Start with workspace hygiene.
    - Check git status before new implementation work.
    - If completed agent-owned work is still uncommitted, decide whether to commit and push it before starting the next slice.
    - Keep unrelated user changes out of agent commits and report them explicitly.
-14. Record the workflow state after every role handoff.
+15. Record the workflow state after every role handoff.
    - After each required role or waiver decision, run `.github/hooks/scripts/role_rotation.py complete --role "<role name>" --note "<summary>"` or `.github/hooks/scripts/role_rotation.py waive --role "<role name>" --reason "<reason>"`.
    - Use `.github/hooks/scripts/role_rotation.py status --json` before editing, committing, or preparing release work.
-15. Close the loop with management reporting.
+16. Close the loop with management reporting.
    - In progress updates and the final summary, include a role-by-role account of which AI roles were used, what each one contributed, and which work remained with the main coding agent.
    - If no supporting roles were used, state that explicitly.
-16. Use repository-friendly commits.
+17. Use repository-friendly commits.
    - Prefer conventional commit messages with Chinese subjects when committing implementation slices.
 
 ## Output
