@@ -1,7 +1,7 @@
 import { sampleBoard } from "@dafuweng/board-config";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { declineProperty, passAuction, payJailFine, purchaseProperty, rollDice, submitAuctionBid } from "../../network/roomApi";
+import { declareBankruptcy, declineProperty, mortgageProperty, passAuction, payJailFine, purchaseProperty, rollDice, submitAuctionBid } from "../../network/roomApi";
 import { BoardScene } from "../../scene/board/BoardScene";
 import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
@@ -13,6 +13,7 @@ export function GamePage() {
   const { projection, isFallback, isLoading, error, applySnapshot, refreshProjection } = useGameProjection(roomId);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [auctionBid, setAuctionBid] = useState("200");
+  const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const presentation = usePresentationState(projection.currentTurnPlayerId, projection.players);
   const activePlayer = getActivePlayer(roomId) ?? {
@@ -40,6 +41,12 @@ export function GamePage() {
     && !isLoading
     && !isSubmittingCommand
     && projection.turnState === "awaiting-jail-release"
+    && activePlayer.playerId === projection.currentTurnPlayerId;
+  const canResolveDeficit = !isFallback
+    && !isLoading
+    && !isSubmittingCommand
+    && projection.turnState === "awaiting-deficit-resolution"
+    && projection.pendingPayment !== null
     && activePlayer.playerId === projection.currentTurnPlayerId;
 
   async function handleRollDice() {
@@ -123,6 +130,52 @@ export function GamePage() {
       setIsSubmittingCommand(false);
     }
   }
+
+  async function handleMortgage(tileId: string) {
+    setIsSubmittingCommand(true);
+    setMortgageBusyTileId(tileId);
+    setActionMessage(null);
+
+    try {
+      const snapshot = await mortgageProperty(roomId, {
+        playerId: activePlayer.playerId,
+        idempotencyKey: crypto.randomUUID(),
+        tileId
+      });
+      applySnapshot(snapshot);
+      setActionMessage("已同步权威抵押结果。");
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "抵押失败");
+      await refreshProjection();
+    } finally {
+      setMortgageBusyTileId(null);
+      setIsSubmittingCommand(false);
+    }
+  }
+
+  async function handleBankruptcy() {
+    setIsSubmittingCommand(true);
+    setActionMessage(null);
+
+    try {
+      const snapshot = await declareBankruptcy(roomId, {
+        playerId: activePlayer.playerId,
+        idempotencyKey: crypto.randomUUID()
+      });
+      applySnapshot(snapshot);
+      setActionMessage("已同步权威破产结果。");
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "宣告破产失败");
+      await refreshProjection();
+    } finally {
+      setIsSubmittingCommand(false);
+    }
+  }
+
+  const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayer.playerId);
+  const mortgageCandidates = (activeProjectionPlayer?.properties ?? []).filter(
+    (tileId) => !(activeProjectionPlayer?.mortgagedProperties ?? []).includes(tileId)
+  );
 
   return (
     <main className="game">
@@ -225,6 +278,31 @@ export function GamePage() {
           </section>
         ) : null}
 
+        {projection.pendingPayment ? (
+          <section className="player-card">
+            <strong>待化解欠款</strong>
+            <span>原因: {projection.pendingPayment.reason}</span>
+            <span>金额: {projection.pendingPayment.amount}</span>
+            <span>来源: {projection.pendingPayment.sourceTileLabel ?? "未知来源"}</span>
+            <div className="lobby__actions">
+              {mortgageCandidates.map((tileId) => (
+                <button
+                  className="button button--secondary"
+                  key={tileId}
+                  type="button"
+                  onClick={() => handleMortgage(tileId)}
+                  disabled={!canResolveDeficit || mortgageBusyTileId === tileId}
+                >
+                  {mortgageBusyTileId === tileId ? `抵押 ${tileId}...` : `抵押 ${tileId}`}
+                </button>
+              ))}
+              <button className="button button--primary" type="button" onClick={handleBankruptcy} disabled={!canResolveDeficit}>
+                宣告破产
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         <h4 className="panel__title">资产一览</h4>
         <div className="asset-grid">
           {projection.players.map((player) => (
@@ -233,7 +311,8 @@ export function GamePage() {
               <span>现金: {player.cash}</span>
               <span>位置: {player.position}</span>
               <span>地产: {player.properties.length}</span>
-              <span>{player.inJail ? "状态: 监狱中" : "状态: 自由"}</span>
+              <span>抵押: {player.mortgagedProperties?.length ?? 0}</span>
+              <span>{player.isBankrupt ? "状态: 已破产" : player.inJail ? "状态: 监狱中" : "状态: 自由"}</span>
             </article>
           ))}
         </div>

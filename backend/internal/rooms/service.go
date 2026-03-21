@@ -19,6 +19,7 @@ const (
 	maxEventCatchUpSpan = 20
 	jailTileIndex       = 10
 	jailFine            = 50
+	taxPaymentAmount    = 200
 )
 
 var boardLabels = []string{
@@ -116,7 +117,9 @@ type Player struct {
 	Cash       int      `json:"cash"`
 	Position   int      `json:"position"`
 	Properties []string `json:"properties"`
+	MortgagedProperties []string `json:"mortgagedProperties,omitempty"`
 	InJail     bool     `json:"inJail,omitempty"`
+	IsBankrupt bool     `json:"isBankrupt,omitempty"`
 	Ready      bool     `json:"ready,omitempty"`
 }
 
@@ -138,12 +141,22 @@ type PendingAuction struct {
 	PassedPlayerIDs  []string `json:"passedPlayerIds"`
 }
 
+type PendingPayment struct {
+	Amount          int    `json:"amount"`
+	Reason          string `json:"reason"`
+	CreditorKind    string `json:"creditorKind"`
+	CreditorPlayerID string `json:"creditorPlayerId,omitempty"`
+	SourceTileID    string `json:"sourceTileId,omitempty"`
+	SourceTileLabel string `json:"sourceTileLabel,omitempty"`
+}
+
 type Event struct {
 	ID              string `json:"id"`
 	Type            string `json:"type"`
 	Sequence        int    `json:"sequence"`
 	SnapshotVersion int    `json:"snapshotVersion"`
 	Summary         string `json:"summary"`
+	RoomState       string `json:"roomState,omitempty"`
 	PlayerID        string `json:"playerId,omitempty"`
 	OwnerPlayerID   string `json:"ownerPlayerId,omitempty"`
 	NextPlayerID    string `json:"nextPlayerId,omitempty"`
@@ -169,6 +182,7 @@ type RoomResponse struct {
 	PendingAction       string           `json:"pendingActionLabel"`
 	PendingProperty     *PendingProperty `json:"pendingProperty"`
 	PendingAuction      *PendingAuction  `json:"pendingAuction"`
+	PendingPayment      *PendingPayment  `json:"pendingPayment"`
 	LastRoll            [2]int           `json:"lastRoll"`
 	RecentEvents        []Event          `json:"recentEvents"`
 	Players             []Player         `json:"players"`
@@ -216,6 +230,12 @@ type AuctionBidRequest struct {
 	Amount         int    `json:"amount"`
 }
 
+type MortgagePropertyRequest struct {
+	PlayerID       string `json:"playerId"`
+	IdempotencyKey string `json:"idempotencyKey"`
+	TileID         string `json:"tileId"`
+}
+
 type tileDetails struct {
 	ID          string
 	Index       int
@@ -236,6 +256,7 @@ type roomRecord struct {
 	PendingAction       string
 	PendingProperty     *PendingProperty
 	PendingAuction      *PendingAuction
+	PendingPayment      *PendingPayment
 	LastRoll            [2]int
 	Players             []Player
 	RecentEvents        []Event
@@ -244,6 +265,7 @@ type roomRecord struct {
 type eventDraft struct {
 	Type           string
 	Summary        string
+	RoomState      string
 	PlayerID       string
 	OwnerPlayerID  string
 	NextPlayerID   string
@@ -372,6 +394,12 @@ func (service *Service) HandleRoomRoute(writer http.ResponseWriter, request *htt
 			return
 		case parts[1] == "jail-release" && request.Method == http.MethodPost:
 			service.handleJailRelease(writer, request, roomID)
+			return
+		case parts[1] == "mortgage" && request.Method == http.MethodPost:
+			service.handleMortgageProperty(writer, request, roomID)
+			return
+		case parts[1] == "bankruptcy" && request.Method == http.MethodPost:
+			service.handleDeclareBankruptcy(writer, request, roomID)
 			return
 		}
 	}
@@ -600,6 +628,38 @@ func (service *Service) handleJailRelease(writer http.ResponseWriter, request *h
 	writeJSON(writer, http.StatusOK, room.toResponse())
 }
 
+func (service *Service) handleMortgageProperty(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload MortgagePropertyRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid mortgage payload")
+		return
+	}
+
+	room, err := service.mortgageProperty(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey), strings.TrimSpace(payload.TileID))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
+func (service *Service) handleDeclareBankruptcy(writer http.ResponseWriter, request *http.Request, roomID string) {
+	var payload PropertyDecisionRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid bankruptcy payload")
+		return
+	}
+
+	room, err := service.declareBankruptcy(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, room.toResponse())
+}
+
 func (service *Service) createRoom(hostName string) roomRecord {
 	service.mu.Lock()
 	defer service.mu.Unlock()
@@ -620,6 +680,7 @@ func (service *Service) createRoom(hostName string) roomRecord {
 		PendingAction:       "等待更多玩家加入",
 		PendingProperty:     nil,
 		PendingAuction:      nil,
+		PendingPayment:      nil,
 		LastRoll:            [2]int{0, 0},
 		Players:             []Player{hostPlayer},
 	}
@@ -723,6 +784,7 @@ func (service *Service) startRoom(roomID string, hostID string) (roomRecord, err
 	room.PendingAction = "等待当前玩家掷骰"
 	room.PendingProperty = nil
 	room.PendingAuction = nil
+	room.PendingPayment = nil
 	room.CurrentTurnPlayerID = room.Players[0].ID
 	room.LastRoll = [2]int{0, 0}
 	service.commitRoomMutation(&room, []eventDraft{{Type: "room-started", Summary: "房主开始了对局。"}})
@@ -896,6 +958,160 @@ func (service *Service) payJailFine(roomID string, playerID string, idempotencyK
 		RoomID:          room.RoomID,
 		PlayerID:        playerID,
 		CommandKind:     "pay-jail-fine",
+		IdempotencyKey:  idempotencyKey,
+		Snapshot:        room.toPersistedSnapshot(),
+		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
+	})
+
+	return room, nil
+}
+
+func (service *Service) mortgageProperty(roomID string, playerID string, idempotencyKey string, tileID string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" {
+		return roomRecord{}, fmt.Errorf("playerId is required")
+	}
+	if idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("idempotencyKey is required")
+	}
+	if tileID == "" {
+		return roomRecord{}, fmt.Errorf("tileId is required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "mortgage-property", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-deficit-resolution" || room.PendingPayment == nil {
+		return roomRecord{}, fmt.Errorf("room is not waiting for deficit resolution")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current deficit player can mortgage property")
+	}
+	playerIndex := findPlayerIndex(room.Players, playerID)
+	if playerIndex == -1 {
+		return roomRecord{}, fmt.Errorf("player not found")
+	}
+	if !containsPlayer(room.Players[playerIndex].Properties, tileID) {
+		return roomRecord{}, fmt.Errorf("player does not own the target property")
+	}
+	if containsPlayer(room.Players[playerIndex].MortgagedProperties, tileID) {
+		return roomRecord{}, fmt.Errorf("property is already mortgaged")
+	}
+	tile, ok := tileForID(tileID)
+	if !ok || tile.Price <= 0 {
+		return roomRecord{}, fmt.Errorf("property cannot be mortgaged")
+	}
+	mortgageValue := tile.Price / 2
+	room.Players[playerIndex].MortgagedProperties = append(room.Players[playerIndex].MortgagedProperties, tileID)
+	room.Players[playerIndex].Cash += mortgageValue
+	drafts := []eventDraft{{
+		Type:      "property-mortgaged",
+		Summary:   fmt.Sprintf("%s 抵押了 %s。", room.Players[playerIndex].Name, tile.Label),
+		PlayerID:  playerID,
+		TileID:    tile.ID,
+		TileIndex: tile.Index,
+		TileLabel: tile.Label,
+		TilePrice: tile.Price,
+		Amount:    mortgageValue,
+		CashAfter: room.Players[playerIndex].Cash,
+	}}
+
+	if room.Players[playerIndex].Cash >= room.PendingPayment.Amount {
+		room.Players[playerIndex].Cash -= room.PendingPayment.Amount
+		drafts = append(drafts, eventDraft{
+			Type:      "tax-paid",
+			Summary:   fmt.Sprintf("%s 补齐了税费。", room.Players[playerIndex].Name),
+			PlayerID:  playerID,
+			TileID:    room.PendingPayment.SourceTileID,
+			TileLabel: room.PendingPayment.SourceTileLabel,
+			Amount:    room.PendingPayment.Amount,
+			CashAfter: room.Players[playerIndex].Cash,
+		})
+		room.PendingPayment = nil
+		nextPlayerID := room.advanceTurnFromPlayer(playerID)
+		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	} else {
+		room.PendingAction = fmt.Sprintf("仍需支付 %d 税费，请继续抵押或宣告破产。", room.PendingPayment.Amount-room.Players[playerIndex].Cash)
+	}
+
+	service.commitRoomMutation(&room, drafts)
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
+		RoomID:          room.RoomID,
+		PlayerID:        playerID,
+		CommandKind:     "mortgage-property",
+		IdempotencyKey:  idempotencyKey,
+		Snapshot:        room.toPersistedSnapshot(),
+		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
+	})
+
+	return room, nil
+}
+
+func (service *Service) declareBankruptcy(roomID string, playerID string, idempotencyKey string) (roomRecord, error) {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	if playerID == "" {
+		return roomRecord{}, fmt.Errorf("playerId is required")
+	}
+	if idempotencyKey == "" {
+		return roomRecord{}, fmt.Errorf("idempotencyKey is required")
+	}
+	if result, ok := service.store.LoadCommandResult(roomID, playerID, "declare-bankruptcy", idempotencyKey); ok {
+		return service.hydrateRoom(result.Snapshot), nil
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return roomRecord{}, fmt.Errorf("room not found")
+	}
+	if room.TurnState != "awaiting-deficit-resolution" || room.PendingPayment == nil {
+		return roomRecord{}, fmt.Errorf("room is not waiting for deficit resolution")
+	}
+	if room.CurrentTurnPlayerID != playerID {
+		return roomRecord{}, fmt.Errorf("only current deficit player can declare bankruptcy")
+	}
+	playerIndex := findPlayerIndex(room.Players, playerID)
+	if playerIndex == -1 {
+		return roomRecord{}, fmt.Errorf("player not found")
+	}
+
+	room.Players[playerIndex].Cash = 0
+	room.Players[playerIndex].Properties = []string{}
+	room.Players[playerIndex].MortgagedProperties = []string{}
+	room.Players[playerIndex].InJail = false
+	room.Players[playerIndex].IsBankrupt = true
+	room.PendingPayment = nil
+	drafts := []eventDraft{{
+		Type:      "bankruptcy-declared",
+		Summary:   fmt.Sprintf("%s 宣告破产。", room.Players[playerIndex].Name),
+		PlayerID:  playerID,
+		CashAfter: 0,
+	}}
+
+	if room.countActivePlayers() <= 1 {
+		room.State = "finished"
+		room.TurnState = "post-roll-pending"
+		room.PendingAction = "房间已结束"
+		room.PendingProperty = nil
+		room.PendingAuction = nil
+		drafts = append(drafts, eventDraft{Type: "room-finished", Summary: "对局已结束。", RoomState: room.State})
+	} else {
+		nextPlayerID := room.advanceTurnFromPlayer(playerID)
+		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+	}
+
+	service.commitRoomMutation(&room, drafts)
+	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{
+		RoomID:          room.RoomID,
+		PlayerID:        playerID,
+		CommandKind:     "declare-bankruptcy",
 		IdempotencyKey:  idempotencyKey,
 		Snapshot:        room.toPersistedSnapshot(),
 		RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents),
@@ -1159,6 +1375,7 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 			Sequence:        room.EventSequence,
 			SnapshotVersion: room.SnapshotVersion,
 			Summary:         draft.Summary,
+			RoomState:       draft.RoomState,
 			PlayerID:        draft.PlayerID,
 			OwnerPlayerID:   draft.OwnerPlayerID,
 			NextPlayerID:    draft.NextPlayerID,
@@ -1180,6 +1397,7 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 			Sequence:        event.Sequence,
 			SnapshotVersion: event.SnapshotVersion,
 			Summary:         event.Summary,
+			RoomState:       event.RoomState,
 			PlayerID:        event.PlayerID,
 			OwnerPlayerID:   event.OwnerPlayerID,
 			NextPlayerID:    event.NextPlayerID,
@@ -1206,6 +1424,7 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 	var players []Player
 	var pendingProperty *PendingProperty
 	var pendingAuction *PendingAuction
+	var pendingPayment *PendingPayment
 	_ = json.Unmarshal(snapshot.PlayersJSON, &players)
 	if len(snapshot.PendingPropertyJSON) > 0 && string(snapshot.PendingPropertyJSON) != "null" {
 		var decoded PendingProperty
@@ -1217,6 +1436,12 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 		var decoded PendingAuction
 		if err := json.Unmarshal(snapshot.PendingAuctionJSON, &decoded); err == nil {
 			pendingAuction = &decoded
+		}
+	}
+	if len(snapshot.PendingPaymentJSON) > 0 && string(snapshot.PendingPaymentJSON) != "null" {
+		var decoded PendingPayment
+		if err := json.Unmarshal(snapshot.PendingPaymentJSON, &decoded); err == nil {
+			pendingPayment = &decoded
 		}
 	}
 
@@ -1232,6 +1457,7 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 		PendingAction:       snapshot.PendingActionLabel,
 		PendingProperty:     pendingProperty,
 		PendingAuction:      pendingAuction,
+		PendingPayment:      pendingPayment,
 		LastRoll:            snapshot.LastRoll,
 		Players:             players,
 		RecentEvents:        tailEvents(events, 10),
@@ -1248,6 +1474,7 @@ func (service *Service) newPlayer(name string) Player {
 		Cash:       1500,
 		Position:   0,
 		Properties: []string{},
+		MortgagedProperties: []string{},
 	}
 }
 
@@ -1271,6 +1498,7 @@ func (service *Service) seedDemoRoom() {
 		PendingAction:       "等待房主开始游戏",
 		PendingProperty:     nil,
 		PendingAuction:      nil,
+		PendingPayment:      nil,
 		LastRoll:            [2]int{0, 0},
 		Players:             []Player{host, second, third},
 	}
@@ -1326,6 +1554,9 @@ func (room *roomRecord) advanceTurnFromPlayer(playerID string) string {
 	if currentIndex >= 0 {
 		nextIndex = (currentIndex + 1) % len(room.Players)
 	}
+	for room.Players[nextIndex].IsBankrupt {
+		nextIndex = (nextIndex + 1) % len(room.Players)
+	}
 	room.CurrentTurnPlayerID = room.Players[nextIndex].ID
 	if room.Players[nextIndex].InJail {
 		room.TurnState = "awaiting-jail-release"
@@ -1336,6 +1567,7 @@ func (room *roomRecord) advanceTurnFromPlayer(playerID string) string {
 	}
 	room.PendingProperty = nil
 	room.PendingAuction = nil
+	room.PendingPayment = nil
 	return room.CurrentTurnPlayerID
 }
 
@@ -1356,6 +1588,37 @@ func (room *roomRecord) resolveSpecialTile(playerIndex int, tile tileDetails) (b
 		nextPlayerID := room.advanceTurnFromPlayer(player.ID)
 		drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
 		return true, drafts
+	}
+	if strings.Contains(tile.Label, "税") {
+		if room.Players[playerIndex].Cash >= taxPaymentAmount {
+			room.Players[playerIndex].Cash -= taxPaymentAmount
+			drafts := []eventDraft{{
+				Type:      "tax-paid",
+				Summary:   fmt.Sprintf("%s 支付了 %d 税费。", player.Name, taxPaymentAmount),
+				PlayerID:  player.ID,
+				TileID:    tile.ID,
+				TileIndex: tile.Index,
+				TileLabel: tile.Label,
+				Amount:    taxPaymentAmount,
+				CashAfter: room.Players[playerIndex].Cash,
+			}}
+			nextPlayerID := room.advanceTurnFromPlayer(player.ID)
+			drafts = append(drafts, eventDraft{Type: "turn-advanced", Summary: "轮到下一位玩家行动。", NextPlayerID: nextPlayerID})
+			return true, drafts
+		}
+		room.TurnState = "awaiting-deficit-resolution"
+		room.PendingPayment = &PendingPayment{Amount: taxPaymentAmount, Reason: "tax", CreditorKind: "bank", SourceTileID: tile.ID, SourceTileLabel: tile.Label}
+		room.PendingAction = fmt.Sprintf("%s 现金不足以支付 %d 税费，请抵押地产或宣告破产。", player.Name, taxPaymentAmount)
+		return true, []eventDraft{{
+			Type:      "deficit-started",
+			Summary:   fmt.Sprintf("%s 需补缴 %d 税费。", player.Name, taxPaymentAmount),
+			PlayerID:  player.ID,
+			TileID:    tile.ID,
+			TileIndex: tile.Index,
+			TileLabel: tile.Label,
+			Amount:    taxPaymentAmount,
+			CashAfter: room.Players[playerIndex].Cash,
+		}}
 	}
 	if strings.Contains(tile.Label, "命运") {
 		room.Players[playerIndex].Cash += 100
@@ -1407,6 +1670,7 @@ func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 	playersJSON, _ := json.Marshal(room.Players)
 	pendingPropertyJSON, _ := json.Marshal(room.PendingProperty)
 	pendingAuctionJSON, _ := json.Marshal(room.PendingAuction)
+	pendingPaymentJSON, _ := json.Marshal(room.PendingPayment)
 	return pocketbase.PersistedRoomSnapshot{
 		RoomID:              room.RoomID,
 		RoomState:           room.State,
@@ -1418,6 +1682,7 @@ func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 		PendingActionLabel:  room.PendingAction,
 		PendingPropertyJSON: pendingPropertyJSON,
 		PendingAuctionJSON:  pendingAuctionJSON,
+		PendingPaymentJSON:  pendingPaymentJSON,
 		LastRoll:            room.LastRoll,
 		PlayersJSON:         playersJSON,
 	}
@@ -1435,6 +1700,7 @@ func (room roomRecord) toResponse() RoomResponse {
 		PendingAction:       room.PendingAction,
 		PendingProperty:     room.PendingProperty,
 		PendingAuction:      room.PendingAuction,
+		PendingPayment:      room.PendingPayment,
 		LastRoll:            room.LastRoll,
 		RecentEvents:        room.RecentEvents,
 		Players:             room.Players,
@@ -1482,6 +1748,7 @@ func toPersistedEvents(roomID string, events []Event) []pocketbase.PersistedRoom
 			Sequence:        event.Sequence,
 			SnapshotVersion: event.SnapshotVersion,
 			Summary:         event.Summary,
+			RoomState:       event.RoomState,
 			PlayerID:        event.PlayerID,
 			OwnerPlayerID:   event.OwnerPlayerID,
 			NextPlayerID:    event.NextPlayerID,
@@ -1508,6 +1775,7 @@ func toRoomEvents(events []pocketbase.PersistedRoomEvent) []Event {
 			Sequence:        event.Sequence,
 			SnapshotVersion: event.SnapshotVersion,
 			Summary:         event.Summary,
+			RoomState:       event.RoomState,
 			PlayerID:        event.PlayerID,
 			OwnerPlayerID:   event.OwnerPlayerID,
 			NextPlayerID:    event.NextPlayerID,
@@ -1600,6 +1868,9 @@ func findPlayerIndex(players []Player, playerID string) int {
 
 func findPropertyOwnerIndex(players []Player, tileID string) int {
 	for index, player := range players {
+		if player.IsBankrupt || containsPlayer(player.MortgagedProperties, tileID) {
+			continue
+		}
 		for _, property := range player.Properties {
 			if property == tileID {
 				return index
@@ -1607,6 +1878,14 @@ func findPropertyOwnerIndex(players []Player, tileID string) int {
 		}
 	}
 	return -1
+}
+
+func tileForID(tileID string) (tileDetails, bool) {
+	var index int
+	if _, err := fmt.Sscanf(tileID, "tile-%d", &index); err != nil || index < 0 || index >= boardTileCount {
+		return tileDetails{}, false
+	}
+	return tileForIndex(index), true
 }
 
 func containsPlayer(playerIDs []string, playerID string) bool {
@@ -1646,9 +1925,20 @@ func (room *roomRecord) startAuction(pending PendingProperty, initiatorPlayerID 
 func (room *roomRecord) nextPlayerIDAfter(playerID string) string {
 	currentIndex := findPlayerIndex(room.Players, playerID)
 	if currentIndex == -1 {
+		for _, player := range room.Players {
+			if !player.IsBankrupt {
+				return player.ID
+			}
+		}
 		return room.Players[0].ID
 	}
-	return room.Players[(currentIndex+1)%len(room.Players)].ID
+	for offset := 1; offset <= len(room.Players); offset++ {
+		candidate := room.Players[(currentIndex+offset)%len(room.Players)]
+		if !candidate.IsBankrupt {
+			return candidate.ID
+		}
+	}
+	return room.Players[currentIndex].ID
 }
 
 func (room *roomRecord) activeAuctionPlayerIDs() []string {
@@ -1657,11 +1947,21 @@ func (room *roomRecord) activeAuctionPlayerIDs() []string {
 	}
 	active := make([]string, 0, len(room.Players))
 	for _, player := range room.Players {
-		if !containsPlayer(room.PendingAuction.PassedPlayerIDs, player.ID) {
+		if !player.IsBankrupt && !containsPlayer(room.PendingAuction.PassedPlayerIDs, player.ID) {
 			active = append(active, player.ID)
 		}
 	}
 	return active
+}
+
+func (room roomRecord) countActivePlayers() int {
+	count := 0
+	for _, player := range room.Players {
+		if !player.IsBankrupt {
+			count++
+		}
+	}
+	return count
 }
 
 func (room *roomRecord) nextAuctionPlayerID(afterPlayerID string) string {

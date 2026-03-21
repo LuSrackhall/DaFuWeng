@@ -154,4 +154,59 @@ describe("toProjectionView", () => {
     expect(updated.players[0]?.cash).toBe(1450);
     expect(updated.players[1]?.cash).toBe(1460);
   });
+
+  test("applies deficit, mortgage, and bankruptcy events", () => {
+    const updated = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-14",
+        type: "deficit-started",
+        sequence: 14,
+        snapshotVersion: 14,
+        summary: "房主 需补缴 200 税费。",
+        playerId: "p1",
+        tileId: "tile-4",
+        tileIndex: 4,
+        tileLabel: "税务局",
+        amount: 200,
+        cashAfter: 100
+      },
+      {
+        id: "evt-15",
+        type: "property-mortgaged",
+        sequence: 15,
+        snapshotVersion: 15,
+        summary: "房主 抵押了 终章大道。",
+        playerId: "p1",
+        tileId: "tile-39",
+        tileIndex: 39,
+        tileLabel: "终章大道",
+        amount: 245,
+        cashAfter: 345
+      },
+      {
+        id: "evt-16",
+        type: "tax-paid",
+        sequence: 16,
+        snapshotVersion: 16,
+        summary: "房主 补齐了税费。",
+        playerId: "p1",
+        amount: 200,
+        cashAfter: 145
+      },
+      {
+        id: "evt-17",
+        type: "bankruptcy-declared",
+        sequence: 17,
+        snapshotVersion: 17,
+        summary: "房主 宣告破产。",
+        playerId: "p1",
+        cashAfter: 0
+      }
+    ]);
+
+    expect(updated.pendingPayment).toBeNull();
+    expect(updated.players[0]?.mortgagedProperties).toEqual([]);
+    expect(updated.players[0]?.isBankrupt).toBe(true);
+    expect(updated.players[0]?.cash).toBe(0);
+  });
 });

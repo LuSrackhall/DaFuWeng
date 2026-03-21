@@ -23,6 +23,7 @@ type PersistedRoomSnapshot struct {
 	PendingActionLabel  string
 	PendingPropertyJSON []byte
 	PendingAuctionJSON  []byte
+	PendingPaymentJSON  []byte
 	LastRoll            [2]int
 	PlayersJSON         []byte
 }
@@ -34,6 +35,7 @@ type PersistedRoomEvent struct {
 	Sequence int
 	SnapshotVersion int
 	Summary  string
+	RoomState string
 	PlayerID string
 	OwnerPlayerID string
 	NextPlayerID string

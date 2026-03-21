@@ -1,16 +1,18 @@
 import type {
   CreateRoomRequest,
+  DeclareBankruptcyRequest,
   DeclinePropertyRequest,
   JoinRoomRequest,
   PassAuctionRequest,
   PayJailFineRequest,
+  MortgagePropertyRequest,
   ProjectionSnapshot,
   PurchasePropertyRequest,
   RollDiceRequest,
   RoomEventCatchUpResponse,
   RoomEventStreamEnvelope,
-  StartGameRequest
-  ,SubmitAuctionBidRequest
+  StartGameRequest,
+  SubmitAuctionBidRequest
 } from "@dafuweng/contracts";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
@@ -115,6 +117,20 @@ export function passAuction(roomId: string, payload: PassAuctionRequest) {
 
 export function payJailFine(roomId: string, payload: PayJailFineRequest) {
   return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/jail-release`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function mortgageProperty(roomId: string, payload: MortgagePropertyRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/mortgage`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function declareBankruptcy(roomId: string, payload: DeclareBankruptcyRequest) {
+  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/bankruptcy`, {
     method: "POST",
     body: JSON.stringify(payload)
   });
