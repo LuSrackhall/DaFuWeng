@@ -99,6 +99,13 @@ The system SHALL surface a clear recent result when an auction ends without a wi
 - **WHEN** the room receives an authoritative `auction-ended-unsold` outcome
 - **THEN** the room page SHALL explain that the lot remained unsold, ownership did not change, and the room has already advanced to the next authoritative step
 
+### Requirement: The room page presents a readable deficit recovery panel
+The system SHALL present a recovery-oriented room stage when a player is resolving a forced payment deficit.
+
+#### Scenario: Deficit recovery is active
+- **WHEN** the room is waiting on the deficit player to mortgage assets or declare bankruptcy
+- **THEN** the room page SHALL explain the debt, show who may act, present visible recovery assets with readable action consequences, and keep non-acting viewers in a clear read-only state
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
