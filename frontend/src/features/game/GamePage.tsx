@@ -151,6 +151,7 @@ export function GamePage() {
     : null;
   const diagnosticsEventLines = projection.recentEvents.slice(-5).reverse();
   const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
+  const resolutionActor = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
 
   function getTradeBlockReason(tileId: string) {
     const tile = boardTileById.get(tileId);
@@ -217,6 +218,38 @@ export function GamePage() {
     detail: "对手持有卡牌",
     disabledReason: null as string | null,
   }));
+  const deficitViewerLabel = projection.resolutionSummary
+    ? canResolveDeficit
+      ? `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。选择一项可抵押资产，或直接宣告破产。`
+      : isSpectator
+        ? `当前仅观战，等待 ${projection.resolutionSummary.actorName} 处理欠款。`
+        : `当前由 ${projection.resolutionSummary.actorName} 处理欠款，其他人暂时只能等待。`
+    : null;
+  const resolutionPropertyOptions = (resolutionActor?.properties ?? []).map((tileId) => {
+    const tile = boardTileById.get(tileId);
+    const price = tile?.price ?? 0;
+    const mortgageValue = price > 0 ? Math.floor(price / 2) : 0;
+    const isMortgaged = resolutionActor?.mortgagedProperties?.includes(tileId) ?? false;
+    const canMortgage = !isMortgaged && price > 0;
+    const disabledReason = isMortgaged ? "已抵押" : price > 0 ? null : "当前不可抵押";
+    const currentShortfall = projection.resolutionSummary?.shortfall ?? 0;
+    const nextShortfall = Math.max(0, currentShortfall - mortgageValue);
+
+    return {
+      id: tileId,
+      label: boardTileLabels.get(tileId) ?? tileId,
+      mortgageValue,
+      canMortgage,
+      disabledReason,
+      nextShortfall,
+      settlesDeficit: canMortgage && nextShortfall === 0,
+      detail: [describeProperty(tileId, resolutionActor?.id ?? ""), price > 0 ? `可回收 ${mortgageValue}` : ""]
+        .filter(Boolean)
+        .join(" · "),
+    };
+  });
+  const mortgageablePropertyOptions = resolutionPropertyOptions.filter((option) => option.canMortgage);
+  const blockedRecoveryPropertyOptions = resolutionPropertyOptions.filter((option) => !option.canMortgage);
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
@@ -507,9 +540,6 @@ export function GamePage() {
     }
   }
 
-  const mortgageCandidates = (activeProjectionPlayer?.properties ?? []).filter(
-    (tileId) => !(activeProjectionPlayer?.mortgagedProperties ?? []).includes(tileId)
-  );
   const developmentTiles = sampleBoard.filter((tile) => (activeProjectionPlayer?.properties ?? []).includes(tile.id) && tile.buildCost !== undefined);
 
   return (
@@ -672,6 +702,54 @@ export function GamePage() {
             <span>仍差: {projection.resolutionSummary.shortfall}</span>
             <span>可抵押资产: {projection.resolutionSummary.availableMortgageCount} 处</span>
             <span>{projection.resolutionSummary.consequenceLabel}</span>
+            <span>{deficitViewerLabel}</span>
+            <div className="deficit-stage__grid">
+              <article className="trade-side">
+                <strong>可立即恢复的资产</strong>
+                <span>{mortgageablePropertyOptions.length > 0 ? "选择一处地产执行权威抵押。" : "当前没有可立即抵押的地产。"}</span>
+                {mortgageablePropertyOptions.length > 0 ? (
+                  <div className="asset-picker deficit-picker">
+                    {mortgageablePropertyOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        className="asset-chip asset-chip--recovery"
+                        type="button"
+                        onClick={() => handleMortgage(option.id)}
+                        disabled={!canResolveDeficit || mortgageBusyTileId === option.id}
+                      >
+                        <strong>{mortgageBusyTileId === option.id ? `抵押 ${option.label}...` : option.label}</strong>
+                        <span>{option.detail || `可回收 ${option.mortgageValue}`}</span>
+                        <span>{option.settlesDeficit ? "本次抵押后将补足欠款" : `抵押后仍差 ${option.nextShortfall}`}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="asset-picker__empty">当前只剩破产退出这一条权威路径。</p>
+                )}
+              </article>
+              <article className="trade-side">
+                <strong>暂不可作为恢复动作的资产</strong>
+                <span>{blockedRecoveryPropertyOptions.length > 0 ? "这些地产仍会显示，但当前不能作为抵押动作。" : "当前没有被阻塞的地产。"}</span>
+                {blockedRecoveryPropertyOptions.length > 0 ? (
+                  <div className="asset-picker deficit-picker">
+                    {blockedRecoveryPropertyOptions.map((option) => (
+                      <div key={option.id} className="asset-chip asset-chip--disabled asset-chip--static">
+                        <strong>{option.label}</strong>
+                        <span>{option.detail || "资产状态已变更"}</span>
+                        <span>{option.disabledReason}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="asset-picker__empty">当前所有名下地产都可直接用于恢复。</p>
+                )}
+              </article>
+            </div>
+            <div className="lobby__actions">
+              <button className="button button--primary" type="button" onClick={handleBankruptcy} disabled={!canResolveDeficit}>
+                宣告破产
+              </button>
+            </div>
           </section>
         ) : null}
 
@@ -940,32 +1018,6 @@ export function GamePage() {
                 disabled={!canResolveProperty}
               >
                 放弃购买
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {projection.pendingPayment ? (
-          <section className="player-card player-card--resolution">
-            <strong>赤字处理动作</strong>
-            <span>当前操作人: {projection.resolutionSummary?.actorName ?? projection.currentTurnPlayerName}</span>
-            <span>先尝试通过抵押补足欠款，若仍不足可宣告破产。</span>
-            <div className="lobby__actions">
-              {mortgageCandidates.map((tileId) => (
-                <button
-                  className="button button--secondary"
-                  key={tileId}
-                  type="button"
-                  onClick={() => handleMortgage(tileId)}
-                  disabled={!canResolveDeficit || mortgageBusyTileId === tileId}
-                >
-                  {mortgageBusyTileId === tileId
-                    ? `抵押 ${boardTileLabels.get(tileId) ?? tileId}...`
-                    : `抵押 ${boardTileLabels.get(tileId) ?? tileId}`}
-                </button>
-              ))}
-              <button className="button button--primary" type="button" onClick={handleBankruptcy} disabled={!canResolveDeficit}>
-                宣告破产
               </button>
             </div>
           </section>

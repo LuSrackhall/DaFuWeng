@@ -217,6 +217,7 @@ body {
 .room-overview__grid,
 .auction-stage__grid,
 .trade-stage__grid,
+.deficit-stage__grid,
 .diagnostics-grid,
 .trade-editor__grid {
   display: grid;
@@ -336,6 +337,20 @@ body {
 .asset-chip--disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.asset-chip--recovery {
+  width: 100%;
+  background: rgba(170, 52, 52, 0.18);
+  border-color: rgba(255, 124, 124, 0.18);
+}
+
+.asset-chip--static {
+  cursor: default;
+}
+
+.deficit-picker {
+  gap: 10px;
 }
 
 .diagnostics-drawer {

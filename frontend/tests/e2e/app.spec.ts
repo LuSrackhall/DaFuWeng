@@ -192,3 +192,167 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
 
   await guestPage.close();
 });
+
+test("deficit recovery panel shows mortgage impact and resolves through the recovery action", async ({
+  page,
+}) => {
+  const roomId = "room-deficit";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 12,
+    eventSequence: 12,
+    turnState: "awaiting-deficit-resolution",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "房主甲 现金不足以支付 200 税费，请抵押地产或宣告破产。",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: {
+      amount: 200,
+      reason: "tax",
+      creditorKind: "bank",
+      sourceTileId: "tile-4",
+      sourceTileLabel: "税务局",
+    },
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 100,
+        position: 4,
+        properties: ["tile-39", "tile-6"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1500,
+        position: 0,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-12",
+        type: "deficit-started",
+        sequence: 12,
+        snapshotVersion: 12,
+        summary: "房主甲 需补缴 200 税费。",
+        playerId: "p1",
+        tileId: "tile-4",
+        tileIndex: 4,
+        tileLabel: "税务局",
+        amount: 200,
+        cashAfter: 100,
+      },
+    ],
+  };
+  const settledSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 14,
+    eventSequence: 14,
+    turnState: "awaiting-roll",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingPayment: null,
+    players: [
+      {
+        ...initialSnapshot.players[0],
+        cash: 145,
+        mortgagedProperties: ["tile-39"],
+      },
+      initialSnapshot.players[1],
+    ],
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      {
+        id: "evt-13",
+        type: "property-mortgaged",
+        sequence: 13,
+        snapshotVersion: 13,
+        summary: "房主甲 抵押了 终章大道。",
+        playerId: "p1",
+        tileId: "tile-39",
+        tileIndex: 39,
+        tileLabel: "终章大道",
+        amount: 245,
+        cashAfter: 345,
+      },
+      {
+        id: "evt-14",
+        type: "tax-paid",
+        sequence: 14,
+        snapshotVersion: 14,
+        summary: "房主甲 补齐了税费。",
+        playerId: "p1",
+        tileId: "tile-4",
+        tileLabel: "税务局",
+        amount: 200,
+        cashAfter: 145,
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  let currentSnapshot = initialSnapshot;
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: currentSnapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+  await page.route(`**/api/rooms/${roomId}/mortgage`, async (route) => {
+    currentSnapshot = settledSnapshot;
+    await route.fulfill({ json: settledSnapshot });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const recoveryButton = page.getByRole("button", { name: /终章大道/ });
+  await expect(page.getByText("房主甲 正在处理 税费")).toBeVisible();
+  await expect(page.getByText(/仍差: 100/)).toBeVisible();
+  await expect(recoveryButton).toBeVisible();
+  await expect(page.getByText(/可回收 245/)).toBeVisible();
+  await expect(page.getByText(/本次抵押后将补足欠款/)).toBeVisible();
+
+  await recoveryButton.click();
+
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(page.getByText(/现金: 145/)).toBeVisible();
+  await expect(page.getByText(/抵押: 1/)).toBeVisible();
+});
