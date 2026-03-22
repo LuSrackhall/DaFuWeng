@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/LuSrackhall/DaFuWeng/compare/v1.5.0...v1.5.1) (2026-03-22)
+
+
+### Bug Fixes
+
+* 优化房间页移动端阶段优先级与密集布局 ([6ed033f](https://github.com/LuSrackhall/DaFuWeng/commit/6ed033f611259d9a83100e5658b054841e536ecd))
+
 # [1.5.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.4.1...v1.5.0) (2026-03-22)
 
 
