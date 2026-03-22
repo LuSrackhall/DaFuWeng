@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.6.0...v1.7.0) (2026-03-22)
+
+
+### Features
+
+* 普通回合工具区默认折叠交易与地产开发 ([21ec2da](https://github.com/LuSrackhall/DaFuWeng/commit/21ec2da20c74477938a2e2e6763bed53a905fa45))
+
 # [1.6.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.5.2...v1.6.0) (2026-03-22)
 
 
