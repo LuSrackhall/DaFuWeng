@@ -31,3 +31,21 @@ The system SHALL present enough pending trade information for proposer, counterp
 #### Scenario: Observer watches a pending trade
 - **WHEN** a joined player or spectator is not the proposer or counterparty during a pending trade
 - **THEN** the client SHALL explain that the room is paused on a trade response and that the viewer is currently read-only
+
+### Requirement: Trade proposal uses readable asset selection
+The system SHALL let a proposer compose a trade using visible assets instead of raw internal asset identifiers.
+
+#### Scenario: Proposer selects their own offered assets
+- **WHEN** the current turn player prepares a trade offer
+- **THEN** the client SHALL show the player's available tradeable properties and held cards as readable selectable assets
+
+#### Scenario: Proposer requests assets from the counterparty
+- **WHEN** the current turn player chooses a counterparty for a trade
+- **THEN** the client SHALL show the counterparty's visible requestable properties and held cards as readable selectable assets
+
+### Requirement: Blocked trade assets remain visible with a reason
+The system SHALL show known blocked assets as disabled instead of requiring players to infer why they cannot be traded.
+
+#### Scenario: Property is blocked by improvements
+- **WHEN** a property's color group still contains improvements and the client can determine that it is not currently tradeable
+- **THEN** the property SHALL remain visible in the selector but SHALL be disabled with a readable reason

@@ -81,6 +81,24 @@ The system SHALL keep technical room information accessible without letting it d
 - **WHEN** the diagnostics drawer is closed
 - **THEN** the main room surface SHALL continue to emphasize player-facing guidance instead of technical metadata
 
+### Requirement: The trade proposal surface exposes real asset pools
+The system SHALL present visible asset pools for both sides of a proposed trade while a proposer is composing an offer.
+
+#### Scenario: Proposer prepares a trade offer
+- **WHEN** the current turn player opens the trade proposal surface
+- **THEN** the room page SHALL show who the offer targets, what assets the proposer can offer, what assets the target can be asked to give up, and how the current draft changes the bilateral trade summary
+
+#### Scenario: Trade draft updates
+- **WHEN** the proposer selects or deselects a property or card in the trade proposal surface
+- **THEN** the room page SHALL update the visible trade summary without requiring manual asset identifier entry
+
+### Requirement: The room page explains an unsold auction outcome
+The system SHALL surface a clear recent result when an auction ends without a winner.
+
+#### Scenario: Auction ends unsold
+- **WHEN** the room receives an authoritative `auction-ended-unsold` outcome
+- **THEN** the room page SHALL explain that the lot remained unsold, ownership did not change, and the room has already advanced to the next authoritative step
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
