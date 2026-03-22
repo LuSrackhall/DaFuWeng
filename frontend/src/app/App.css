@@ -188,6 +188,13 @@ body {
   border-color: rgba(34, 197, 94, 0.18);
 }
 
+.stage-card--trade {
+  background:
+    radial-gradient(circle at top right, rgba(202, 138, 4, 0.18), transparent 38%),
+    rgba(62, 45, 11, 0.28);
+  border-color: rgba(202, 138, 4, 0.18);
+}
+
 .stage-card--danger {
   background:
     radial-gradient(circle at top right, rgba(201, 78, 78, 0.22), transparent 38%),
@@ -208,7 +215,10 @@ body {
 }
 
 .room-overview__grid,
-.auction-stage__grid {
+.auction-stage__grid,
+.trade-stage__grid,
+.diagnostics-grid,
+.trade-editor__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -256,6 +266,47 @@ body {
 .auction-stage__field {
   display: grid;
   gap: 8px;
+}
+
+.trade-side,
+.diagnostics-drawer {
+  display: grid;
+  gap: 10px;
+}
+
+.trade-side {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(4, 12, 10, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.trade-editor__field {
+  margin: 0;
+}
+
+.diagnostics-drawer {
+  margin-top: 18px;
+  border-radius: 20px;
+  padding: 16px;
+  background: rgba(7, 13, 17, 0.42);
+  border: 1px solid rgba(106, 117, 131, 0.18);
+}
+
+.diagnostics-drawer__toggle {
+  width: 100%;
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f6ecd4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.diagnostics-drawer__body {
+  display: grid;
+  gap: 14px;
 }
 
 .player-card input {
@@ -369,7 +420,10 @@ body {
   .status-grid,
   .asset-grid,
   .room-overview__grid,
-  .auction-stage__grid {
+  .auction-stage__grid,
+  .trade-stage__grid,
+  .diagnostics-grid,
+  .trade-editor__grid {
     grid-template-columns: 1fr;
   }
 }

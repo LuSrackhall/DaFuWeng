@@ -1,6 +1,8 @@
+import { sampleBoard } from "@dafuweng/board-config";
 import { useEffect, useState } from "react";
 import type {
   PendingAuction,
+  PendingTrade,
   PendingPayment,
   PlayerState,
   ProjectionEvent,
@@ -78,6 +80,23 @@ type AuctionSummary = {
   statusLabel: string;
 };
 
+type TradeSummary = {
+  proposerPlayerId: string;
+  proposerName: string;
+  counterpartyPlayerId: string;
+  counterpartyName: string;
+  offeredCash: number;
+  requestedCash: number;
+  offeredTileLabels: string[];
+  requestedTileLabels: string[];
+  offeredCardLabels: string[];
+  requestedCardLabels: string[];
+  proposerNetCash: number;
+  counterpartyNetCash: number;
+  stageLabel: string;
+  outcomePreviewLabel: string;
+};
+
 type SettlementSummary = {
   title: string;
   detail: string;
@@ -91,6 +110,7 @@ type ProjectionView = ProjectionSnapshot & {
   players: PlayerSummary[];
   waitingRoomSummary: WaitingRoomSummary | null;
   auctionSummary: AuctionSummary | null;
+  tradeSummary: TradeSummary | null;
   resolutionSummary: ResolutionSummary | null;
   latestSettlementSummary: SettlementSummary | null;
 };
@@ -128,6 +148,21 @@ function createEmptyProjection(roomId: string): ProjectionSnapshot {
 
 function getPlayerName(players: PlayerState[], playerId: string | undefined) {
   return players.find((player) => player.id === playerId)?.name ?? "未知玩家";
+}
+
+const boardTileLabels = new Map(sampleBoard.map((tile) => [tile.id, tile.label]));
+
+const cardLabels = new Map([
+  ["chance-jail-card", "机会免狱卡"],
+  ["community-jail-card", "命运免狱卡"],
+]);
+
+function getTileLabel(tileId: string) {
+  return boardTileLabels.get(tileId) ?? tileId;
+}
+
+function getCardLabel(cardId: string) {
+  return cardLabels.get(cardId) ?? cardId;
 }
 
 function formatPendingPaymentReason(reason: PendingPayment["reason"]) {
@@ -256,25 +291,80 @@ function buildAuctionSummary(snapshot: ProjectionSnapshot): AuctionSummary | nul
   };
 }
 
+function buildTradeSummaryFromPendingTrade(
+  players: PlayerState[],
+  pendingTrade: PendingTrade,
+): TradeSummary {
+  const proposerName = getPlayerName(players, pendingTrade.proposerPlayerId);
+  const counterpartyName = getPlayerName(players, pendingTrade.counterpartyPlayerId);
+  const proposerNetCash = pendingTrade.requestedCash - pendingTrade.offeredCash;
+  const counterpartyNetCash = pendingTrade.offeredCash - pendingTrade.requestedCash;
+
+  return {
+    proposerPlayerId: pendingTrade.proposerPlayerId,
+    proposerName,
+    counterpartyPlayerId: pendingTrade.counterpartyPlayerId,
+    counterpartyName,
+    offeredCash: pendingTrade.offeredCash,
+    requestedCash: pendingTrade.requestedCash,
+    offeredTileLabels: pendingTrade.offeredTileIds.map(getTileLabel),
+    requestedTileLabels: pendingTrade.requestedTileIds.map(getTileLabel),
+    offeredCardLabels: pendingTrade.offeredCardIds.map(getCardLabel),
+    requestedCardLabels: pendingTrade.requestedCardIds.map(getCardLabel),
+    proposerNetCash,
+    counterpartyNetCash,
+    stageLabel: `${proposerName} 已向 ${counterpartyName} 发出正式交易报价，当前等待 ${counterpartyName} 决定。`,
+    outcomePreviewLabel:
+      `${proposerName} 现金净变动 ${proposerNetCash >= 0 ? "+" : ""}${proposerNetCash}，` +
+      `${counterpartyName} 现金净变动 ${counterpartyNetCash >= 0 ? "+" : ""}${counterpartyNetCash}。`,
+  };
+}
+
+function buildTradeSummary(snapshot: ProjectionSnapshot): TradeSummary | null {
+  if (!snapshot.pendingTrade) {
+    return null;
+  }
+
+  return buildTradeSummaryFromPendingTrade(snapshot.players, snapshot.pendingTrade);
+}
+
 function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementSummary | null {
+  const recentTradeEvent = [...snapshot.recentEvents]
+    .reverse()
+    .find(
+      (event) =>
+        event.type === "trade-accepted" || event.type === "trade-rejected",
+    );
+  const recentTradeProposal = [...snapshot.recentEvents]
+    .reverse()
+    .find((event) => event.type === "trade-proposed");
+
   const bankruptcyEvent = [...snapshot.recentEvents]
     .reverse()
     .find((event) => event.type === "bankruptcy-declared");
 
-  if (!bankruptcyEvent || !bankruptcyEvent.playerId) {
-    return null;
-  }
+  if (bankruptcyEvent?.playerId) {
+    const debtorName = getPlayerName(snapshot.players, bankruptcyEvent.playerId);
 
-  const debtorName = getPlayerName(snapshot.players, bankruptcyEvent.playerId);
+    if (bankruptcyEvent.ownerPlayerId) {
+      const creditorName = getPlayerName(snapshot.players, bankruptcyEvent.ownerPlayerId);
+      const transferredPropertyCount = bankruptcyEvent.transferredPropertyIds?.length ?? 0;
+      const transferredCardCount = bankruptcyEvent.transferredCardIds?.length ?? 0;
 
-  if (bankruptcyEvent.ownerPlayerId) {
-    const creditorName = getPlayerName(snapshot.players, bankruptcyEvent.ownerPlayerId);
-    const transferredPropertyCount = bankruptcyEvent.transferredPropertyIds?.length ?? 0;
-    const transferredCardCount = bankruptcyEvent.transferredCardIds?.length ?? 0;
+      return {
+        title: `${debtorName} 已向 ${creditorName} 破产结算`,
+        detail: `${creditorName} 接收了 ${transferredPropertyCount} 处地产、${transferredCardCount} 张卡牌及剩余现金。`,
+        nextStepLabel:
+          snapshot.roomState === "finished"
+            ? "本局已结束，只剩最后一名未破产玩家。"
+            : snapshot.pendingActionLabel,
+        tone: snapshot.roomState === "finished" ? "danger" : "neutral",
+      };
+    }
 
     return {
-      title: `${debtorName} 已向 ${creditorName} 破产结算`,
-      detail: `${creditorName} 接收了 ${transferredPropertyCount} 处地产、${transferredCardCount} 张卡牌及剩余现金。`,
+      title: `${debtorName} 已向银行破产结算`,
+      detail: "该玩家的资产、抵押和持有卡牌已按银行债权规则清空或回收给银行。",
       nextStepLabel:
         snapshot.roomState === "finished"
           ? "本局已结束，只剩最后一名未破产玩家。"
@@ -283,15 +373,38 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
     };
   }
 
-  return {
-    title: `${debtorName} 已向银行破产结算`,
-    detail: "该玩家的资产、抵押和持有卡牌已按银行债权规则清空或回收给银行。",
-    nextStepLabel:
-      snapshot.roomState === "finished"
-        ? "本局已结束，只剩最后一名未破产玩家。"
-        : snapshot.pendingActionLabel,
-    tone: snapshot.roomState === "finished" ? "danger" : "neutral",
-  };
+  if (recentTradeEvent && recentTradeProposal && recentTradeProposal.playerId && recentTradeProposal.ownerPlayerId) {
+    const tradeSummary = buildTradeSummaryFromPendingTrade(snapshot.players, {
+      proposerPlayerId: recentTradeProposal.playerId,
+      counterpartyPlayerId: recentTradeProposal.ownerPlayerId,
+      offeredCash: recentTradeProposal.offeredCash ?? 0,
+      requestedCash: recentTradeProposal.requestedCash ?? 0,
+      offeredTileIds: recentTradeProposal.offeredTileIds ?? [],
+      requestedTileIds: recentTradeProposal.requestedTileIds ?? [],
+      offeredCardIds: recentTradeProposal.offeredCardIds ?? [],
+      requestedCardIds: recentTradeProposal.requestedCardIds ?? [],
+      snapshotVersion:
+        recentTradeProposal.tradeSnapshotVersion ?? snapshot.snapshotVersion,
+    });
+
+    if (recentTradeEvent.type === "trade-accepted") {
+      return {
+        title: `${tradeSummary.counterpartyName} 接受了 ${tradeSummary.proposerName} 的交易报价`,
+        detail: `${tradeSummary.proposerName} 交出 ${tradeSummary.offeredCash} 现金与 ${tradeSummary.offeredTileLabels.join("、") || "无地产"}${tradeSummary.offeredCardLabels.length > 0 ? `，并附带 ${tradeSummary.offeredCardLabels.join("、")}` : ""}；作为交换，获得 ${tradeSummary.requestedCash} 现金与 ${tradeSummary.requestedTileLabels.join("、") || "无地产"}${tradeSummary.requestedCardLabels.length > 0 ? `，并接收 ${tradeSummary.requestedCardLabels.join("、")}` : ""}。`,
+        nextStepLabel: snapshot.pendingActionLabel,
+        tone: "neutral",
+      };
+    }
+
+    return {
+      title: `${tradeSummary.counterpartyName} 拒绝了 ${tradeSummary.proposerName} 的交易报价`,
+      detail: `房间不再等待交易响应，${tradeSummary.proposerName} 的回合恢复为正常行动阶段。`,
+      nextStepLabel: snapshot.pendingActionLabel,
+      tone: "neutral",
+    };
+  }
+
+  return null;
 }
 
 export function toProjectionView(snapshot: ProjectionSnapshot): ProjectionView {
@@ -306,6 +419,7 @@ export function toProjectionView(snapshot: ProjectionSnapshot): ProjectionView {
     players: snapshot.players,
     waitingRoomSummary: buildWaitingRoomSummary(snapshot),
     auctionSummary: buildAuctionSummary(snapshot),
+    tradeSummary: buildTradeSummary(snapshot),
     resolutionSummary: buildResolutionSummary(snapshot),
     latestSettlementSummary: buildLatestSettlementSummary(snapshot),
   };

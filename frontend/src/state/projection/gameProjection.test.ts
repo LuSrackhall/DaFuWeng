@@ -476,6 +476,12 @@ describe("toProjectionView", () => {
     expect(proposed.currentTurnPlayerId).toBe("p2");
     expect(proposed.pendingTrade?.offeredCash).toBe(100);
 
+    const proposedProjection = toProjectionView(proposed);
+    expect(proposedProjection.tradeSummary?.proposerName).toBe("房主");
+    expect(proposedProjection.tradeSummary?.counterpartyName).toBe("玩家二");
+    expect(proposedProjection.tradeSummary?.offeredCash).toBe(100);
+    expect(proposedProjection.tradeSummary?.stageLabel).toContain("等待 玩家二 决定");
+
     const accepted = applyRoomEvents(proposed, [
       {
         id: "evt-27",
@@ -497,6 +503,10 @@ describe("toProjectionView", () => {
     expect(accepted.players[0]?.cash).toBe(1450);
     expect(accepted.players[1]?.cash).toBe(1550);
 
+    const acceptedProjection = toProjectionView(accepted);
+    expect(acceptedProjection.tradeSummary).toBeNull();
+    expect(acceptedProjection.latestSettlementSummary?.title).toContain("接受了");
+
     const rejected = applyRoomEvents(proposed, [
       {
         id: "evt-28",
@@ -513,5 +523,8 @@ describe("toProjectionView", () => {
     expect(rejected.pendingTrade).toBeNull();
     expect(rejected.turnState).toBe("awaiting-roll");
     expect(rejected.currentTurnPlayerId).toBe("p1");
+
+    const rejectedProjection = toProjectionView(rejected);
+    expect(rejectedProjection.latestSettlementSummary?.title).toContain("拒绝了");
   });
 });

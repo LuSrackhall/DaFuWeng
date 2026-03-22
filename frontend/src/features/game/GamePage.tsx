@@ -21,6 +21,7 @@ export function GamePage() {
   const [tradeRequestedTiles, setTradeRequestedTiles] = useState("");
   const [tradeOfferedCards, setTradeOfferedCards] = useState("");
   const [tradeRequestedCards, setTradeRequestedCards] = useState("");
+  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const presentation = usePresentationState(
@@ -99,17 +100,24 @@ export function GamePage() {
 
   const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
   const boardTileLabels = new Map(sampleBoard.map((tile) => [tile.id, tile.label]));
+  const cardLabels = new Map([
+    ["chance-jail-card", "机会免狱卡"],
+    ["community-jail-card", "命运免狱卡"],
+  ]);
   const roomPhaseLabel = projection.roomState === "lobby"
     ? "等待房间"
     : projection.roomState === "finished"
       ? "对局结束"
       : projection.turnState === "awaiting-auction"
         ? "公开拍卖"
+        : projection.turnState === "awaiting-trade-response"
+          ? "交易响应"
         : projection.turnState === "awaiting-deficit-resolution"
           ? "资金结算"
           : "对局进行中";
   const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
   const auctionSummary = projection.auctionSummary;
+  const tradeSummary = projection.tradeSummary;
   const auctionQuickBidOptions = auctionSummary
     ? Array.from(new Set([
         auctionSummary.nextMinimumBid,
@@ -126,6 +134,21 @@ export function GamePage() {
           ? "你已放弃本轮竞拍，等待其余玩家完成拍卖。"
           : `当前轮到 ${auctionSummary.actingBidderName} 决策，你暂时只能等待。`
     : null;
+  const selectedCounterparty = otherPlayers.find((player) => player.id === tradeCounterpartyId) ?? otherPlayers[0] ?? null;
+  const draftTradeOfferedTileLabels = parseTradeIds(tradeOfferedTiles).map((tileId) => boardTileLabels.get(tileId) ?? tileId);
+  const draftTradeRequestedTileLabels = parseTradeIds(tradeRequestedTiles).map((tileId) => boardTileLabels.get(tileId) ?? tileId);
+  const draftTradeOfferedCardLabels = parseTradeIds(tradeOfferedCards).map((cardId) => cardLabels.get(cardId) ?? cardId);
+  const draftTradeRequestedCardLabels = parseTradeIds(tradeRequestedCards).map((cardId) => cardLabels.get(cardId) ?? cardId);
+  const tradeStageViewerLabel = tradeSummary
+    ? canResolveTrade
+      ? `轮到你决定是否接受 ${tradeSummary.proposerName} 的报价。`
+      : tradeSummary.proposerPlayerId === activePlayerId
+        ? `报价已发出，当前等待 ${tradeSummary.counterpartyName} 回复。`
+        : isSpectator
+          ? "当前仅观战，你可以查看交易内容，但不能参与响应。"
+          : `当前轮到 ${tradeSummary.counterpartyName} 决定，其他人保持只读。`
+    : null;
+  const diagnosticsEventLines = projection.recentEvents.slice(-5).reverse();
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
@@ -570,9 +593,109 @@ export function GamePage() {
           </section>
         ) : null}
 
-        {!projection.waitingRoomSummary && !auctionSummary && !projection.resolutionSummary && projection.latestSettlementSummary ? (
+        {!projection.waitingRoomSummary && !auctionSummary && !projection.resolutionSummary && tradeSummary ? (
+          <section className="stage-card stage-card--trade">
+            <p className="shell__eyebrow">交易阶段</p>
+            <strong>双边交易待响应</strong>
+            <span>{tradeSummary.stageLabel}</span>
+            <div className="trade-stage__grid">
+              <article className="trade-side">
+                <strong>{tradeSummary.proposerName} 给出</strong>
+                <span>现金: {tradeSummary.offeredCash}</span>
+                <span>地产: {tradeSummary.offeredTileLabels.join(" / ") || "无"}</span>
+                <span>卡牌: {tradeSummary.offeredCardLabels.join(" / ") || "无"}</span>
+              </article>
+              <article className="trade-side">
+                <strong>{tradeSummary.proposerName} 获得</strong>
+                <span>现金: {tradeSummary.requestedCash}</span>
+                <span>地产: {tradeSummary.requestedTileLabels.join(" / ") || "无"}</span>
+                <span>卡牌: {tradeSummary.requestedCardLabels.join(" / ") || "无"}</span>
+              </article>
+            </div>
+            <span>{tradeSummary.outcomePreviewLabel}</span>
+            <span>{tradeStageViewerLabel}</span>
+            <div className="lobby__actions">
+              <button className="button button--primary" type="button" onClick={() => handleResolveTrade("accept")} disabled={!canResolveTrade}>
+                接受交易
+              </button>
+              <button className="button button--secondary button--danger" type="button" onClick={() => handleResolveTrade("reject")} disabled={!canResolveTrade}>
+                拒绝交易
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {!projection.waitingRoomSummary && !auctionSummary && !projection.resolutionSummary && !tradeSummary && canProposeTrade ? (
+          <section className="stage-card stage-card--trade">
+            <p className="shell__eyebrow">交易阶段</p>
+            <strong>发起双边交易报价</strong>
+            <span>
+              {selectedCounterparty
+                ? `当前由你决定是否向 ${selectedCounterparty.name} 发起一笔正式报价。`
+                : "请选择一名仍在局内的玩家作为交易对象。"}
+            </span>
+            <div className="trade-stage__grid">
+              <article className="trade-side">
+                <strong>你给出</strong>
+                <span>现金: {Number(tradeOfferedCash) || 0}</span>
+                <span>地产: {draftTradeOfferedTileLabels.join(" / ") || "无"}</span>
+                <span>卡牌: {draftTradeOfferedCardLabels.join(" / ") || "无"}</span>
+              </article>
+              <article className="trade-side">
+                <strong>你获得</strong>
+                <span>现金: {Number(tradeRequestedCash) || 0}</span>
+                <span>地产: {draftTradeRequestedTileLabels.join(" / ") || "无"}</span>
+                <span>卡牌: {draftTradeRequestedCardLabels.join(" / ") || "无"}</span>
+              </article>
+            </div>
+            <span>
+              这笔报价提交后会暂停房间，等待 {selectedCounterparty?.name ?? "对手"} 明确接受或拒绝。
+            </span>
+            <div className="trade-editor__grid">
+              <label className="player-card trade-editor__field">
+                <strong>目标玩家</strong>
+                <select value={tradeCounterpartyId} onChange={(event) => setTradeCounterpartyId(event.target.value)}>
+                  {otherPlayers.map((player) => (
+                    <option key={player.id} value={player.id}>{player.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="player-card trade-editor__field">
+                <strong>我出现金</strong>
+                <input value={tradeOfferedCash} onChange={(event) => setTradeOfferedCash(event.target.value)} />
+              </label>
+              <label className="player-card trade-editor__field">
+                <strong>我索要现金</strong>
+                <input value={tradeRequestedCash} onChange={(event) => setTradeRequestedCash(event.target.value)} />
+              </label>
+              <label className="player-card trade-editor__field">
+                <strong>我出让地产</strong>
+                <input value={tradeOfferedTiles} onChange={(event) => setTradeOfferedTiles(event.target.value)} placeholder="tile-1,tile-3" />
+              </label>
+              <label className="player-card trade-editor__field">
+                <strong>我索要地产</strong>
+                <input value={tradeRequestedTiles} onChange={(event) => setTradeRequestedTiles(event.target.value)} placeholder="tile-6" />
+              </label>
+              <label className="player-card trade-editor__field">
+                <strong>我出让卡牌</strong>
+                <input value={tradeOfferedCards} onChange={(event) => setTradeOfferedCards(event.target.value)} placeholder="chance-jail-card" />
+              </label>
+              <label className="player-card trade-editor__field">
+                <strong>我索要卡牌</strong>
+                <input value={tradeRequestedCards} onChange={(event) => setTradeRequestedCards(event.target.value)} placeholder="community-jail-card" />
+              </label>
+            </div>
+            <div className="lobby__actions">
+              <button className="button button--secondary" type="button" onClick={handleProposeTrade} disabled={!canProposeTrade || !tradeCounterpartyId}>
+                发起交易
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {!projection.waitingRoomSummary && !auctionSummary && !projection.resolutionSummary && !tradeSummary && projection.latestSettlementSummary ? (
           <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--result"}`}>
-            <p className="shell__eyebrow">最近结算</p>
+            <p className="shell__eyebrow">最近结果</p>
             <strong>{projection.latestSettlementSummary.title}</strong>
             <span>{projection.latestSettlementSummary.detail}</span>
             <span>{projection.latestSettlementSummary.nextStepLabel}</span>
@@ -587,14 +710,6 @@ export function GamePage() {
           <article className="status-card">
             <strong>下一步</strong>
             <span>{projection.pendingActionLabel}</span>
-          </article>
-          <article className="status-card">
-            <strong>牌堆状态</strong>
-            <span>机会 {projection.chanceDeck.drawPile.length} / 命运 {projection.communityDeck.drawPile.length}</span>
-          </article>
-          <article className="status-card">
-            <strong>房间同步</strong>
-            <span>快照 {projection.snapshotVersion} · 序列 {projection.eventSequence}</span>
           </article>
         </div>
 
@@ -673,77 +788,6 @@ export function GamePage() {
           </section>
         ) : null}
 
-        {projection.pendingTrade ? (
-          <section className="player-card">
-            <strong>待响应交易</strong>
-            <span>发起方: {projection.pendingTrade.proposerPlayerId}</span>
-            <span>对手方: {projection.pendingTrade.counterpartyPlayerId}</span>
-            <span>发起方出价现金: {projection.pendingTrade.offeredCash}</span>
-            <span>发起方索要现金: {projection.pendingTrade.requestedCash}</span>
-            <span>发起方出让地产: {projection.pendingTrade.offeredTileIds.join(", ") || "无"}</span>
-            <span>发起方索要地产: {projection.pendingTrade.requestedTileIds.join(", ") || "无"}</span>
-            <span>发起方出让卡牌: {projection.pendingTrade.offeredCardIds.join(", ") || "无"}</span>
-            <span>发起方索要卡牌: {projection.pendingTrade.requestedCardIds.join(", ") || "无"}</span>
-            <div className="lobby__actions">
-              <button className="button button--primary" type="button" onClick={() => handleResolveTrade("accept")} disabled={!canResolveTrade}>
-                接受交易
-              </button>
-              <button className="button button--secondary" type="button" onClick={() => handleResolveTrade("reject")} disabled={!canResolveTrade}>
-                拒绝交易
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {otherPlayers.length > 0 ? (
-          <section className="player-card">
-            <strong>发起交易</strong>
-            <label className="player-card">
-              <strong>目标玩家</strong>
-              <select value={tradeCounterpartyId} onChange={(event) => setTradeCounterpartyId(event.target.value)}>
-                {otherPlayers.map((player) => (
-                  <option key={player.id} value={player.id}>{player.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="player-card">
-              <strong>我出现金</strong>
-              <input value={tradeOfferedCash} onChange={(event) => setTradeOfferedCash(event.target.value)} />
-            </label>
-            <label className="player-card">
-              <strong>我索要现金</strong>
-              <input value={tradeRequestedCash} onChange={(event) => setTradeRequestedCash(event.target.value)} />
-            </label>
-            <label className="player-card">
-              <strong>我出让地产</strong>
-              <input value={tradeOfferedTiles} onChange={(event) => setTradeOfferedTiles(event.target.value)} placeholder="tile-1,tile-3" />
-            </label>
-            <label className="player-card">
-              <strong>我索要地产</strong>
-              <input value={tradeRequestedTiles} onChange={(event) => setTradeRequestedTiles(event.target.value)} placeholder="tile-6" />
-            </label>
-            <label className="player-card">
-              <strong>我出让卡牌</strong>
-              <input value={tradeOfferedCards} onChange={(event) => setTradeOfferedCards(event.target.value)} placeholder="chance-jail-card" />
-            </label>
-            <label className="player-card">
-              <strong>我索要卡牌</strong>
-              <input value={tradeRequestedCards} onChange={(event) => setTradeRequestedCards(event.target.value)} placeholder="community-jail-card" />
-            </label>
-            <div className="lobby__actions">
-              <button className="button button--secondary" type="button" onClick={handleProposeTrade} disabled={!canProposeTrade || !tradeCounterpartyId}>
-                发起交易
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        <section className="player-card section-card">
-          <strong>牌堆状态</strong>
-          <span>机会牌堆: 抽牌 {projection.chanceDeck.drawPile.length} / 弃牌 {projection.chanceDeck.discardPile.length}</span>
-          <span>命运牌堆: 抽牌 {projection.communityDeck.drawPile.length} / 弃牌 {projection.communityDeck.discardPile.length}</span>
-        </section>
-
         {developmentTiles.length > 0 ? (
           <section className="player-card">
             <strong>地产开发</strong>
@@ -782,12 +826,44 @@ export function GamePage() {
           ))}
         </div>
 
-        <h4 className="panel__title">对局记录</h4>
-        <ol className="event-log">
-          {projection.recentEvents.map((event) => (
-            <li key={event.id}>#{event.sequence} {event.summary}</li>
-          ))}
-        </ol>
+        <section className="diagnostics-drawer">
+          <button
+            className="diagnostics-drawer__toggle"
+            type="button"
+            onClick={() => setIsDiagnosticsOpen((current) => !current)}
+          >
+            {isDiagnosticsOpen ? "收起诊断抽屉" : "展开诊断抽屉"}
+          </button>
+          {isDiagnosticsOpen ? (
+            <div className="diagnostics-drawer__body">
+              <div className="diagnostics-grid">
+                <article className="status-card">
+                  <strong>房间上下文</strong>
+                  <span>{projection.roomState} / {projection.turnState}</span>
+                </article>
+                <article className="status-card">
+                  <strong>房间同步</strong>
+                  <span>快照 {projection.snapshotVersion} · 序列 {projection.eventSequence}</span>
+                </article>
+                <article className="status-card">
+                  <strong>牌堆状态</strong>
+                  <span>机会 {projection.chanceDeck.drawPile.length}/{projection.chanceDeck.discardPile.length} · 命运 {projection.communityDeck.drawPile.length}/{projection.communityDeck.discardPile.length}</span>
+                </article>
+                <article className="status-card">
+                  <strong>挂起交易版本</strong>
+                  <span>{projection.pendingTrade?.snapshotVersion ?? "当前无挂起交易"}</span>
+                </article>
+              </div>
+              <p className="panel__subtitle">当前权威说明: {projection.pendingActionLabel}</p>
+              <h4 className="panel__title">最近事件</h4>
+              <ol className="event-log">
+                {diagnosticsEventLines.map((event) => (
+                  <li key={event.id}>#{event.sequence} {event.summary}</li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+        </section>
       </aside>
     </main>
   );
