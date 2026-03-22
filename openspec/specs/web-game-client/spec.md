@@ -120,6 +120,13 @@ The system SHALL keep stage actions and asset groups readable on narrow screens.
 - **WHEN** the room page renders auction, trade, or deficit recovery content on a mobile viewport
 - **THEN** the client SHALL present stage details, actions, and asset selections in a single readable column without requiring horizontal scrolling
 
+### Requirement: The mobile room page presents the current stage before the board
+The system SHALL prioritize the current authoritative room stage above the board on narrow screens.
+
+#### Scenario: Player opens a mobile room with an active decision
+- **WHEN** the room page is rendered in a narrow mobile viewport and the room has a current stage to explain
+- **THEN** the room-state panel SHALL appear before the board panel in the page reading flow so the player reaches the active decision surface first
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
