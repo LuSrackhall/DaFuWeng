@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/LuSrackhall/DaFuWeng/compare/v1.5.1...v1.5.2) (2026-03-22)
+
+
+### Bug Fixes
+
+* 调整移动端房间页阶段信息前置于棋盘 ([3c8a22e](https://github.com/LuSrackhall/DaFuWeng/commit/3c8a22e73f2bd292f5f17fbe30fc50f6a8496218))
+
 ## [1.5.1](https://github.com/LuSrackhall/DaFuWeng/compare/v1.5.0...v1.5.1) (2026-03-22)
 
 
