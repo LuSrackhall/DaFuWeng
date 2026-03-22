@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.11.0...v1.12.0) (2026-03-22)
+
+
+### Features
+
+* 强化普通回合交易待响应多视角体验 ([35276ae](https://github.com/LuSrackhall/DaFuWeng/commit/35276aee85ea2f048cad8ae0656834e8f6b12e36))
+
 # [1.11.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.10.0...v1.11.0) (2026-03-22)
 
 
