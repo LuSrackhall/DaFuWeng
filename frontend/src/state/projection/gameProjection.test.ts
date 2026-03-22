@@ -601,6 +601,9 @@ describe("toProjectionView", () => {
     const acceptedProjection = toProjectionView(accepted);
     expect(acceptedProjection.tradeSummary).toBeNull();
     expect(acceptedProjection.latestSettlementSummary?.title).toContain("接受了");
+    expect(acceptedProjection.latestSettlementSummary?.kind).toBe("trade-accepted");
+    expect(acceptedProjection.latestSettlementSummary?.tradeSettlement?.proposerName).toBe("房主");
+    expect(acceptedProjection.latestSettlementSummary?.tradeSettlement?.counterpartyCashAfter).toBe(1550);
 
     const rejected = applyRoomEvents(proposed, [
       {

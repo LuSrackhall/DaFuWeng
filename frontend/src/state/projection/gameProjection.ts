@@ -102,6 +102,17 @@ type SettlementSummary = {
   detail: string;
   nextStepLabel: string;
   tone: "danger" | "neutral";
+  kind?: "trade-accepted" | "generic";
+  tradeSettlement?: {
+    proposerName: string;
+    counterpartyName: string;
+    proposerGives: string[];
+    proposerGets: string[];
+    counterpartyGives: string[];
+    counterpartyGets: string[];
+    proposerCashAfter: number | null;
+    counterpartyCashAfter: number | null;
+  };
 };
 
 type ProjectionView = ProjectionSnapshot & {
@@ -358,6 +369,7 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
             ? "本局已结束，只剩最后一名未破产玩家。"
             : snapshot.pendingActionLabel,
         tone: snapshot.roomState === "finished" ? "danger" : "neutral",
+        kind: "generic",
       };
     }
 
@@ -369,6 +381,7 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
           ? "本局已结束，只剩最后一名未破产玩家。"
           : snapshot.pendingActionLabel,
       tone: snapshot.roomState === "finished" ? "danger" : "neutral",
+      kind: "generic",
     };
   }
 
@@ -378,6 +391,7 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
       detail: `没有玩家赢得 ${latestFormalEvent.tileLabel ?? "该地产"}，产权保持未售出状态，也没有任何现金结算。`,
       nextStepLabel: snapshot.pendingActionLabel,
       tone: "neutral",
+      kind: "generic",
     };
   }
 
@@ -412,11 +426,40 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
     });
 
     if (latestFormalEvent.type === "trade-accepted") {
+      const proposerCashAfter = latestFormalEvent.cashAfterByPlayer?.[tradeSummary.proposerPlayerId] ?? null;
+      const counterpartyCashAfter = latestFormalEvent.cashAfterByPlayer?.[tradeSummary.counterpartyPlayerId] ?? null;
       return {
         title: `${tradeSummary.counterpartyName} 接受了 ${tradeSummary.proposerName} 的交易报价`,
-        detail: `${tradeSummary.proposerName} 交出 ${tradeSummary.offeredCash} 现金与 ${tradeSummary.offeredTileLabels.join("、") || "无地产"}${tradeSummary.offeredCardLabels.length > 0 ? `，并附带 ${tradeSummary.offeredCardLabels.join("、")}` : ""}；作为交换，获得 ${tradeSummary.requestedCash} 现金与 ${tradeSummary.requestedTileLabels.join("、") || "无地产"}${tradeSummary.requestedCardLabels.length > 0 ? `，并接收 ${tradeSummary.requestedCardLabels.join("、")}` : ""}。`,
+        detail: "成交已按当前报价完成结算，双方现金与资产已经同步交换。",
         nextStepLabel: snapshot.pendingActionLabel,
         tone: "neutral",
+        kind: "trade-accepted",
+        tradeSettlement: {
+          proposerName: tradeSummary.proposerName,
+          counterpartyName: tradeSummary.counterpartyName,
+          proposerGives: [
+            `现金 ${tradeSummary.offeredCash}`,
+            `地产 ${tradeSummary.offeredTileLabels.join(" / ") || "无"}`,
+            `卡牌 ${tradeSummary.offeredCardLabels.join(" / ") || "无"}`,
+          ],
+          proposerGets: [
+            `现金 ${tradeSummary.requestedCash}`,
+            `地产 ${tradeSummary.requestedTileLabels.join(" / ") || "无"}`,
+            `卡牌 ${tradeSummary.requestedCardLabels.join(" / ") || "无"}`,
+          ],
+          counterpartyGives: [
+            `现金 ${tradeSummary.requestedCash}`,
+            `地产 ${tradeSummary.requestedTileLabels.join(" / ") || "无"}`,
+            `卡牌 ${tradeSummary.requestedCardLabels.join(" / ") || "无"}`,
+          ],
+          counterpartyGets: [
+            `现金 ${tradeSummary.offeredCash}`,
+            `地产 ${tradeSummary.offeredTileLabels.join(" / ") || "无"}`,
+            `卡牌 ${tradeSummary.offeredCardLabels.join(" / ") || "无"}`,
+          ],
+          proposerCashAfter,
+          counterpartyCashAfter,
+        },
       };
     }
 
@@ -425,6 +468,7 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
       detail: `房间不再等待交易响应，${tradeSummary.proposerName} 的回合恢复为正常行动阶段。`,
       nextStepLabel: snapshot.pendingActionLabel,
       tone: "neutral",
+      kind: "generic",
     };
   }
 

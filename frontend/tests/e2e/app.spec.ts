@@ -217,8 +217,12 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
 
   await guestPage.getByRole("button", { name: "接受交易" }).click();
 
+  await expect(page.getByText("交易已成交", { exact: true })).toBeVisible();
+  await expect(page.getByText(/成交后现金:/).first()).toBeVisible();
   await expect(page.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
+  await expect(guestPage.getByText("交易已成交", { exact: true })).toBeVisible();
   await expect(guestPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
+  await expect(spectatorPage.getByText("交易已成交", { exact: true })).toBeVisible();
   await expect(spectatorPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
 

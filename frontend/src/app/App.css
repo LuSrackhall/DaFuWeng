@@ -428,6 +428,16 @@ body {
   border: 1px dashed rgba(255, 255, 255, 0.18);
 }
 
+.trade-settlement-card,
+.trade-settlement-card__grid {
+  display: grid;
+  gap: 12px;
+}
+
+.trade-settlement-card__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .action-surface__summary,
 .action-surface__hint,
 .action-surface__meta {

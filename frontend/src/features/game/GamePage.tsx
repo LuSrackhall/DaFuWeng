@@ -1400,12 +1400,43 @@ export function GamePage() {
         ) : null}
 
         {!projection.waitingRoomSummary && !auctionSummary && !projection.resolutionSummary && !tradeSummary && projection.latestSettlementSummary ? (
-          <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--result"}`}>
-            <p className="shell__eyebrow">最近结果</p>
-            <strong>{projection.latestSettlementSummary.title}</strong>
-            <span>{projection.latestSettlementSummary.detail}</span>
-            <span>{projection.latestSettlementSummary.nextStepLabel}</span>
-          </section>
+          projection.latestSettlementSummary.kind === "trade-accepted" && projection.latestSettlementSummary.tradeSettlement ? (
+            <section className="stage-card stage-card--result trade-settlement-card">
+              <p className="shell__eyebrow">交易已成交</p>
+              <strong>{projection.latestSettlementSummary.title}</strong>
+              <span>{projection.latestSettlementSummary.detail}</span>
+              <div className="trade-settlement-card__grid">
+                <article className="trade-side">
+                  <strong>{projection.latestSettlementSummary.tradeSettlement.proposerName}</strong>
+                  {projection.latestSettlementSummary.tradeSettlement.proposerGives.map((line) => (
+                    <span key={`proposer-gives-${line}`}>交出: {line}</span>
+                  ))}
+                  {projection.latestSettlementSummary.tradeSettlement.proposerGets.map((line) => (
+                    <span key={`proposer-gets-${line}`}>获得: {line}</span>
+                  ))}
+                  <span>{`成交后现金: ${projection.latestSettlementSummary.tradeSettlement.proposerCashAfter ?? "未知"}`}</span>
+                </article>
+                <article className="trade-side">
+                  <strong>{projection.latestSettlementSummary.tradeSettlement.counterpartyName}</strong>
+                  {projection.latestSettlementSummary.tradeSettlement.counterpartyGives.map((line) => (
+                    <span key={`counterparty-gives-${line}`}>交出: {line}</span>
+                  ))}
+                  {projection.latestSettlementSummary.tradeSettlement.counterpartyGets.map((line) => (
+                    <span key={`counterparty-gets-${line}`}>获得: {line}</span>
+                  ))}
+                  <span>{`成交后现金: ${projection.latestSettlementSummary.tradeSettlement.counterpartyCashAfter ?? "未知"}`}</span>
+                </article>
+              </div>
+              <span>{projection.latestSettlementSummary.nextStepLabel}</span>
+            </section>
+          ) : (
+            <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--result"}`}>
+              <p className="shell__eyebrow">最近结果</p>
+              <strong>{projection.latestSettlementSummary.title}</strong>
+              <span>{projection.latestSettlementSummary.detail}</span>
+              <span>{projection.latestSettlementSummary.nextStepLabel}</span>
+            </section>
+          )
         ) : null}
 
         <div className="status-grid status-grid--support">
