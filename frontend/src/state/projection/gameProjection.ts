@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
+  PendingAuction,
   PendingPayment,
   PlayerState,
   ProjectionEvent,
@@ -59,6 +60,24 @@ type ResolutionSummary = {
   sourceTileId: string | null;
 };
 
+type AuctionSummary = {
+  lotTileId: string;
+  lotLabel: string;
+  lotPrice: number;
+  initiatorPlayerName: string;
+  actingBidderId: string;
+  actingBidderName: string;
+  highestBid: number;
+  highestBidderName: string | null;
+  nextMinimumBid: number;
+  activeBidderNames: string[];
+  passedPlayerNames: string[];
+  activeBidderCount: number;
+  passedBidderCount: number;
+  triggerLabel: string;
+  statusLabel: string;
+};
+
 type SettlementSummary = {
   title: string;
   detail: string;
@@ -71,6 +90,7 @@ type ProjectionView = ProjectionSnapshot & {
   hostPlayerName: string;
   players: PlayerSummary[];
   waitingRoomSummary: WaitingRoomSummary | null;
+  auctionSummary: AuctionSummary | null;
   resolutionSummary: ResolutionSummary | null;
   latestSettlementSummary: SettlementSummary | null;
 };
@@ -192,6 +212,50 @@ function buildResolutionSummary(snapshot: ProjectionSnapshot): ResolutionSummary
   };
 }
 
+function buildAuctionSummary(snapshot: ProjectionSnapshot): AuctionSummary | null {
+  const auction = snapshot.pendingAuction;
+  if (!auction) {
+    return null;
+  }
+
+  const activeBidderNames = snapshot.players
+    .filter(
+      (player) =>
+        !player.isBankrupt &&
+        !auction.passedPlayerIds.includes(player.id),
+    )
+    .map((player) => player.name);
+
+  const passedPlayerNames = auction.passedPlayerIds.map((playerId) =>
+    getPlayerName(snapshot.players, playerId),
+  );
+
+  const highestBidderName = auction.highestBidderId
+    ? getPlayerName(snapshot.players, auction.highestBidderId)
+    : null;
+
+  return {
+    lotTileId: auction.tileId,
+    lotLabel: auction.label,
+    lotPrice: auction.price,
+    initiatorPlayerName: getPlayerName(snapshot.players, auction.initiatorPlayerId),
+    actingBidderId: snapshot.currentTurnPlayerId,
+    actingBidderName: getPlayerName(snapshot.players, snapshot.currentTurnPlayerId),
+    highestBid: auction.highestBid,
+    highestBidderName,
+    nextMinimumBid: Math.max(1, auction.highestBid + 1),
+    activeBidderNames,
+    passedPlayerNames,
+    activeBidderCount: activeBidderNames.length,
+    passedBidderCount: passedPlayerNames.length,
+    triggerLabel: `${getPlayerName(snapshot.players, auction.initiatorPlayerId)} 放弃购买后，${auction.label} 进入公开拍卖。`,
+    statusLabel:
+      highestBidderName
+        ? `${highestBidderName} 目前以 ${auction.highestBid} 领先，轮到 ${getPlayerName(snapshot.players, snapshot.currentTurnPlayerId)} 决策。`
+        : `当前还没有领先者，轮到 ${getPlayerName(snapshot.players, snapshot.currentTurnPlayerId)} 开出第一口。`,
+  };
+}
+
 function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementSummary | null {
   const bankruptcyEvent = [...snapshot.recentEvents]
     .reverse()
@@ -241,6 +305,7 @@ export function toProjectionView(snapshot: ProjectionSnapshot): ProjectionView {
     hostPlayerName: getPlayerName(snapshot.players, snapshot.hostId),
     players: snapshot.players,
     waitingRoomSummary: buildWaitingRoomSummary(snapshot),
+    auctionSummary: buildAuctionSummary(snapshot),
     resolutionSummary: buildResolutionSummary(snapshot),
     latestSettlementSummary: buildLatestSettlementSummary(snapshot),
   };

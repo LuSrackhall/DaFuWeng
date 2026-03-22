@@ -27,6 +27,7 @@ export function GamePage() {
     projection.currentTurnPlayerId,
     projection.players,
     projection.roomState,
+    projection.pendingAuction,
     projection.pendingPayment,
   );
   const activePlayer = getActivePlayer(roomId);
@@ -98,12 +99,50 @@ export function GamePage() {
 
   const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
   const boardTileLabels = new Map(sampleBoard.map((tile) => [tile.id, tile.label]));
+  const roomPhaseLabel = projection.roomState === "lobby"
+    ? "等待房间"
+    : projection.roomState === "finished"
+      ? "对局结束"
+      : projection.turnState === "awaiting-auction"
+        ? "公开拍卖"
+        : projection.turnState === "awaiting-deficit-resolution"
+          ? "资金结算"
+          : "对局进行中";
+  const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
+  const auctionSummary = projection.auctionSummary;
+  const auctionQuickBidOptions = auctionSummary
+    ? Array.from(new Set([
+        auctionSummary.nextMinimumBid,
+        auctionSummary.nextMinimumBid + 10,
+        auctionSummary.nextMinimumBid + 50,
+      ]))
+    : [];
+  const auctionViewerLabel = auctionSummary
+    ? canAuction
+      ? `轮到你出价或放弃，下一口至少 ${auctionSummary.nextMinimumBid}。`
+      : isSpectator
+        ? "当前仅观战，你可以看到完整拍卖过程，但不能参与出价。"
+        : projection.pendingAuction?.passedPlayerIds.includes(activePlayerId)
+          ? "你已放弃本轮竞拍，等待其余玩家完成拍卖。"
+          : `当前轮到 ${auctionSummary.actingBidderName} 决策，你暂时只能等待。`
+    : null;
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
       setTradeCounterpartyId(otherPlayers[0].id);
     }
   }, [otherPlayers, tradeCounterpartyId]);
+
+  useEffect(() => {
+    if (!auctionSummary) {
+      return;
+    }
+
+    const nextMinimumBid = auctionSummary.nextMinimumBid;
+    if (Number(auctionBid) < nextMinimumBid) {
+      setAuctionBid(String(nextMinimumBid));
+    }
+  }, [auctionSummary?.lotTileId, auctionSummary?.nextMinimumBid, auctionBid]);
 
   async function handleStartRoom() {
     if (!projection.hostId) {
@@ -371,7 +410,7 @@ export function GamePage() {
   return (
     <main className="game">
       <section className="panel board">
-        <p className="panel__meta">Authoritative board projection</p>
+        <p className="panel__meta">当前棋盘</p>
         {isLoading ? <p className="panel__subtitle">正在同步房间状态...</p> : null}
         {isFallback ? <p className="panel__subtitle">尚未成功同步到权威后端，请稍后重试。</p> : null}
         <BoardScene
@@ -382,16 +421,51 @@ export function GamePage() {
         />
       </section>
       <aside className="panel">
-        <p className="panel__meta">Current room state</p>
+        <p className="panel__meta">当前房间态势</p>
         <h3 className="panel__title">房间 {projection.roomId}</h3>
         {error ? <p className="panel__subtitle">{error}</p> : null}
         {actionMessage ? <p className="panel__subtitle">{actionMessage}</p> : null}
         {isSpectator ? <p className="panel__subtitle">当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。</p> : null}
         {isFallback ? <p className="panel__subtitle">房间尚未成功连接到权威后端，当前仅显示加载或失败状态。</p> : null}
 
+        <section className="stage-card stage-card--overview">
+          <p className="shell__eyebrow">房间总览</p>
+          <strong>{activeIdentityLabel}</strong>
+          <div className="room-overview__grid">
+            <article className="status-card">
+              <strong>当前阶段</strong>
+              <span>{roomPhaseLabel}</span>
+            </article>
+            <article className="status-card">
+              <strong>当前回合</strong>
+              <span>{projection.currentTurnPlayerName}</span>
+            </article>
+            <article className="status-card">
+              <strong>房主</strong>
+              <span>{projection.hostPlayerName}</span>
+            </article>
+            <article className="status-card">
+              <strong>最新进展</strong>
+              <span>{latestEventSummary}</span>
+            </article>
+          </div>
+          <div className="room-overview__roster">
+            {projection.players.map((player) => (
+              <article className="room-chip" key={player.id}>
+                <strong>{player.name}</strong>
+                <span>
+                  {player.id === projection.hostId ? "房主" : "玩家"}
+                  {player.id === projection.currentTurnPlayerId ? " · 当前行动" : ""}
+                  {player.id === activePlayerId ? " · 你" : ""}
+                </span>
+              </article>
+            ))}
+          </div>
+        </section>
+
         {projection.waitingRoomSummary ? (
           <section className="stage-card stage-card--waiting">
-            <p className="shell__eyebrow">Waiting room</p>
+            <p className="shell__eyebrow">等待阶段</p>
             <strong>等待房间开始</strong>
             <span>{projection.waitingRoomSummary.canStart ? "玩家已就位，房主现在可以开始本局。" : "仍有条件未满足，请先完成房间准备。"}</span>
             <span>{activeIdentityLabel}</span>
@@ -424,9 +498,67 @@ export function GamePage() {
           </section>
         ) : null}
 
-        {projection.resolutionSummary ? (
+        {!projection.waitingRoomSummary && auctionSummary ? (
+          <section className="stage-card stage-card--auction">
+            <p className="shell__eyebrow">拍卖阶段</p>
+            <strong>公开拍卖进行中</strong>
+            <span>{auctionSummary.triggerLabel}</span>
+            <div className="auction-stage__grid">
+              <article className="status-card">
+                <strong>拍品</strong>
+                <span>{auctionSummary.lotLabel}</span>
+              </article>
+              <article className="status-card">
+                <strong>面价</strong>
+                <span>{auctionSummary.lotPrice}</span>
+              </article>
+              <article className="status-card">
+                <strong>当前轮到</strong>
+                <span>{auctionSummary.actingBidderName}</span>
+              </article>
+              <article className="status-card">
+                <strong>当前领跑</strong>
+                <span>{auctionSummary.highestBidderName ? `${auctionSummary.highestBidderName} · ${auctionSummary.highestBid}` : "暂无领先者"}</span>
+              </article>
+            </div>
+            <span>{auctionSummary.statusLabel}</span>
+            <span>{auctionViewerLabel}</span>
+            <span>仍在竞拍: {auctionSummary.activeBidderNames.join(" / ")}</span>
+            <span>已退出: {auctionSummary.passedPlayerNames.join(" / ") || "暂无"}</span>
+            {canAuction ? (
+              <>
+                <div className="auction-quick-bids">
+                  {auctionQuickBidOptions.map((amount) => (
+                    <button
+                      className="button button--secondary"
+                      key={amount}
+                      type="button"
+                      onClick={() => setAuctionBid(String(amount))}
+                    >
+                      出价 {amount}
+                    </button>
+                  ))}
+                </div>
+                <label className="auction-stage__field">
+                  <strong>自定义出价</strong>
+                  <input value={auctionBid} onChange={(event) => setAuctionBid(event.target.value)} />
+                </label>
+                <div className="lobby__actions">
+                  <button className="button button--primary" type="button" onClick={() => handleAuction("bid")} disabled={!canAuction}>
+                    提交出价
+                  </button>
+                  <button className="button button--secondary button--danger" type="button" onClick={() => handleAuction("pass")} disabled={!canAuction}>
+                    放弃本轮竞拍
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </section>
+        ) : null}
+
+        {!projection.waitingRoomSummary && !auctionSummary && projection.resolutionSummary ? (
           <section className="stage-card stage-card--danger">
-            <p className="shell__eyebrow">Forced resolution</p>
+            <p className="shell__eyebrow">强制结算</p>
             <strong>{projection.resolutionSummary.actorName} 正在处理 {projection.resolutionSummary.reasonLabel}</strong>
             <span>债权人: {projection.resolutionSummary.creditorLabel}</span>
             <span>欠款来源: {projection.resolutionSummary.sourceLabel}</span>
@@ -438,61 +570,56 @@ export function GamePage() {
           </section>
         ) : null}
 
-        {projection.latestSettlementSummary ? (
+        {!projection.waitingRoomSummary && !auctionSummary && !projection.resolutionSummary && projection.latestSettlementSummary ? (
           <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--result"}`}>
-            <p className="shell__eyebrow">Latest settlement</p>
+            <p className="shell__eyebrow">最近结算</p>
             <strong>{projection.latestSettlementSummary.title}</strong>
             <span>{projection.latestSettlementSummary.detail}</span>
             <span>{projection.latestSettlementSummary.nextStepLabel}</span>
           </section>
         ) : null}
 
-        <div className="status-grid">
-          <article className="status-card">
-            <strong>当前回合</strong>
-            <span>{projection.currentTurnPlayerName}</span>
-          </article>
+        <div className="status-grid status-grid--support">
           <article className="status-card">
             <strong>最近骰子</strong>
             <span>{projection.lastRoll.join(" + ")}</span>
-          </article>
-          <article className="status-card">
-            <strong>当前阶段</strong>
-            <span>{projection.roomState === "lobby" ? "等待房间" : projection.roomState === "finished" ? "对局结束" : "对局进行中"}</span>
           </article>
           <article className="status-card">
             <strong>下一步</strong>
             <span>{projection.pendingActionLabel}</span>
           </article>
           <article className="status-card">
-            <strong>快照版本</strong>
-            <span>{projection.snapshotVersion}</span>
+            <strong>牌堆状态</strong>
+            <span>机会 {projection.chanceDeck.drawPile.length} / 命运 {projection.communityDeck.drawPile.length}</span>
           </article>
           <article className="status-card">
-            <strong>事件序列</strong>
-            <span>{projection.eventSequence}</span>
+            <strong>房间同步</strong>
+            <span>快照 {projection.snapshotVersion} · 序列 {projection.eventSequence}</span>
           </article>
         </div>
 
-        <div className="lobby__actions">
-          <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
-            {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayerName} 身份掷骰`}
-          </button>
-          <button className="button button--secondary" type="button" onClick={handleJailRelease} disabled={!canResolveJail}>
-            支付 50 罚金
-          </button>
-          <button className="button button--secondary" type="button" onClick={handleJailRoll} disabled={!canResolveJail}>
-            尝试掷骰出狱
-          </button>
-          <button
-            className="button button--secondary"
-            type="button"
-            onClick={handleUseJailCard}
-            disabled={!canResolveJail || (activeProjectionPlayer?.heldCardIds?.length ?? 0) === 0}
-          >
-            使用出狱卡
-          </button>
-        </div>
+        <section className="player-card section-card">
+          <strong>当前操作</strong>
+          <div className="lobby__actions">
+            <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
+              {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayerName} 身份掷骰`}
+            </button>
+            <button className="button button--secondary" type="button" onClick={handleJailRelease} disabled={!canResolveJail}>
+              支付 50 罚金
+            </button>
+            <button className="button button--secondary" type="button" onClick={handleJailRoll} disabled={!canResolveJail}>
+              尝试掷骰出狱
+            </button>
+            <button
+              className="button button--secondary"
+              type="button"
+              onClick={handleUseJailCard}
+              disabled={!canResolveJail || (activeProjectionPlayer?.heldCardIds?.length ?? 0) === 0}
+            >
+              使用出狱卡
+            </button>
+          </div>
+        </section>
 
         {projection.pendingProperty ? (
           <section className="player-card">
@@ -515,27 +642,6 @@ export function GamePage() {
                 disabled={!canResolveProperty}
               >
                 放弃购买
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {projection.pendingAuction ? (
-          <section className="player-card">
-            <strong>待结算拍卖</strong>
-            <span>{projection.pendingAuction.label}</span>
-            <span>当前最高出价: {projection.pendingAuction.highestBid}</span>
-            <span>已放弃玩家: {projection.pendingAuction.passedPlayerIds.length}</span>
-            <label className="player-card">
-              <strong>出价金额</strong>
-              <input value={auctionBid} onChange={(event) => setAuctionBid(event.target.value)} />
-            </label>
-            <div className="lobby__actions">
-              <button className="button button--primary" type="button" onClick={() => handleAuction("bid")} disabled={!canAuction}>
-                提交出价
-              </button>
-              <button className="button button--secondary" type="button" onClick={() => handleAuction("pass")} disabled={!canAuction}>
-                放弃竞拍
               </button>
             </div>
           </section>
@@ -632,7 +738,7 @@ export function GamePage() {
           </section>
         ) : null}
 
-        <section className="player-card">
+        <section className="player-card section-card">
           <strong>牌堆状态</strong>
           <span>机会牌堆: 抽牌 {projection.chanceDeck.drawPile.length} / 弃牌 {projection.chanceDeck.discardPile.length}</span>
           <span>命运牌堆: 抽牌 {projection.communityDeck.drawPile.length} / 弃牌 {projection.communityDeck.discardPile.length}</span>
@@ -659,7 +765,7 @@ export function GamePage() {
           </section>
         ) : null}
 
-        <h4 className="panel__title">资产一览</h4>
+        <h4 className="panel__title">玩家资产</h4>
         <div className="asset-grid">
           {projection.players.map((player) => (
             <article className="tile-card" key={player.id}>
@@ -676,7 +782,7 @@ export function GamePage() {
           ))}
         </div>
 
-        <h4 className="panel__title">事件记录</h4>
+        <h4 className="panel__title">对局记录</h4>
         <ol className="event-log">
           {projection.recentEvents.map((event) => (
             <li key={event.id}>#{event.sequence} {event.summary}</li>

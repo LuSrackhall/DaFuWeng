@@ -135,6 +135,59 @@ describe("toProjectionView", () => {
     expect(updated.currentTurnPlayerId).toBe("p1");
     expect(updated.pendingAuction?.highestBid).toBe(200);
     expect(updated.pendingAuction?.highestBidderId).toBe("p2");
+
+    const projection = toProjectionView(updated);
+    expect(projection.auctionSummary?.lotLabel).toBe("东湖路");
+    expect(projection.auctionSummary?.highestBid).toBe(200);
+    expect(projection.auctionSummary?.highestBidderName).toBe("玩家二");
+    expect(projection.auctionSummary?.actingBidderName).toBe("房主");
+    expect(projection.auctionSummary?.nextMinimumBid).toBe(201);
+  });
+
+  test("derives passed players and active bidders during auction", () => {
+    const updated = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-9",
+        type: "auction-started",
+        sequence: 9,
+        snapshotVersion: 9,
+        summary: "东湖路 进入拍卖。",
+        playerId: "p1",
+        nextPlayerId: "p2",
+        tileId: "tile-6",
+        tileIndex: 6,
+        tileLabel: "东湖路",
+        tilePrice: 160,
+      },
+      {
+        id: "evt-10",
+        type: "auction-bid-submitted",
+        sequence: 10,
+        snapshotVersion: 10,
+        summary: "玩家二 出价 51。",
+        playerId: "p2",
+        nextPlayerId: "p1",
+        tileId: "tile-6",
+        tileIndex: 6,
+        tileLabel: "东湖路",
+        tilePrice: 160,
+        amount: 51,
+      },
+      {
+        id: "evt-11",
+        type: "auction-pass-submitted",
+        sequence: 11,
+        snapshotVersion: 11,
+        summary: "房主 放弃竞拍。",
+        playerId: "p1",
+        nextPlayerId: "p2",
+      },
+    ]);
+
+    const projection = toProjectionView(updated);
+    expect(projection.auctionSummary?.passedPlayerNames).toContain("房主");
+    expect(projection.auctionSummary?.activeBidderNames).toContain("玩家二");
+    expect(projection.auctionSummary?.passedBidderCount).toBe(1);
   });
 
   test("applies jail and card events from authoritative updates", () => {

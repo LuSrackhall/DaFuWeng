@@ -127,6 +127,11 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.button--danger {
+  border-color: rgba(255, 124, 124, 0.28);
+  color: #ffd5d5;
+}
+
 .player-grid,
 .status-grid,
 .asset-grid {
@@ -170,6 +175,19 @@ body {
     rgba(255, 255, 255, 0.05);
 }
 
+.stage-card--overview {
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.18), transparent 38%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.stage-card--auction {
+  background:
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.18), transparent 38%),
+    rgba(11, 49, 37, 0.3);
+  border-color: rgba(34, 197, 94, 0.18);
+}
+
 .stage-card--danger {
   background:
     radial-gradient(circle at top right, rgba(201, 78, 78, 0.22), transparent 38%),
@@ -189,6 +207,28 @@ body {
   gap: 12px;
 }
 
+.room-overview__grid,
+.auction-stage__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.room-overview__roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.room-chip {
+  display: grid;
+  gap: 4px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(4, 12, 10, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
 .stage-card__seat {
   display: grid;
   gap: 6px;
@@ -201,6 +241,21 @@ body {
 .player-card--resolution {
   border-color: rgba(255, 124, 124, 0.22);
   background: rgba(128, 38, 38, 0.14);
+}
+
+.section-card {
+  margin-top: 16px;
+}
+
+.auction-quick-bids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.auction-stage__field {
+  display: grid;
+  gap: 8px;
 }
 
 .player-card input {
@@ -225,7 +280,9 @@ body {
 
 .player-card strong,
 .status-card strong,
-.tile-card strong {
+.tile-card strong,
+.room-chip strong,
+.auction-stage__field strong {
   display: block;
   font-size: 1.05rem;
 }
@@ -310,7 +367,9 @@ body {
   }
 
   .status-grid,
-  .asset-grid {
+  .asset-grid,
+  .room-overview__grid,
+  .auction-stage__grid {
     grid-template-columns: 1fr;
   }
 }
