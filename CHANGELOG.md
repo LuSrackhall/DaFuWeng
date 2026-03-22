@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/LuSrackhall/DaFuWeng/compare/v1.4.0...v1.4.1) (2026-03-22)
+
+
+### Bug Fixes
+
+* 展示拍卖流拍最近结果 ([7b0a5f1](https://github.com/LuSrackhall/DaFuWeng/commit/7b0a5f1d88b5707839b3e265a6571f8626e2496a))
+
 # [1.4.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.3.0...v1.4.0) (2026-03-22)
 
 
