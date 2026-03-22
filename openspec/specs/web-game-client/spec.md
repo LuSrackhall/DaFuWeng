@@ -9,7 +9,7 @@ The system SHALL provide a web client that renders room flows, the board scene, 
 
 #### Scenario: Player enters an active room
 - **WHEN** a player opens or rejoins an active room in the web client
-- **THEN** the client SHALL render the current room and match state from the latest authoritative snapshot and event stream
+- **THEN** the client SHALL render the current room and match state from the latest authoritative snapshot and event stream, plus the player's joined-seat state when a valid room-scoped player session is present
 
 #### Scenario: Turn feedback is shown during gameplay
 - **WHEN** gameplay state changes on the backend
@@ -25,6 +25,28 @@ The system MUST separate local UI or animation state from authoritative gameplay
 #### Scenario: Animation runs after a resolved action
 - **WHEN** the client receives an authoritative action result such as movement or rent payment
 - **THEN** the client MAY animate that result locally without changing the underlying authoritative values
+
+### Requirement: Formal room flows never silently fall back to local demo gameplay
+The system MUST distinguish between a real authoritative room, a reconnectable joined room, and an unavailable room state.
+
+#### Scenario: Backend room is unavailable
+- **WHEN** the web client fails to load a requested room from the backend
+- **THEN** the client SHALL show an explicit loading or failure state instead of substituting local sample gameplay
+
+#### Scenario: Viewer opens a room without a joined-seat session
+- **WHEN** the web client loads a real room but does not hold a valid room-scoped player session for that room
+- **THEN** the client SHALL render the room in a read-only state and SHALL NOT default command privileges to the current turn player
+
+### Requirement: The room page presents stage-oriented guidance
+The system SHALL render waiting-room, active turn, and forced-resolution states using explicit stage summaries instead of mostly raw state labels.
+
+#### Scenario: Waiting room is rendered
+- **WHEN** the client loads a room that has not started
+- **THEN** it SHALL show a dedicated waiting-room summary that explains room identity, host authority, seat presence, and the next step to start
+
+#### Scenario: Forced resolution pauses the room
+- **WHEN** the client renders a pending deficit or bankruptcy-capable state
+- **THEN** it SHALL explain who owes whom, why the room is paused, what the acting player can do next, and what outcome ends the pause
 
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
