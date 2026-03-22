@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.8.0...v1.9.0) (2026-03-22)
+
+
+### Features
+
+* 强化普通回合交易成交审核卡 ([f1de2f0](https://github.com/LuSrackhall/DaFuWeng/commit/f1de2f0339b71d1aed3dd9928e4062383573d849))
+
 # [1.8.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.7.0...v1.8.0) (2026-03-22)
 
 
