@@ -17,10 +17,10 @@ export function GamePage() {
   const [tradeCounterpartyId, setTradeCounterpartyId] = useState("");
   const [tradeOfferedCash, setTradeOfferedCash] = useState("0");
   const [tradeRequestedCash, setTradeRequestedCash] = useState("0");
-  const [tradeOfferedTiles, setTradeOfferedTiles] = useState("");
-  const [tradeRequestedTiles, setTradeRequestedTiles] = useState("");
-  const [tradeOfferedCards, setTradeOfferedCards] = useState("");
-  const [tradeRequestedCards, setTradeRequestedCards] = useState("");
+  const [tradeOfferedTileIds, setTradeOfferedTileIds] = useState<string[]>([]);
+  const [tradeRequestedTileIds, setTradeRequestedTileIds] = useState<string[]>([]);
+  const [tradeOfferedCardIds, setTradeOfferedCardIds] = useState<string[]>([]);
+  const [tradeRequestedCardIds, setTradeRequestedCardIds] = useState<string[]>([]);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
@@ -99,6 +99,7 @@ export function GamePage() {
     && activePlayerId === projection.pendingTrade.counterpartyPlayerId;
 
   const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
+  const boardTileById = new Map(sampleBoard.map((tile) => [tile.id, tile]));
   const boardTileLabels = new Map(sampleBoard.map((tile) => [tile.id, tile.label]));
   const cardLabels = new Map([
     ["chance-jail-card", "机会免狱卡"],
@@ -135,10 +136,10 @@ export function GamePage() {
           : `当前轮到 ${auctionSummary.actingBidderName} 决策，你暂时只能等待。`
     : null;
   const selectedCounterparty = otherPlayers.find((player) => player.id === tradeCounterpartyId) ?? otherPlayers[0] ?? null;
-  const draftTradeOfferedTileLabels = parseTradeIds(tradeOfferedTiles).map((tileId) => boardTileLabels.get(tileId) ?? tileId);
-  const draftTradeRequestedTileLabels = parseTradeIds(tradeRequestedTiles).map((tileId) => boardTileLabels.get(tileId) ?? tileId);
-  const draftTradeOfferedCardLabels = parseTradeIds(tradeOfferedCards).map((cardId) => cardLabels.get(cardId) ?? cardId);
-  const draftTradeRequestedCardLabels = parseTradeIds(tradeRequestedCards).map((cardId) => cardLabels.get(cardId) ?? cardId);
+  const draftTradeOfferedTileLabels = tradeOfferedTileIds.map((tileId) => boardTileLabels.get(tileId) ?? tileId);
+  const draftTradeRequestedTileLabels = tradeRequestedTileIds.map((tileId) => boardTileLabels.get(tileId) ?? tileId);
+  const draftTradeOfferedCardLabels = tradeOfferedCardIds.map((cardId) => cardLabels.get(cardId) ?? cardId);
+  const draftTradeRequestedCardLabels = tradeRequestedCardIds.map((cardId) => cardLabels.get(cardId) ?? cardId);
   const tradeStageViewerLabel = tradeSummary
     ? canResolveTrade
       ? `轮到你决定是否接受 ${tradeSummary.proposerName} 的报价。`
@@ -149,12 +150,98 @@ export function GamePage() {
           : `当前轮到 ${tradeSummary.counterpartyName} 决定，其他人保持只读。`
     : null;
   const diagnosticsEventLines = projection.recentEvents.slice(-5).reverse();
+  const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
+
+  function getTradeBlockReason(tileId: string) {
+    const tile = boardTileById.get(tileId);
+    if (!tile?.colorGroup) {
+      return null;
+    }
+
+    const blocked = projection.players.some((player) =>
+      player.properties.some((propertyId) => {
+        const propertyTile = boardTileById.get(propertyId);
+        return propertyTile?.colorGroup === tile.colorGroup && (player.propertyImprovements?.[propertyId] ?? 0) > 0;
+      }),
+    );
+
+    return blocked ? "同色组仍有建筑，当前不可交易" : null;
+  }
+
+  function describeProperty(tileId: string, playerId: string) {
+    const labels: string[] = [];
+    const player = projection.players.find((candidate) => candidate.id === playerId);
+    if (player?.mortgagedProperties?.includes(tileId)) {
+      labels.push("已抵押");
+    }
+    const level = player?.propertyImprovements?.[tileId] ?? 0;
+    if (level > 0) {
+      labels.push(`建筑 ${level}`);
+    }
+    return labels.join(" · ");
+  }
+
+  function toggleTradeSelection(assetId: string, selectedIds: string[], setSelectedIds: (next: string[]) => void, disabled: boolean) {
+    if (disabled) {
+      return;
+    }
+
+    setSelectedIds(
+      selectedIds.includes(assetId)
+        ? selectedIds.filter((currentId) => currentId !== assetId)
+        : [...selectedIds, assetId],
+    );
+  }
+
+  const offeredPropertyOptions = (activeProjectionPlayer?.properties ?? []).map((tileId) => ({
+    id: tileId,
+    label: boardTileLabels.get(tileId) ?? tileId,
+    detail: describeProperty(tileId, activePlayerId),
+    disabledReason: getTradeBlockReason(tileId),
+  }));
+  const requestedPropertyOptions = (selectedCounterparty?.properties ?? []).map((tileId) => ({
+    id: tileId,
+    label: boardTileLabels.get(tileId) ?? tileId,
+    detail: describeProperty(tileId, selectedCounterparty.id),
+    disabledReason: getTradeBlockReason(tileId),
+  }));
+  const offeredCardOptions = (activeProjectionPlayer?.heldCardIds ?? []).map((cardId) => ({
+    id: cardId,
+    label: cardLabels.get(cardId) ?? cardId,
+    detail: "已持有卡牌",
+    disabledReason: null as string | null,
+  }));
+  const requestedCardOptions = (selectedCounterparty?.heldCardIds ?? []).map((cardId) => ({
+    id: cardId,
+    label: cardLabels.get(cardId) ?? cardId,
+    detail: "对手持有卡牌",
+    disabledReason: null as string | null,
+  }));
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
       setTradeCounterpartyId(otherPlayers[0].id);
     }
   }, [otherPlayers, tradeCounterpartyId]);
+
+  useEffect(() => {
+    const selectableOfferedTileIds = new Set(
+      offeredPropertyOptions
+        .filter((option) => !option.disabledReason)
+        .map((option) => option.id),
+    );
+    setTradeOfferedTileIds((current) => current.filter((tileId) => selectableOfferedTileIds.has(tileId)));
+    const selectableRequestedTileIds = new Set(
+      requestedPropertyOptions
+        .filter((option) => !option.disabledReason)
+        .map((option) => option.id),
+    );
+    setTradeRequestedTileIds((current) => current.filter((tileId) => selectableRequestedTileIds.has(tileId)));
+    const selectableOfferedCardIds = new Set(offeredCardOptions.map((option) => option.id));
+    setTradeOfferedCardIds((current) => current.filter((cardId) => selectableOfferedCardIds.has(cardId)));
+    const selectableRequestedCardIds = new Set(requestedCardOptions.map((option) => option.id));
+    setTradeRequestedCardIds((current) => current.filter((cardId) => selectableRequestedCardIds.has(cardId)));
+  }, [offeredPropertyOptions, requestedPropertyOptions, offeredCardOptions, requestedCardOptions]);
 
   useEffect(() => {
     if (!auctionSummary) {
@@ -372,10 +459,6 @@ export function GamePage() {
     }
   }
 
-  function parseTradeIds(raw: string) {
-    return raw.split(",").map((value) => value.trim()).filter(Boolean);
-  }
-
   async function handleProposeTrade() {
     setIsSubmittingCommand(true);
     setActionMessage(null);
@@ -387,10 +470,10 @@ export function GamePage() {
         counterpartyPlayerId: tradeCounterpartyId,
         offeredCash: Number(tradeOfferedCash) || 0,
         requestedCash: Number(tradeRequestedCash) || 0,
-        offeredTileIds: parseTradeIds(tradeOfferedTiles),
-        requestedTileIds: parseTradeIds(tradeRequestedTiles),
-        offeredCardIds: parseTradeIds(tradeOfferedCards),
-        requestedCardIds: parseTradeIds(tradeRequestedCards)
+        offeredTileIds: tradeOfferedTileIds,
+        requestedTileIds: tradeRequestedTileIds,
+        offeredCardIds: tradeOfferedCardIds,
+        requestedCardIds: tradeRequestedCardIds
       });
       applySnapshot(snapshot);
       setActionMessage("已同步权威交易报价。");
@@ -424,7 +507,6 @@ export function GamePage() {
     }
   }
 
-  const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
   const mortgageCandidates = (activeProjectionPlayer?.properties ?? []).filter(
     (tileId) => !(activeProjectionPlayer?.mortgagedProperties ?? []).includes(tileId)
   );
@@ -668,22 +750,123 @@ export function GamePage() {
                 <strong>我索要现金</strong>
                 <input value={tradeRequestedCash} onChange={(event) => setTradeRequestedCash(event.target.value)} />
               </label>
-              <label className="player-card trade-editor__field">
-                <strong>我出让地产</strong>
-                <input value={tradeOfferedTiles} onChange={(event) => setTradeOfferedTiles(event.target.value)} placeholder="tile-1,tile-3" />
-              </label>
-              <label className="player-card trade-editor__field">
-                <strong>我索要地产</strong>
-                <input value={tradeRequestedTiles} onChange={(event) => setTradeRequestedTiles(event.target.value)} placeholder="tile-6" />
-              </label>
-              <label className="player-card trade-editor__field">
-                <strong>我出让卡牌</strong>
-                <input value={tradeOfferedCards} onChange={(event) => setTradeOfferedCards(event.target.value)} placeholder="chance-jail-card" />
-              </label>
-              <label className="player-card trade-editor__field">
-                <strong>我索要卡牌</strong>
-                <input value={tradeRequestedCards} onChange={(event) => setTradeRequestedCards(event.target.value)} placeholder="community-jail-card" />
-              </label>
+            </div>
+            <div className="asset-picker">
+              <section className="asset-picker__section">
+                <div className="asset-picker__header">
+                  <strong>我可出让的地产</strong>
+                  <span>{offeredPropertyOptions.length > 0 ? "点击选择要放进报价的地产" : "当前没有可出让地产"}</span>
+                </div>
+                {offeredPropertyOptions.length > 0 ? (
+                  <div className="asset-chip-list">
+                    {offeredPropertyOptions.map((option) => {
+                      const selected = tradeOfferedTileIds.includes(option.id);
+                      const disabled = Boolean(option.disabledReason);
+                      return (
+                        <button
+                          key={option.id}
+                          className={`asset-chip${selected ? " asset-chip--selected" : ""}${disabled ? " asset-chip--disabled" : ""}`}
+                          type="button"
+                          aria-label={`选择我出让的地产 ${option.label}`}
+                          onClick={() => toggleTradeSelection(option.id, tradeOfferedTileIds, setTradeOfferedTileIds, disabled)}
+                          disabled={disabled}
+                        >
+                          <strong>{option.label}</strong>
+                          <span>{option.disabledReason ?? (option.detail || "可加入报价")}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="asset-picker__empty">当前没有可出让地产。</p>
+                )}
+              </section>
+
+              <section className="asset-picker__section">
+                <div className="asset-picker__header">
+                  <strong>{selectedCounterparty?.name ?? "对手"} 可让出的地产</strong>
+                  <span>{selectedCounterparty ? "点击选择你想请求的地产" : "请先选择交易对象"}</span>
+                </div>
+                {requestedPropertyOptions.length > 0 ? (
+                  <div className="asset-chip-list">
+                    {requestedPropertyOptions.map((option) => {
+                      const selected = tradeRequestedTileIds.includes(option.id);
+                      const disabled = Boolean(option.disabledReason);
+                      return (
+                        <button
+                          key={option.id}
+                          className={`asset-chip${selected ? " asset-chip--selected" : ""}${disabled ? " asset-chip--disabled" : ""}`}
+                          type="button"
+                          aria-label={`选择索要的地产 ${option.label}`}
+                          onClick={() => toggleTradeSelection(option.id, tradeRequestedTileIds, setTradeRequestedTileIds, disabled)}
+                          disabled={disabled}
+                        >
+                          <strong>{option.label}</strong>
+                          <span>{option.disabledReason ?? (option.detail || "可请求")}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="asset-picker__empty">{selectedCounterparty ? "对手当前没有可请求地产。" : "请先选择交易对象。"}</p>
+                )}
+              </section>
+
+              <section className="asset-picker__section">
+                <div className="asset-picker__header">
+                  <strong>我可出让的卡牌</strong>
+                  <span>{offeredCardOptions.length > 0 ? "点击选择要附带的卡牌" : "当前没有可出让卡牌"}</span>
+                </div>
+                {offeredCardOptions.length > 0 ? (
+                  <div className="asset-chip-list">
+                    {offeredCardOptions.map((option) => {
+                      const selected = tradeOfferedCardIds.includes(option.id);
+                      return (
+                        <button
+                          key={option.id}
+                          className={`asset-chip${selected ? " asset-chip--selected" : ""}`}
+                          type="button"
+                          aria-label={`选择我出让的卡牌 ${option.label}`}
+                          onClick={() => toggleTradeSelection(option.id, tradeOfferedCardIds, setTradeOfferedCardIds, false)}
+                        >
+                          <strong>{option.label}</strong>
+                          <span>{option.detail}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="asset-picker__empty">当前没有可出让卡牌。</p>
+                )}
+              </section>
+
+              <section className="asset-picker__section">
+                <div className="asset-picker__header">
+                  <strong>{selectedCounterparty?.name ?? "对手"} 可让出的卡牌</strong>
+                  <span>{selectedCounterparty ? "点击选择你想索要的卡牌" : "请先选择交易对象"}</span>
+                </div>
+                {requestedCardOptions.length > 0 ? (
+                  <div className="asset-chip-list">
+                    {requestedCardOptions.map((option) => {
+                      const selected = tradeRequestedCardIds.includes(option.id);
+                      return (
+                        <button
+                          key={option.id}
+                          className={`asset-chip${selected ? " asset-chip--selected" : ""}`}
+                          type="button"
+                          aria-label={`选择索要的卡牌 ${option.label}`}
+                          onClick={() => toggleTradeSelection(option.id, tradeRequestedCardIds, setTradeRequestedCardIds, false)}
+                        >
+                          <strong>{option.label}</strong>
+                          <span>{option.detail}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="asset-picker__empty">{selectedCounterparty ? "对手当前没有可请求卡牌。" : "请先选择交易对象。"}</p>
+                )}
+              </section>
             </div>
             <div className="lobby__actions">
               <button className="button button--secondary" type="button" onClick={handleProposeTrade} disabled={!canProposeTrade || !tradeCounterpartyId}>

@@ -285,6 +285,59 @@ body {
   margin: 0;
 }
 
+.asset-picker {
+  display: grid;
+  gap: 14px;
+}
+
+.asset-picker__section {
+  display: grid;
+  gap: 10px;
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(4, 12, 10, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.asset-picker__header {
+  display: grid;
+  gap: 4px;
+}
+
+.asset-picker__empty {
+  margin: 0;
+  color: rgba(246, 236, 212, 0.72);
+}
+
+.asset-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.asset-chip {
+  min-width: 140px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f6ecd4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.asset-chip--selected {
+  border-color: rgba(229, 191, 105, 0.4);
+  background: rgba(170, 114, 33, 0.26);
+}
+
+.asset-chip--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .diagnostics-drawer {
   margin-top: 18px;
   border-radius: 20px;
@@ -333,7 +386,9 @@ body {
 .status-card strong,
 .tile-card strong,
 .room-chip strong,
-.auction-stage__field strong {
+.auction-stage__field strong,
+.asset-picker__header strong,
+.asset-chip strong {
   display: block;
   font-size: 1.05rem;
 }

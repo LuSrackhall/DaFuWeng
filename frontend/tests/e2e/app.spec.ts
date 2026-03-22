@@ -157,16 +157,27 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await expect(guestPage).toHaveURL(new RegExp(`/room/${roomId}$`));
 
   await page.getByRole("button", { name: "房主开始游戏" }).click();
+  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
+  await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
+  await page.getByRole("button", { name: "购买地产" }).click();
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
+  await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
+  await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
   await expect(page.getByText("发起双边交易报价")).toBeVisible();
 
   await page.getByLabel("我出现金").fill("120");
   await page.getByLabel("我索要现金").fill("30");
+  await page.getByRole("button", { name: "选择我出让的地产 东湖路" }).click();
   await page.getByRole("button", { name: "发起交易" }).click();
 
   await expect(page.getByText("双边交易待响应")).toBeVisible();
   await expect(page.getByText(/报价已发出，当前等待 玩家乙 回复。/)).toBeVisible();
+  await expect(page.getByText(/地产: 东湖路/)).toBeVisible();
   await expect(guestPage.getByText("双边交易待响应")).toBeVisible();
   await expect(guestPage.getByText(/轮到你决定是否接受 房主甲 的报价。/)).toBeVisible();
+  await expect(guestPage.getByText(/地产: 东湖路/)).toBeVisible();
 
   await expect(page.getByRole("button", { name: "展开诊断抽屉" })).toBeVisible();
   await page.getByRole("button", { name: "展开诊断抽屉" }).click();
