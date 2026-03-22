@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/LuSrackhall/DaFuWeng/compare/v1.2.0...v1.2.1) (2026-03-22)
+
+
+### Bug Fixes
+
+* 修正拍卖阶段呈现与房间页信息层级 ([ad5d201](https://github.com/LuSrackhall/DaFuWeng/commit/ad5d201f47d01976cd99ba8a1fae38b016f289d4))
+
 # [1.2.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.1.0...v1.2.0) (2026-03-22)
 
 
