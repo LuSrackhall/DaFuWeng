@@ -259,6 +259,29 @@ body {
   background: rgba(128, 38, 38, 0.14);
 }
 
+.player-card--contextual {
+  background:
+    radial-gradient(circle at top right, rgba(229, 191, 105, 0.14), transparent 38%),
+    rgba(255, 255, 255, 0.05);
+  border-color: rgba(232, 205, 143, 0.18);
+}
+
+.action-surface__summary,
+.action-surface__hint,
+.action-surface__meta {
+  margin: 0;
+}
+
+.action-surface__summary {
+  font-size: 1rem;
+  color: #f6ecd4;
+}
+
+.action-surface__hint,
+.action-surface__meta {
+  color: rgba(246, 236, 212, 0.76);
+}
+
 .section-card {
   margin-top: 16px;
 }

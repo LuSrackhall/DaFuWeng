@@ -33,8 +33,8 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(guestPage.locator(".stage-card--overview").getByText("当前以 玩家乙 身份加入此房间。").first()).toBeVisible();
 
   await page.getByRole("button", { name: "房主开始游戏" }).click();
-  await expect(page.getByText("等待当前玩家掷骰")).toBeVisible();
-  await expect(guestPage.getByText("等待当前玩家掷骰")).toBeVisible();
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
   await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
   await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
@@ -321,10 +321,10 @@ test("deficit recovery panel shows mortgage impact and resolves through the reco
       close() {}
     }
 
-    window.EventSource = FakeEventSource as typeof EventSource;
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
   }, { currentRoomId: roomId });
 
-  let currentSnapshot = initialSnapshot;
+  let currentSnapshot: typeof initialSnapshot | typeof settledSnapshot = initialSnapshot;
   await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
     if (request.method() === "GET") {
       await route.fulfill({ json: currentSnapshot });
@@ -451,7 +451,7 @@ test("mobile room page prioritizes the current stage before overview without hor
       close() {}
     }
 
-    window.EventSource = FakeEventSource as typeof EventSource;
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
   }, { currentRoomId: roomId });
 
   await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
@@ -496,4 +496,110 @@ test("mobile room page prioritizes the current stage before overview without hor
 
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(hasHorizontalOverflow).toBe(false);
+});
+
+test("contextual action surface only shows jail decisions without unrelated generic actions", async ({
+  page,
+}) => {
+  const roomId = "room-jail-decision";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 31,
+    eventSequence: 31,
+    turnState: "awaiting-jail-decision",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "房主甲 需要先完成监狱决策。",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 880,
+        position: 10,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: ["chance-jail-card"],
+        inJail: true,
+        jailTurnsServed: 1,
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1500,
+        position: 4,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-31",
+        type: "player-jailed",
+        sequence: 31,
+        snapshotVersion: 31,
+        summary: "房主甲 进入了监狱。",
+        playerId: "p1",
+        tileId: "tile-10",
+        tileIndex: 10,
+        tileLabel: "监狱",
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: snapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  await expect(page.getByText("监狱决策", { exact: true })).toBeVisible();
+  await expect(page.getByText(/选择一种出狱方式后，当前回合才能继续推进/)).toBeVisible();
+  await expect(page.getByText(/可用出狱卡: 1/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "尝试掷骰出狱" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "支付 50 罚金" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "使用出狱卡" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "购买地产" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "放弃购买" })).toHaveCount(0);
 });
