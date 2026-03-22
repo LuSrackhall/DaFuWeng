@@ -248,6 +248,77 @@ export function GamePage() {
     detail: "对手持有卡牌",
     disabledReason: null as string | null,
   }));
+  const selectedOfferedProperties = offeredPropertyOptions.filter((option) => tradeOfferedTileIds.includes(option.id));
+  const selectedRequestedProperties = requestedPropertyOptions.filter((option) => tradeRequestedTileIds.includes(option.id));
+  const selectedOfferedCards = offeredCardOptions.filter((option) => tradeOfferedCardIds.includes(option.id));
+  const selectedRequestedCards = requestedCardOptions.filter((option) => tradeRequestedCardIds.includes(option.id));
+  const activePlayerCashAfterTrade = (activeProjectionPlayer?.cash ?? 0) - (Number(tradeOfferedCash) || 0) + (Number(tradeRequestedCash) || 0);
+  const counterpartyCashAfterTrade = (selectedCounterparty?.cash ?? 0) - (Number(tradeRequestedCash) || 0) + (Number(tradeOfferedCash) || 0);
+  const colorGroupTotals = new Map<string, number>();
+  sampleBoard.forEach((tile) => {
+    if (!tile.colorGroup) {
+      return;
+    }
+
+    colorGroupTotals.set(tile.colorGroup, (colorGroupTotals.get(tile.colorGroup) ?? 0) + 1);
+  });
+  const activeCurrentProperties = new Set(activeProjectionPlayer?.properties ?? []);
+  const counterpartyCurrentProperties = new Set(selectedCounterparty?.properties ?? []);
+  const activeAfterTradeProperties = new Set(activeCurrentProperties);
+  const counterpartyAfterTradeProperties = new Set(counterpartyCurrentProperties);
+  tradeOfferedTileIds.forEach((tileId) => {
+    activeAfterTradeProperties.delete(tileId);
+    counterpartyAfterTradeProperties.add(tileId);
+  });
+  tradeRequestedTileIds.forEach((tileId) => {
+    counterpartyAfterTradeProperties.delete(tileId);
+    activeAfterTradeProperties.add(tileId);
+  });
+  const relevantTradeColorGroups = Array.from(new Set(
+    [...tradeOfferedTileIds, ...tradeRequestedTileIds]
+      .map((tileId) => boardTileById.get(tileId)?.colorGroup)
+      .filter((colorGroup): colorGroup is string => Boolean(colorGroup)),
+  ));
+  const tradeConsequenceNotes = [
+    ...relevantTradeColorGroups.flatMap((colorGroup) => {
+      const total = colorGroupTotals.get(colorGroup) ?? 0;
+      const activeBefore = Array.from(activeCurrentProperties).filter((tileId) => boardTileById.get(tileId)?.colorGroup === colorGroup).length === total;
+      const activeAfter = Array.from(activeAfterTradeProperties).filter((tileId) => boardTileById.get(tileId)?.colorGroup === colorGroup).length === total;
+      const counterpartyBefore = Array.from(counterpartyCurrentProperties).filter((tileId) => boardTileById.get(tileId)?.colorGroup === colorGroup).length === total;
+      const counterpartyAfter = Array.from(counterpartyAfterTradeProperties).filter((tileId) => boardTileById.get(tileId)?.colorGroup === colorGroup).length === total;
+      const label = `${colorGroup} 地段组`;
+      const notes: string[] = [];
+
+      if (!activeBefore && activeAfter) {
+        notes.push(`成交后你将凑齐 ${label}`);
+      }
+      if (activeBefore && !activeAfter) {
+        notes.push(`成交后你将失去 ${label}`);
+      }
+      if (!counterpartyBefore && counterpartyAfter) {
+        notes.push(`成交后 ${selectedCounterparty?.name ?? "对手"} 将凑齐 ${label}`);
+      }
+      if (counterpartyBefore && !counterpartyAfter) {
+        notes.push(`成交后 ${selectedCounterparty?.name ?? "对手"} 将失去 ${label}`);
+      }
+
+      return notes;
+    }),
+    ...(selectedRequestedProperties.filter((option) => option.detail.includes("已抵押")).length > 0
+      ? [`你将收到已抵押资产: ${selectedRequestedProperties.filter((option) => option.detail.includes("已抵押")).map((option) => option.label).join(" / ")}`]
+      : []),
+    ...(selectedOfferedProperties.filter((option) => option.detail.includes("已抵押")).length > 0
+      ? [`你将让出已抵押资产: ${selectedOfferedProperties.filter((option) => option.detail.includes("已抵押")).map((option) => option.label).join(" / ")}`]
+      : []),
+    ...((Number(tradeOfferedCash) > 0
+      || Number(tradeRequestedCash) > 0
+      || tradeOfferedTileIds.length > 0
+      || tradeRequestedTileIds.length > 0
+      || tradeOfferedCardIds.length > 0
+      || tradeRequestedCardIds.length > 0)
+      ? [`报价发出后房间会暂停，等待 ${selectedCounterparty?.name ?? "对手"} 接受或拒绝。`]
+      : []),
+  ];
   const deficitViewerLabel = projection.resolutionSummary
     ? canResolveDeficit
       ? `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。选择一项可抵押资产，或直接宣告破产。`
@@ -969,24 +1040,43 @@ export function GamePage() {
 
                 {tradeComposerStep === "review" ? (
                   <div className="trade-composer__panel">
-                    <div className="trade-composer__review trade-review-card">
+                    <div className="trade-composer__review trade-review-card trade-review-card--risk">
                       <strong>成交审核卡</strong>
                       <span>{selectedCounterparty ? `报价对象: ${selectedCounterparty.name}` : "尚未选择报价对象"}</span>
                       <span>{tradeNetCashLabel}</span>
+                      <span>{`交易后现金: 你 ${activePlayerCashAfterTrade} · ${selectedCounterparty?.name ?? "对手"} ${counterpartyCashAfterTrade}`}</span>
                       <span>{hasTradeDraft ? "返回上一步继续编辑不会丢失当前草案。请先完成最后一眼核对，再决定是否提交。" : "当前草案仍为空，请先返回前一步补充报价内容。"}</span>
                       <div className="trade-review-card__grid">
                         <article className="trade-side">
                           <strong>你给出</strong>
                           <span>现金: {Number(tradeOfferedCash) || 0}</span>
                           <span>地产: {draftTradeOfferedTileLabels.join(" / ") || "无"}</span>
+                          {selectedOfferedProperties.map((option) => (
+                            <span className="trade-review-card__tag" key={`offered-property-${option.id}`}>{option.label}{option.detail ? ` · ${option.detail}` : ""}</span>
+                          ))}
                           <span>卡牌: {draftTradeOfferedCardLabels.join(" / ") || "无"}</span>
+                          {selectedOfferedCards.map((option) => (
+                            <span className="trade-review-card__tag" key={`offered-card-${option.id}`}>{option.label} · {option.detail}</span>
+                          ))}
                         </article>
                         <article className="trade-side">
                           <strong>你获得</strong>
                           <span>现金: {Number(tradeRequestedCash) || 0}</span>
                           <span>地产: {draftTradeRequestedTileLabels.join(" / ") || "无"}</span>
+                          {selectedRequestedProperties.map((option) => (
+                            <span className="trade-review-card__tag" key={`requested-property-${option.id}`}>{option.label}{option.detail ? ` · ${option.detail}` : ""}</span>
+                          ))}
                           <span>卡牌: {draftTradeRequestedCardLabels.join(" / ") || "无"}</span>
+                          {selectedRequestedCards.map((option) => (
+                            <span className="trade-review-card__tag" key={`requested-card-${option.id}`}>{option.label} · {option.detail}</span>
+                          ))}
                         </article>
+                      </div>
+                      <div className="trade-review-card__consequences">
+                        <strong>成交后果</strong>
+                        {tradeConsequenceNotes.length > 0 ? tradeConsequenceNotes.map((note) => (
+                          <span className="trade-review-card__note" key={note}>{note}</span>
+                        )) : <span className="trade-review-card__note">当前没有额外风险提示。</span>}
                       </div>
                     </div>
                     <div className="lobby__actions">

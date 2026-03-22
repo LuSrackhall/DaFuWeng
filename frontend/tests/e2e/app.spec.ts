@@ -178,6 +178,15 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await page.getByRole("button", { name: "下一步：确认报价摘要" }).click();
   await expect(page.getByText("成交审核卡", { exact: true })).toBeVisible();
   await expect(page.getByText(/现金净流向: 你净支付 90 给 玩家乙/)).toBeVisible();
+  await expect(page.getByText(/交易后现金: 你 \d+ · 玩家乙 \d+/)).toBeVisible();
+  await expect(page.getByText(/报价发出后房间会暂停，等待 玩家乙 接受或拒绝/)).toBeVisible();
+  await page.getByRole("button", { name: "返回继续编辑草案" }).click();
+  await expect(page.getByLabel("我索要现金")).toHaveValue("30");
+  await page.getByRole("button", { name: "返回选择我给出的内容" }).click();
+  await expect(page.getByLabel("我出现金")).toHaveValue("120");
+  await expect(page.getByRole("button", { name: "选择我出让的地产 东湖路" })).toHaveClass(/asset-chip--selected/);
+  await page.getByRole("button", { name: "下一步：选择我索取的内容" }).click();
+  await page.getByRole("button", { name: "下一步：确认报价摘要" }).click();
   await page.getByRole("button", { name: "确认并发起交易" }).click();
 
   await expect(page.getByText("双边交易待响应")).toBeVisible();
@@ -743,7 +752,7 @@ test("stepwise trade composer guides the draft before entering pending trade res
         cash: 1320,
         position: 6,
         properties: ["tile-6"],
-        mortgagedProperties: [],
+        mortgagedProperties: ["tile-6"],
         propertyImprovements: {},
         heldCardIds: [],
         isBankrupt: false,
@@ -866,6 +875,8 @@ test("stepwise trade composer guides the draft before entering pending trade res
   await page.getByRole("button", { name: "下一步：确认报价摘要" }).click();
   await expect(page.getByText("成交审核卡", { exact: true })).toBeVisible();
   await expect(page.getByText(/现金净流向: 你净支付 120 给 玩家乙/)).toBeVisible();
+  await expect(page.getByText(/东湖路 · 已抵押/)).toBeVisible();
+  await expect(page.getByText(/你将让出已抵押资产: 东湖路/)).toBeVisible();
   await expect(page.getByText(/返回上一步继续编辑不会丢失当前草案/)).toBeVisible();
   await page.getByRole("button", { name: "确认并发起交易" }).click();
 
