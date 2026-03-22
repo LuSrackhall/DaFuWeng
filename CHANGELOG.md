@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.9.0...v1.10.0) (2026-03-22)
+
+
+### Features
+
+* 强化普通回合交易最终确认风险提示 ([26e2ac4](https://github.com/LuSrackhall/DaFuWeng/commit/26e2ac4049d910a3078f76b203446c06e7e0894a))
+
 # [1.9.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.8.0...v1.9.0) (2026-03-22)
 
 
