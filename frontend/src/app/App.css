@@ -154,7 +154,66 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.stage-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  border-radius: 22px;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(232, 205, 143, 0.16);
+}
+
+.stage-card--waiting {
+  background:
+    radial-gradient(circle at top right, rgba(229, 191, 105, 0.18), transparent 36%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.stage-card--danger {
+  background:
+    radial-gradient(circle at top right, rgba(201, 78, 78, 0.22), transparent 38%),
+    rgba(122, 31, 31, 0.18);
+  border-color: rgba(255, 124, 124, 0.2);
+}
+
+.stage-card--result {
+  background:
+    radial-gradient(circle at top right, rgba(112, 186, 148, 0.18), transparent 38%),
+    rgba(24, 64, 52, 0.26);
+}
+
+.stage-card__seat-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.stage-card__seat {
+  display: grid;
+  gap: 6px;
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(4, 12, 10, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.player-card--resolution {
+  border-color: rgba(255, 124, 124, 0.22);
+  background: rgba(128, 38, 38, 0.14);
+}
+
 .player-card input {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(7, 15, 13, 0.35);
+  color: #f6ecd4;
+}
+
+.player-card select {
   width: 100%;
   margin-top: 10px;
   padding: 10px 12px;

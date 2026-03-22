@@ -12,6 +12,25 @@ describe("toProjectionView", () => {
     expect(projection.snapshotVersion).toBe(4);
   });
 
+  test("derives a clearer waiting-room summary from lobby state", () => {
+    const projection = toProjectionView({
+      ...sampleProjection,
+      roomId: "room-101",
+      roomState: "lobby",
+      hostId: "p1",
+      currentTurnPlayerId: "p1",
+      pendingActionLabel: "等待更多玩家加入",
+      players: sampleProjection.players.slice(0, 1),
+      recentEvents: [],
+    });
+
+    expect(projection.waitingRoomSummary?.roomCode).toBe("room-101");
+    expect(projection.waitingRoomSummary?.hostName).toBe("房主");
+    expect(projection.waitingRoomSummary?.playerCount).toBe(1);
+    expect(projection.waitingRoomSummary?.playersNeeded).toBe(1);
+    expect(projection.waitingRoomSummary?.blockerLabel).toContain("至少还需要 1 名玩家加入");
+  });
+
   test("applies property offer, purchase, and turn advance events as catch-up state", () => {
     const updated = applyRoomEvents(sampleProjection, [
       {
@@ -265,6 +284,36 @@ describe("toProjectionView", () => {
     expect(updated.players[0]?.mortgagedProperties).toEqual([]);
     expect(updated.players[0]?.isBankrupt).toBe(true);
     expect(updated.players[0]?.cash).toBe(0);
+
+    const projection = toProjectionView(updated);
+    expect(projection.latestSettlementSummary?.title).toContain("房主");
+    expect(projection.latestSettlementSummary?.detail).toContain("银行");
+  });
+
+  test("derives readable deficit resolution summaries", () => {
+    const updated = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-23",
+        type: "deficit-started",
+        sequence: 23,
+        snapshotVersion: 23,
+        summary: "玩家二 需向 房主 支付 60 租金。",
+        playerId: "p2",
+        ownerPlayerId: "p1",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "南城路",
+        amount: 60,
+        cashAfter: 20,
+      },
+    ]);
+
+    const projection = toProjectionView(updated);
+    expect(projection.resolutionSummary?.actorName).toBe("玩家二");
+    expect(projection.resolutionSummary?.creditorLabel).toContain("房主");
+    expect(projection.resolutionSummary?.reasonLabel).toBe("租金");
+    expect(projection.resolutionSummary?.shortfall).toBe(40);
+    expect(projection.resolutionSummary?.sourceTileId).toBe("tile-1");
   });
 
   test("applies improvement build, sell, and rent deficit events", () => {

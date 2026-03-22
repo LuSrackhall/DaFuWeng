@@ -27,6 +27,10 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(page.getByText("等待房间开始")).toBeVisible();
   await expect(guestPage.getByText("等待房间开始")).toBeVisible();
   await expect(page.getByText("当前人数: 2")).toBeVisible();
+  await expect(page.getByText("当前以 房主甲 身份加入此房间。")).toBeVisible();
+  await expect(page.getByText(/这是服务端权威房间。刷新后会恢复同一房间快照/)).toBeVisible();
+  await expect(page.getByText("房主: 房主甲")).toBeVisible();
+  await expect(guestPage.getByText("当前以 玩家乙 身份加入此房间。")).toBeVisible();
 
   await page.getByRole("button", { name: "房主开始游戏" }).click();
   await expect(page.getByText("等待当前玩家掷骰")).toBeVisible();
@@ -78,6 +82,7 @@ test("viewer without a joined room session stays read-only instead of inheriting
       "当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。",
     ),
   ).toBeVisible();
+  await expect(viewerPage.getByText("当前以只读观战身份查看此房间。")).toBeVisible();
   await expect(
     viewerPage.getByRole("button", { name: "房主开始游戏" }),
   ).toBeDisabled();

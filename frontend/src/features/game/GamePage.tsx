@@ -23,11 +23,19 @@ export function GamePage() {
   const [tradeRequestedCards, setTradeRequestedCards] = useState("");
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
-  const presentation = usePresentationState(projection.currentTurnPlayerId, projection.players);
+  const presentation = usePresentationState(
+    projection.currentTurnPlayerId,
+    projection.players,
+    projection.roomState,
+    projection.pendingPayment,
+  );
   const activePlayer = getActivePlayer(roomId);
   const activePlayerId = activePlayer?.playerId ?? "";
   const activePlayerName = activePlayer?.playerName ?? "观战者";
   const isSpectator = !activePlayer;
+  const activeIdentityLabel = isSpectator
+    ? "当前以只读观战身份查看此房间。"
+    : `当前以 ${activePlayerName} 身份加入此房间。`;
   const canStartRoom = !isFallback
     && !isLoading
     && !isSubmittingCommand
@@ -89,6 +97,7 @@ export function GamePage() {
     && activePlayerId === projection.pendingTrade.counterpartyPlayerId;
 
   const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
+  const boardTileLabels = new Map(sampleBoard.map((tile) => [tile.id, tile.label]));
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
@@ -364,7 +373,7 @@ export function GamePage() {
       <section className="panel board">
         <p className="panel__meta">Authoritative board projection</p>
         {isLoading ? <p className="panel__subtitle">正在同步房间状态...</p> : null}
-        {isFallback ? <p className="panel__subtitle">当前显示本地回退投影，后端连接尚未建立。</p> : null}
+        {isFallback ? <p className="panel__subtitle">尚未成功同步到权威后端，请稍后重试。</p> : null}
         <BoardScene
           board={sampleBoard}
           currentTurnPlayerId={projection.currentTurnPlayerId}
@@ -380,13 +389,30 @@ export function GamePage() {
         {isSpectator ? <p className="panel__subtitle">当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。</p> : null}
         {isFallback ? <p className="panel__subtitle">房间尚未成功连接到权威后端，当前仅显示加载或失败状态。</p> : null}
 
-        {projection.roomState === "lobby" ? (
-          <section className="player-card">
+        {projection.waitingRoomSummary ? (
+          <section className="stage-card stage-card--waiting">
+            <p className="shell__eyebrow">Waiting room</p>
             <strong>等待房间开始</strong>
-            <span>房间码: {projection.roomId}</span>
-            <span>房主: {projection.players.find((player) => player.id === projection.hostId)?.name ?? "未知房主"}</span>
-            <span>当前人数: {projection.players.length}</span>
-            <span>{projection.players.length >= 2 ? "已满足开局最少人数" : "至少还需要 1 名玩家加入"}</span>
+            <span>{projection.waitingRoomSummary.canStart ? "玩家已就位，房主现在可以开始本局。" : "仍有条件未满足，请先完成房间准备。"}</span>
+            <span>{activeIdentityLabel}</span>
+            <span>房间码: {projection.waitingRoomSummary.roomCode}</span>
+            <span>房主: {projection.waitingRoomSummary.hostName}</span>
+            <span>当前人数: {projection.waitingRoomSummary.playerCount} / 最少 {projection.waitingRoomSummary.minimumPlayers}</span>
+            <span>{projection.waitingRoomSummary.blockerLabel}</span>
+            <span>{projection.waitingRoomSummary.reconnectLabel}</span>
+            <div className="stage-card__seat-list">
+              {projection.waitingRoomSummary.seats.map((seat) => (
+                <article className="stage-card__seat" key={seat.playerId}>
+                  <strong>{seat.name}</strong>
+                  <span>
+                    {seat.isHost ? "房主" : "玩家"}
+                    {seat.playerId === activePlayerId ? " · 你" : ""}
+                  </span>
+                  <span>起始现金: {seat.cash}</span>
+                  <span>已持有地产: {seat.propertyCount}</span>
+                </article>
+              ))}
+            </div>
             <div className="lobby__actions">
               <button className="button button--primary" type="button" onClick={handleStartRoom} disabled={!canStartRoom}>
                 {isSubmittingCommand && canStartRoom ? "开始中..." : "房主开始游戏"}
@@ -397,6 +423,30 @@ export function GamePage() {
             </div>
           </section>
         ) : null}
+
+        {projection.resolutionSummary ? (
+          <section className="stage-card stage-card--danger">
+            <p className="shell__eyebrow">Forced resolution</p>
+            <strong>{projection.resolutionSummary.actorName} 正在处理 {projection.resolutionSummary.reasonLabel}</strong>
+            <span>债权人: {projection.resolutionSummary.creditorLabel}</span>
+            <span>欠款来源: {projection.resolutionSummary.sourceLabel}</span>
+            <span>应支付: {projection.resolutionSummary.amount}</span>
+            <span>当前现金: {projection.resolutionSummary.actorCash}</span>
+            <span>仍差: {projection.resolutionSummary.shortfall}</span>
+            <span>可抵押资产: {projection.resolutionSummary.availableMortgageCount} 处</span>
+            <span>{projection.resolutionSummary.consequenceLabel}</span>
+          </section>
+        ) : null}
+
+        {projection.latestSettlementSummary ? (
+          <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--result"}`}>
+            <p className="shell__eyebrow">Latest settlement</p>
+            <strong>{projection.latestSettlementSummary.title}</strong>
+            <span>{projection.latestSettlementSummary.detail}</span>
+            <span>{projection.latestSettlementSummary.nextStepLabel}</span>
+          </section>
+        ) : null}
+
         <div className="status-grid">
           <article className="status-card">
             <strong>当前回合</strong>
@@ -407,11 +457,11 @@ export function GamePage() {
             <span>{projection.lastRoll.join(" + ")}</span>
           </article>
           <article className="status-card">
-            <strong>房间状态</strong>
-            <span>{projection.roomState}</span>
+            <strong>当前阶段</strong>
+            <span>{projection.roomState === "lobby" ? "等待房间" : projection.roomState === "finished" ? "对局结束" : "对局进行中"}</span>
           </article>
           <article className="status-card">
-            <strong>待处理动作</strong>
+            <strong>下一步</strong>
             <span>{projection.pendingActionLabel}</span>
           </article>
           <article className="status-card">
@@ -492,11 +542,10 @@ export function GamePage() {
         ) : null}
 
         {projection.pendingPayment ? (
-          <section className="player-card">
-            <strong>待化解欠款</strong>
-            <span>原因: {projection.pendingPayment.reason}</span>
-            <span>金额: {projection.pendingPayment.amount}</span>
-            <span>来源: {projection.pendingPayment.sourceTileLabel ?? "未知来源"}</span>
+          <section className="player-card player-card--resolution">
+            <strong>赤字处理动作</strong>
+            <span>当前操作人: {projection.resolutionSummary?.actorName ?? projection.currentTurnPlayerName}</span>
+            <span>先尝试通过抵押补足欠款，若仍不足可宣告破产。</span>
             <div className="lobby__actions">
               {mortgageCandidates.map((tileId) => (
                 <button
@@ -506,7 +555,9 @@ export function GamePage() {
                   onClick={() => handleMortgage(tileId)}
                   disabled={!canResolveDeficit || mortgageBusyTileId === tileId}
                 >
-                  {mortgageBusyTileId === tileId ? `抵押 ${tileId}...` : `抵押 ${tileId}`}
+                  {mortgageBusyTileId === tileId
+                    ? `抵押 ${boardTileLabels.get(tileId) ?? tileId}...`
+                    : `抵押 ${boardTileLabels.get(tileId) ?? tileId}`}
                 </button>
               ))}
               <button className="button button--primary" type="button" onClick={handleBankruptcy} disabled={!canResolveDeficit}>
