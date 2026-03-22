@@ -186,6 +186,17 @@ The system SHALL present the final normal-turn trade confirmation step as a cons
 - **WHEN** the acting player returns from the final confirmation surface back to the earlier trade steps
 - **THEN** the room page SHALL preserve the current draft selections so the player can continue editing without rebuilding the proposal
 
+### Requirement: The final trade confirmation surface prioritizes consequence-first reading
+The system SHALL present the final normal-turn trade confirmation surface in a hierarchy that emphasizes consequences before detailed exchange review.
+
+#### Scenario: Player reviews the final confirmation surface
+- **WHEN** the acting player reaches the final normal-turn trade confirmation step
+- **THEN** the room page SHALL emphasize the irreversible submission consequence and high-priority risk summary before the bilateral exchange detail list
+
+#### Scenario: Player scans the exchange details after consequences
+- **WHEN** the acting player continues reviewing the final confirmation surface
+- **THEN** the room page SHALL still present the detailed "you give" and "you receive" breakdown in a clearly secondary review section
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
