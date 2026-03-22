@@ -9,6 +9,8 @@ import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
 import { usePresentationState } from "../../state/presentation/gamePresentation";
 
+type TradeComposerStep = "counterparty" | "offered" | "requested" | "review";
+
 export function GamePage() {
   const params = useParams();
   const roomId = params.roomId ?? "";
@@ -22,6 +24,7 @@ export function GamePage() {
   const [tradeRequestedTileIds, setTradeRequestedTileIds] = useState<string[]>([]);
   const [tradeOfferedCardIds, setTradeOfferedCardIds] = useState<string[]>([]);
   const [tradeRequestedCardIds, setTradeRequestedCardIds] = useState<string[]>([]);
+  const [tradeComposerStep, setTradeComposerStep] = useState<TradeComposerStep>("counterparty");
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isTurnToolsOpen, setIsTurnToolsOpen] = useState(false);
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
@@ -142,6 +145,12 @@ export function GamePage() {
   const draftTradeRequestedTileLabels = tradeRequestedTileIds.map((tileId) => boardTileLabels.get(tileId) ?? tileId);
   const draftTradeOfferedCardLabels = tradeOfferedCardIds.map((cardId) => cardLabels.get(cardId) ?? cardId);
   const draftTradeRequestedCardLabels = tradeRequestedCardIds.map((cardId) => cardLabels.get(cardId) ?? cardId);
+  const tradeComposerSteps: Array<{ key: TradeComposerStep; label: string }> = [
+    { key: "counterparty", label: "选对象" },
+    { key: "offered", label: "选我给出" },
+    { key: "requested", label: "选我索取" },
+    { key: "review", label: "确认摘要" },
+  ];
   const tradeStageViewerLabel = tradeSummary
     ? canResolveTrade
       ? `轮到你决定是否接受 ${tradeSummary.proposerName} 的报价。`
@@ -514,6 +523,8 @@ export function GamePage() {
         requestedCardIds: tradeRequestedCardIds
       });
       applySnapshot(snapshot);
+      setTradeComposerStep("counterparty");
+      setIsTurnToolsOpen(false);
       setActionMessage("已同步权威交易报价。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "交易报价失败");
@@ -554,12 +565,24 @@ export function GamePage() {
     && !tradeSummary
     && projection.turnState === "awaiting-roll"
     && (hasDevelopmentTools || hasTradeTool);
+  const hasTradeDraft = Number(tradeOfferedCash) > 0
+    || Number(tradeRequestedCash) > 0
+    || tradeOfferedTileIds.length > 0
+    || tradeRequestedTileIds.length > 0
+    || tradeOfferedCardIds.length > 0
+    || tradeRequestedCardIds.length > 0;
 
   useEffect(() => {
     if (!hasTurnTools) {
       setIsTurnToolsOpen(false);
     }
   }, [hasTurnTools]);
+
+  useEffect(() => {
+    if (!hasTradeTool) {
+      setTradeComposerStep("counterparty");
+    }
+  }, [hasTradeTool]);
 
   function renderContextualActionSurface() {
     if (projection.waitingRoomSummary || auctionSummary || projection.resolutionSummary || tradeSummary) {
@@ -724,6 +747,16 @@ export function GamePage() {
                     ? `当前由你决定是否向 ${selectedCounterparty.name} 发起一笔正式报价。`
                     : "请选择一名仍在局内的玩家作为交易对象。"}
                 </span>
+                <div className="trade-composer__steps" aria-label="交易报价步骤">
+                  {tradeComposerSteps.map((step) => (
+                    <span
+                      key={step.key}
+                      className={`trade-composer__step${tradeComposerStep === step.key ? " trade-composer__step--active" : ""}`}
+                    >
+                      {step.label}
+                    </span>
+                  ))}
+                </div>
                 <div className="trade-stage__grid">
                   <article className="trade-side">
                     <strong>你给出</strong>
@@ -741,146 +774,210 @@ export function GamePage() {
                 <span>
                   这笔报价提交后会暂停房间，等待 {selectedCounterparty?.name ?? "对手"} 明确接受或拒绝。
                 </span>
-                <div className="trade-editor__grid">
-                  <label className="player-card trade-editor__field">
-                    <strong>目标玩家</strong>
-                    <select value={tradeCounterpartyId} onChange={(event) => setTradeCounterpartyId(event.target.value)}>
-                      {otherPlayers.map((player) => (
-                        <option key={player.id} value={player.id}>{player.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="player-card trade-editor__field">
-                    <strong>我出现金</strong>
-                    <input value={tradeOfferedCash} onChange={(event) => setTradeOfferedCash(event.target.value)} />
-                  </label>
-                  <label className="player-card trade-editor__field">
-                    <strong>我索要现金</strong>
-                    <input value={tradeRequestedCash} onChange={(event) => setTradeRequestedCash(event.target.value)} />
-                  </label>
-                </div>
-                <div className="asset-picker">
-                  <section className="asset-picker__section">
-                    <div className="asset-picker__header">
-                      <strong>我可出让的地产</strong>
-                      <span>{offeredPropertyOptions.length > 0 ? "点击选择要放进报价的地产" : "当前没有可出让地产"}</span>
+                {tradeComposerStep === "counterparty" ? (
+                  <div className="trade-composer__panel">
+                    <div className="trade-editor__grid">
+                      <label className="player-card trade-editor__field">
+                        <strong>目标玩家</strong>
+                        <select value={tradeCounterpartyId} onChange={(event) => setTradeCounterpartyId(event.target.value)}>
+                          {otherPlayers.map((player) => (
+                            <option key={player.id} value={player.id}>{player.name}</option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
-                    {offeredPropertyOptions.length > 0 ? (
-                      <div className="asset-chip-list">
-                        {offeredPropertyOptions.map((option) => {
-                          const selected = tradeOfferedTileIds.includes(option.id);
-                          const disabled = Boolean(option.disabledReason);
-                          return (
-                            <button
-                              key={option.id}
-                              className={`asset-chip${selected ? " asset-chip--selected" : ""}${disabled ? " asset-chip--disabled" : ""}`}
-                              type="button"
-                              aria-label={`选择我出让的地产 ${option.label}`}
-                              onClick={() => toggleTradeSelection(option.id, tradeOfferedTileIds, setTradeOfferedTileIds, disabled)}
-                              disabled={disabled}
-                            >
-                              <strong>{option.label}</strong>
-                              <span>{option.disabledReason ?? (option.detail || "可加入报价")}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="asset-picker__empty">当前没有可出让地产。</p>
-                    )}
-                  </section>
+                    <div className="lobby__actions">
+                      <button className="button button--primary" type="button" onClick={() => setTradeComposerStep("offered")} disabled={!tradeCounterpartyId}>
+                        下一步：选择我给出的内容
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
-                  <section className="asset-picker__section">
-                    <div className="asset-picker__header">
-                      <strong>{selectedCounterparty?.name ?? "对手"} 可让出的地产</strong>
-                      <span>{selectedCounterparty ? "点击选择你想请求的地产" : "请先选择交易对象"}</span>
+                {tradeComposerStep === "offered" ? (
+                  <div className="trade-composer__panel">
+                    <div className="trade-editor__grid">
+                      <label className="player-card trade-editor__field">
+                        <strong>我出现金</strong>
+                        <input value={tradeOfferedCash} onChange={(event) => setTradeOfferedCash(event.target.value)} />
+                      </label>
                     </div>
-                    {requestedPropertyOptions.length > 0 ? (
-                      <div className="asset-chip-list">
-                        {requestedPropertyOptions.map((option) => {
-                          const selected = tradeRequestedTileIds.includes(option.id);
-                          const disabled = Boolean(option.disabledReason);
-                          return (
-                            <button
-                              key={option.id}
-                              className={`asset-chip${selected ? " asset-chip--selected" : ""}${disabled ? " asset-chip--disabled" : ""}`}
-                              type="button"
-                              aria-label={`选择索要的地产 ${option.label}`}
-                              onClick={() => toggleTradeSelection(option.id, tradeRequestedTileIds, setTradeRequestedTileIds, disabled)}
-                              disabled={disabled}
-                            >
-                              <strong>{option.label}</strong>
-                              <span>{option.disabledReason ?? (option.detail || "可请求")}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="asset-picker__empty">{selectedCounterparty ? "对手当前没有可请求地产。" : "请先选择交易对象。"}</p>
-                    )}
-                  </section>
+                    <div className="asset-picker">
+                      <section className="asset-picker__section">
+                        <div className="asset-picker__header">
+                          <strong>我可出让的地产</strong>
+                          <span>{offeredPropertyOptions.length > 0 ? "点击选择要放进报价的地产" : "当前没有可出让地产"}</span>
+                        </div>
+                        {offeredPropertyOptions.length > 0 ? (
+                          <div className="asset-chip-list">
+                            {offeredPropertyOptions.map((option) => {
+                              const selected = tradeOfferedTileIds.includes(option.id);
+                              const disabled = Boolean(option.disabledReason);
+                              return (
+                                <button
+                                  key={option.id}
+                                  className={`asset-chip${selected ? " asset-chip--selected" : ""}${disabled ? " asset-chip--disabled" : ""}`}
+                                  type="button"
+                                  aria-label={`选择我出让的地产 ${option.label}`}
+                                  onClick={() => toggleTradeSelection(option.id, tradeOfferedTileIds, setTradeOfferedTileIds, disabled)}
+                                  disabled={disabled}
+                                >
+                                  <strong>{option.label}</strong>
+                                  <span>{option.disabledReason ?? (option.detail || "可加入报价")}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="asset-picker__empty">当前没有可出让地产。</p>
+                        )}
+                      </section>
 
-                  <section className="asset-picker__section">
-                    <div className="asset-picker__header">
-                      <strong>我可出让的卡牌</strong>
-                      <span>{offeredCardOptions.length > 0 ? "点击选择要附带的卡牌" : "当前没有可出让卡牌"}</span>
+                      <section className="asset-picker__section">
+                        <div className="asset-picker__header">
+                          <strong>我可出让的卡牌</strong>
+                          <span>{offeredCardOptions.length > 0 ? "点击选择要附带的卡牌" : "当前没有可出让卡牌"}</span>
+                        </div>
+                        {offeredCardOptions.length > 0 ? (
+                          <div className="asset-chip-list">
+                            {offeredCardOptions.map((option) => {
+                              const selected = tradeOfferedCardIds.includes(option.id);
+                              return (
+                                <button
+                                  key={option.id}
+                                  className={`asset-chip${selected ? " asset-chip--selected" : ""}`}
+                                  type="button"
+                                  aria-label={`选择我出让的卡牌 ${option.label}`}
+                                  onClick={() => toggleTradeSelection(option.id, tradeOfferedCardIds, setTradeOfferedCardIds, false)}
+                                >
+                                  <strong>{option.label}</strong>
+                                  <span>{option.detail}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="asset-picker__empty">当前没有可出让卡牌。</p>
+                        )}
+                      </section>
                     </div>
-                    {offeredCardOptions.length > 0 ? (
-                      <div className="asset-chip-list">
-                        {offeredCardOptions.map((option) => {
-                          const selected = tradeOfferedCardIds.includes(option.id);
-                          return (
-                            <button
-                              key={option.id}
-                              className={`asset-chip${selected ? " asset-chip--selected" : ""}`}
-                              type="button"
-                              aria-label={`选择我出让的卡牌 ${option.label}`}
-                              onClick={() => toggleTradeSelection(option.id, tradeOfferedCardIds, setTradeOfferedCardIds, false)}
-                            >
-                              <strong>{option.label}</strong>
-                              <span>{option.detail}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="asset-picker__empty">当前没有可出让卡牌。</p>
-                    )}
-                  </section>
+                    <div className="lobby__actions">
+                      <button className="button button--secondary" type="button" onClick={() => setTradeComposerStep("counterparty")}>
+                        返回选择对象
+                      </button>
+                      <button className="button button--primary" type="button" onClick={() => setTradeComposerStep("requested")}>
+                        下一步：选择我索取的内容
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
-                  <section className="asset-picker__section">
-                    <div className="asset-picker__header">
-                      <strong>{selectedCounterparty?.name ?? "对手"} 可让出的卡牌</strong>
-                      <span>{selectedCounterparty ? "点击选择你想索要的卡牌" : "请先选择交易对象"}</span>
+                {tradeComposerStep === "requested" ? (
+                  <div className="trade-composer__panel">
+                    <div className="trade-editor__grid">
+                      <label className="player-card trade-editor__field">
+                        <strong>我索要现金</strong>
+                        <input value={tradeRequestedCash} onChange={(event) => setTradeRequestedCash(event.target.value)} />
+                      </label>
                     </div>
-                    {requestedCardOptions.length > 0 ? (
-                      <div className="asset-chip-list">
-                        {requestedCardOptions.map((option) => {
-                          const selected = tradeRequestedCardIds.includes(option.id);
-                          return (
-                            <button
-                              key={option.id}
-                              className={`asset-chip${selected ? " asset-chip--selected" : ""}`}
-                              type="button"
-                              aria-label={`选择索要的卡牌 ${option.label}`}
-                              onClick={() => toggleTradeSelection(option.id, tradeRequestedCardIds, setTradeRequestedCardIds, false)}
-                            >
-                              <strong>{option.label}</strong>
-                              <span>{option.detail}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="asset-picker__empty">{selectedCounterparty ? "对手当前没有可请求卡牌。" : "请先选择交易对象。"}</p>
-                    )}
-                  </section>
-                </div>
-                <div className="lobby__actions">
-                  <button className="button button--secondary" type="button" onClick={handleProposeTrade} disabled={!canProposeTrade || !tradeCounterpartyId}>
-                    发起交易
-                  </button>
-                </div>
+                    <div className="asset-picker">
+                      <section className="asset-picker__section">
+                        <div className="asset-picker__header">
+                          <strong>{selectedCounterparty?.name ?? "对手"} 可让出的地产</strong>
+                          <span>{selectedCounterparty ? "点击选择你想请求的地产" : "请先选择交易对象"}</span>
+                        </div>
+                        {requestedPropertyOptions.length > 0 ? (
+                          <div className="asset-chip-list">
+                            {requestedPropertyOptions.map((option) => {
+                              const selected = tradeRequestedTileIds.includes(option.id);
+                              const disabled = Boolean(option.disabledReason);
+                              return (
+                                <button
+                                  key={option.id}
+                                  className={`asset-chip${selected ? " asset-chip--selected" : ""}${disabled ? " asset-chip--disabled" : ""}`}
+                                  type="button"
+                                  aria-label={`选择索要的地产 ${option.label}`}
+                                  onClick={() => toggleTradeSelection(option.id, tradeRequestedTileIds, setTradeRequestedTileIds, disabled)}
+                                  disabled={disabled}
+                                >
+                                  <strong>{option.label}</strong>
+                                  <span>{option.disabledReason ?? (option.detail || "可请求")}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="asset-picker__empty">{selectedCounterparty ? "对手当前没有可请求地产。" : "请先选择交易对象。"}</p>
+                        )}
+                      </section>
+
+                      <section className="asset-picker__section">
+                        <div className="asset-picker__header">
+                          <strong>{selectedCounterparty?.name ?? "对手"} 可让出的卡牌</strong>
+                          <span>{selectedCounterparty ? "点击选择你想索要的卡牌" : "请先选择交易对象"}</span>
+                        </div>
+                        {requestedCardOptions.length > 0 ? (
+                          <div className="asset-chip-list">
+                            {requestedCardOptions.map((option) => {
+                              const selected = tradeRequestedCardIds.includes(option.id);
+                              return (
+                                <button
+                                  key={option.id}
+                                  className={`asset-chip${selected ? " asset-chip--selected" : ""}`}
+                                  type="button"
+                                  aria-label={`选择索要的卡牌 ${option.label}`}
+                                  onClick={() => toggleTradeSelection(option.id, tradeRequestedCardIds, setTradeRequestedCardIds, false)}
+                                >
+                                  <strong>{option.label}</strong>
+                                  <span>{option.detail}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="asset-picker__empty">{selectedCounterparty ? "对手当前没有可请求卡牌。" : "请先选择交易对象。"}</p>
+                        )}
+                      </section>
+                    </div>
+                    <div className="lobby__actions">
+                      <button className="button button--secondary" type="button" onClick={() => setTradeComposerStep("offered")}>
+                        返回选择我给出的内容
+                      </button>
+                      <button className="button button--primary" type="button" onClick={() => setTradeComposerStep("review")}>
+                        下一步：确认报价摘要
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {tradeComposerStep === "review" ? (
+                  <div className="trade-composer__panel">
+                    <div className="trade-composer__review">
+                      <strong>最终报价摘要</strong>
+                      <span>{selectedCounterparty ? `报价对象: ${selectedCounterparty.name}` : "尚未选择报价对象"}</span>
+                      <span>{hasTradeDraft ? "请确认双方资产方向无误后再发起交易。" : "当前草案仍为空，请先返回前一步补充报价内容。"}</span>
+                    </div>
+                    <div className="lobby__actions">
+                      <button className="button button--secondary" type="button" onClick={() => setTradeComposerStep("requested")}>
+                        返回选择我索取的内容
+                      </button>
+                      <button className="button button--secondary button--danger" type="button" onClick={() => {
+                        setTradeComposerStep("counterparty");
+                        setTradeOfferedCash("0");
+                        setTradeRequestedCash("0");
+                        setTradeOfferedTileIds([]);
+                        setTradeRequestedTileIds([]);
+                        setTradeOfferedCardIds([]);
+                        setTradeRequestedCardIds([]);
+                      }}>
+                        放弃当前草案
+                      </button>
+                      <button className="button button--primary" type="button" onClick={handleProposeTrade} disabled={!canProposeTrade || !tradeCounterpartyId || !hasTradeDraft}>
+                        确认并发起交易
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </section>
             ) : null}
           </div>

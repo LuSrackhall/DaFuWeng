@@ -300,6 +300,37 @@ body {
   margin-top: 0;
 }
 
+.trade-composer__steps,
+.trade-composer__panel,
+.trade-composer__review {
+  display: grid;
+  gap: 12px;
+}
+
+.trade-composer__steps {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.trade-composer__step {
+  border-radius: 999px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(246, 236, 212, 0.72);
+  text-align: center;
+}
+
+.trade-composer__step--active {
+  background: rgba(170, 114, 33, 0.26);
+  color: #f6ecd4;
+}
+
+.trade-composer__review {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(4, 12, 10, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .action-surface__summary,
 .action-surface__hint,
 .action-surface__meta {
@@ -559,6 +590,10 @@ body {
 
   .turn-tools-shelf__header {
     grid-template-columns: 1fr;
+  }
+
+  .trade-composer__steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .status-grid,
