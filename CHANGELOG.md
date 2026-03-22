@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.10.0...v1.11.0) (2026-03-22)
+
+
+### Features
+
+* 强化交易最终确认面的后果优先视觉层级 ([315b384](https://github.com/LuSrackhall/DaFuWeng/commit/315b384da3c4b49667473485caeecdfe2f0b5080))
+
 # [1.10.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.9.0...v1.10.0) (2026-03-22)
 
 
