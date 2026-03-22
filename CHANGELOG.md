@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.2.1...v1.3.0) (2026-03-22)
+
+
+### Features
+
+* 完成交易阶段化呈现与诊断抽屉下沉 ([c11524d](https://github.com/LuSrackhall/DaFuWeng/commit/c11524d2e6121c0770643f4e578173165f555512))
+
 ## [1.2.1](https://github.com/LuSrackhall/DaFuWeng/compare/v1.2.0...v1.2.1) (2026-03-22)
 
 
