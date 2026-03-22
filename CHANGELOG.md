@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.7.0...v1.8.0) (2026-03-22)
+
+
+### Features
+
+* 普通回合交易发起收敛为四步报价器 ([cec784d](https://github.com/LuSrackhall/DaFuWeng/commit/cec784d1970559527eb0838fad2de8c45bb33e18))
+
 # [1.7.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.6.0...v1.7.0) (2026-03-22)
 
 
