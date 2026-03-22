@@ -1,3 +1,15 @@
+# [1.2.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.1.0...v1.2.0) (2026-03-22)
+
+
+### Bug Fixes
+
+* 提升等待房与赤字破产结算可读性 ([def0a0d](https://github.com/LuSrackhall/DaFuWeng/commit/def0a0d2c89bafec4ed6d152ed8c737626623141))
+
+
+### Features
+
+* 引入房间级玩家会话并收紧多人授权闭环 ([2e0b7f6](https://github.com/LuSrackhall/DaFuWeng/commit/2e0b7f65574433fffe6257e597de6b3fe824199d))
+
 # [1.1.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.0.0...v1.1.0) (2026-03-22)
 
 
