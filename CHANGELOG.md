@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.12.0...v1.13.0) (2026-03-22)
+
+
+### Features
+
+* 升级交易接受后的双边结果结算卡 ([845200b](https://github.com/LuSrackhall/DaFuWeng/commit/845200bbafd89c1cc59aadda42cf12dbd7b82c30))
+
 # [1.12.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.11.0...v1.12.0) (2026-03-22)
 
 
