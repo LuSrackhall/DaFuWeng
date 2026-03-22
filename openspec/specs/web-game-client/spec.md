@@ -142,6 +142,17 @@ The system SHALL present only the actions that are relevant to the current autho
 - **WHEN** the room is waiting on the current player to accept or decline a property purchase
 - **THEN** the room page SHALL present the property label, price, and the purchase-or-decline decision in one contextual action surface
 
+### Requirement: Optional normal-turn tools stay behind a collapsible shelf
+The system SHALL keep optional normal-turn tools behind a secondary collapsible shelf when no dedicated stage surface is active.
+
+#### Scenario: Player enters a normal roll state
+- **WHEN** the room is waiting on the current player to roll and optional tools such as trade drafting or property development are available
+- **THEN** the room page SHALL keep those tools collapsed by default while still indicating that they are available
+
+#### Scenario: Player opens the tools shelf
+- **WHEN** the acting player expands the turn-tools shelf during a normal roll state
+- **THEN** the room page SHALL reveal the optional trade drafting and property development surfaces without replacing the main action surface
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
