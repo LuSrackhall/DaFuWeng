@@ -1,12 +1,20 @@
+import { existsSync } from "node:fs";
+
 import { defineConfig } from "@playwright/test";
+
+const localChromeExecutablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+
+const launchOptions = process.env.CI || !existsSync(localChromeExecutablePath)
+  ? undefined
+  : {
+      executablePath: localChromeExecutablePath,
+    };
 
 export default defineConfig({
   testDir: "./tests/e2e",
   use: {
     baseURL: "http://127.0.0.1:4173",
-    launchOptions: {
-      executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    }
+    launchOptions
   },
   webServer: [
     {
