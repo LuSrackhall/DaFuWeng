@@ -404,6 +404,30 @@ body {
   background: rgba(170, 114, 33, 0.18);
 }
 
+.trade-response-stage__hero,
+.trade-response-stage__outcome,
+.trade-response-stage__readonly {
+  display: grid;
+  gap: 8px;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.trade-response-stage__hero {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.trade-response-stage__outcome {
+  background: linear-gradient(135deg, rgba(170, 114, 33, 0.18), rgba(112, 186, 148, 0.1));
+  border: 1px solid rgba(229, 191, 105, 0.2);
+}
+
+.trade-response-stage__readonly {
+  background: rgba(4, 12, 10, 0.2);
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+}
+
 .action-surface__summary,
 .action-surface__hint,
 .action-surface__meta {

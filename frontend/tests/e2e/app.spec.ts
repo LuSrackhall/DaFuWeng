@@ -156,6 +156,9 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await guestPage.getByRole("button", { name: "加入房间" }).click();
   await expect(guestPage).toHaveURL(new RegExp(`/room/${roomId}$`));
 
+  const spectatorPage = await browser.newPage();
+  await spectatorPage.goto(`/room/${roomId}`);
+
   await page.getByRole("button", { name: "房主开始游戏" }).click();
   await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
   await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
@@ -193,11 +196,19 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await page.getByRole("button", { name: "确认并发起交易" }).click();
 
   await expect(page.getByText("双边交易待响应")).toBeVisible();
+  await expect(page.getByText("报价已送达，等待对手回应", { exact: true })).toBeVisible();
+  await expect(page.getByText(/你当前不能操作: 报价已锁定，等待对方决定/).first()).toBeVisible();
   await expect(page.getByText(/报价已发出，当前等待 玩家乙 回复。/)).toBeVisible();
-  await expect(page.getByText(/地产: 东湖路/)).toBeVisible();
+  await expect(page.getByText(/房主甲 交出/)).toBeVisible();
   await expect(guestPage.getByText("双边交易待响应")).toBeVisible();
+  await expect(guestPage.getByText("轮到你决定是否接受这笔报价", { exact: true })).toBeVisible();
+  await expect(guestPage.getByText(/你当前可以操作: 接受或拒绝这笔交易/)).toBeVisible();
   await expect(guestPage.getByText(/轮到你决定是否接受 房主甲 的报价。/)).toBeVisible();
-  await expect(guestPage.getByText(/地产: 东湖路/)).toBeVisible();
+  await expect(guestPage.getByText(/接下来会怎样/)).toBeVisible();
+  await expect(spectatorPage.getByText("双边交易待响应")).toBeVisible();
+  await expect(spectatorPage.getByText("房间暂停在交易回应阶段", { exact: true })).toBeVisible();
+  await expect(spectatorPage.getByText(/你当前不能操作: 此阶段仅可查看交易内容/).first()).toBeVisible();
+  await expect(spectatorPage.getByText(/当前无可执行操作/)).toBeVisible();
 
   await expect(page.getByRole("button", { name: "展开诊断抽屉" })).toBeVisible();
   await page.getByRole("button", { name: "展开诊断抽屉" }).click();
@@ -208,8 +219,10 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
 
   await expect(page.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
   await expect(guestPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
+  await expect(spectatorPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
+  await spectatorPage.close();
   await guestPage.close();
 });
 

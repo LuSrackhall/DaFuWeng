@@ -160,6 +160,34 @@ export function GamePage() {
           ? "当前仅观战，你可以查看交易内容，但不能参与响应。"
           : `当前轮到 ${tradeSummary.counterpartyName} 决定，其他人保持只读。`
     : null;
+  const isTradeProposerView = tradeSummary?.proposerPlayerId === activePlayerId;
+  const isTradeCounterpartyView = canResolveTrade;
+  const tradeWaitingHeadline = tradeSummary
+    ? isTradeCounterpartyView
+      ? "轮到你决定是否接受这笔报价"
+      : isTradeProposerView
+        ? "报价已送达，等待对手回应"
+        : "房间暂停在交易回应阶段"
+    : null;
+  const tradeWaitingPrimarySummary = tradeSummary
+    ? isTradeCounterpartyView
+      ? `${tradeSummary.proposerName} 已正式向你发出报价。你现在必须决定接受或拒绝。`
+      : isTradeProposerView
+        ? `你已经向 ${tradeSummary.counterpartyName} 发出正式报价，当前只能等待对方回复。`
+        : `当前正在等待 ${tradeSummary.counterpartyName} 回应 ${tradeSummary.proposerName} 的报价。`
+    : null;
+  const tradeWaitingCapabilityLabel = tradeSummary
+    ? isTradeCounterpartyView
+      ? "你当前可以操作: 接受或拒绝这笔交易"
+      : isTradeProposerView
+        ? "你当前不能操作: 报价已锁定，等待对方决定"
+        : "你当前不能操作: 此阶段仅可查看交易内容"
+    : null;
+  const tradeWaitingOutcomeSummary = tradeSummary
+    ? isTradeCounterpartyView
+      ? "如果接受，系统会按当前报价原子结算并继续推进房间；如果拒绝，交易等待会结束并回到后续正常流程。"
+      : "如果对方接受，系统会立即按当前报价结算；如果对方拒绝，等待阶段会结束，房间继续后续权威流程。"
+    : null;
   const diagnosticsEventLines = projection.recentEvents.slice(-5).reverse();
   const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
   const currentTurnProjectionPlayer = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
@@ -1328,30 +1356,46 @@ export function GamePage() {
             <p className="shell__eyebrow">交易阶段</p>
             <strong>双边交易待响应</strong>
             <span>{tradeSummary.stageLabel}</span>
+            <div className="trade-response-stage__hero">
+              <strong>{tradeWaitingHeadline}</strong>
+              <span>{tradeWaitingPrimarySummary}</span>
+              <span>{tradeWaitingCapabilityLabel}</span>
+            </div>
+            <div className="trade-response-stage__outcome">
+              <strong>接下来会怎样</strong>
+              <span>{tradeSummary.outcomePreviewLabel}</span>
+              <span>{tradeWaitingOutcomeSummary}</span>
+            </div>
             <div className="trade-stage__grid">
               <article className="trade-side">
-                <strong>{tradeSummary.proposerName} 给出</strong>
+                <strong>{tradeSummary.proposerName} 交出</strong>
                 <span>现金: {tradeSummary.offeredCash}</span>
                 <span>地产: {tradeSummary.offeredTileLabels.join(" / ") || "无"}</span>
                 <span>卡牌: {tradeSummary.offeredCardLabels.join(" / ") || "无"}</span>
               </article>
               <article className="trade-side">
-                <strong>{tradeSummary.proposerName} 获得</strong>
+                <strong>{tradeSummary.counterpartyName} 交出</strong>
                 <span>现金: {tradeSummary.requestedCash}</span>
                 <span>地产: {tradeSummary.requestedTileLabels.join(" / ") || "无"}</span>
                 <span>卡牌: {tradeSummary.requestedCardLabels.join(" / ") || "无"}</span>
               </article>
             </div>
-            <span>{tradeSummary.outcomePreviewLabel}</span>
             <span>{tradeStageViewerLabel}</span>
-            <div className="lobby__actions">
-              <button className="button button--primary" type="button" onClick={() => handleResolveTrade("accept")} disabled={!canResolveTrade}>
-                接受交易
-              </button>
-              <button className="button button--secondary button--danger" type="button" onClick={() => handleResolveTrade("reject")} disabled={!canResolveTrade}>
-                拒绝交易
-              </button>
-            </div>
+            {canResolveTrade ? (
+              <div className="lobby__actions">
+                <button className="button button--primary" type="button" onClick={() => handleResolveTrade("accept")} disabled={!canResolveTrade}>
+                  接受交易
+                </button>
+                <button className="button button--secondary button--danger" type="button" onClick={() => handleResolveTrade("reject")} disabled={!canResolveTrade}>
+                  拒绝交易
+                </button>
+              </div>
+            ) : (
+              <div className="trade-response-stage__readonly">
+                <strong>当前无可执行操作</strong>
+                <span>{tradeWaitingCapabilityLabel}</span>
+              </div>
+            )}
           </section>
         ) : null}
 
