@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.4.1...v1.5.0) (2026-03-22)
+
+
+### Features
+
+* 将赤字恢复升级为资产恢复面板 ([9a95ffe](https://github.com/LuSrackhall/DaFuWeng/commit/9a95ffee98318e0267a933e466632bf6ce747acb))
+
 ## [1.4.1](https://github.com/LuSrackhall/DaFuWeng/compare/v1.4.0...v1.4.1) (2026-03-22)
 
 
