@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.3.0...v1.4.0) (2026-03-22)
+
+
+### Features
+
+* 完成交易资产可视化选择器 ([a7933ef](https://github.com/LuSrackhall/DaFuWeng/commit/a7933efbdebd14f2bb4af7327388493c030e9d75))
+
 # [1.3.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.2.1...v1.3.0) (2026-03-22)
 
 
