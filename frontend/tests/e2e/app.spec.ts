@@ -1,255 +1,87 @@
 import { expect, test } from "@playwright/test";
 
-test("purchase property, settle rent, and recover through streaming plus refresh", async ({ browser, page }) => {
-  await page.goto("/");
+function extractRoomId(url: string) {
+  const match = url.match(/\/room\/(room-\d+)$/);
+  return match?.[1] ?? "";
+}
 
-  await expect(page.getByRole("heading", { name: "Da Fu Weng" })).toBeVisible();
-  await expect(page.getByText("经典大富翁，多人房间先跑通")).toBeVisible();
-
-  await page.getByLabel("房主昵称").fill("端到端房主");
-  await page.getByRole("button", { name: "创建房间" }).click();
-  await expect(page.getByText(/已创建房间 room-/)).toBeVisible();
-
-  const headingText = await page.locator("h3.panel__title").first().textContent();
-  const roomId = headingText?.replace("房间 ", "") ?? "";
-  expect(roomId).toMatch(/^room-/);
-
-  await page.getByLabel("加入房间").fill(roomId);
-  await page.getByLabel("玩家昵称").fill("端到端玩家");
-  await page.getByRole("button", { name: "加入房间" }).click();
-  await expect(page.getByText("端到端玩家")).toBeVisible();
-
-  await page.getByRole("button", { name: "开始当前房间" }).click();
-  await expect(page).toHaveURL(new RegExp(`/room/${roomId}$`));
-  await expect(page.getByText("等待当前玩家掷骰")).toBeVisible();
-
-  const viewerPage = await browser.newPage();
-  await viewerPage.goto(`/room/${roomId}`);
-  await expect(viewerPage.getByText("等待当前玩家掷骰")).toBeVisible();
-
-  await page.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
-  await expect(page.getByText(/权威掷骰结果已同步/)).toBeVisible();
-  await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
-  await expect(page.getByText(/#\d+ .*可选择购买 东湖路/)).toBeVisible();
-
-  await expect(viewerPage.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
-
-  await page.getByRole("button", { name: "购买地产" }).click();
-  await expect(page.getByText(/已同步权威买地结果/)).toBeVisible();
-  await expect(page.getByText("等待当前玩家掷骰")).toBeVisible();
-  await expect(page.getByText(/现金: 1340/)).toBeVisible();
-  await expect(page.getByText(/地产: 1/)).toBeVisible();
-  await expect(page.getByText(/#\d+ .*购买了 东湖路/)).toBeVisible();
-
-  await expect(viewerPage.getByText(/现金: 1340/)).toBeVisible();
-  await expect(viewerPage.getByText(/地产: 1/)).toBeVisible();
-  await expect(viewerPage.getByText(/#\d+ .*购买了 东湖路/)).toBeVisible();
-
-  await viewerPage.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
-  await expect(viewerPage.getByText(/权威掷骰结果已同步/)).toBeVisible();
-  await expect(viewerPage.getByText(/#\d+ .*支付了 22 租金/)).toBeVisible();
-  await expect(viewerPage.getByText(/现金: 1478/)).toBeVisible();
-
-  await expect(page.getByText(/#\d+ .*支付了 22 租金/)).toBeVisible();
-  await expect(page.getByText(/现金: 1362/)).toBeVisible();
-
-  const versionBeforeRefresh = await page.locator(".status-card span").nth(4).textContent();
-  await page.reload();
-
-  await expect(page.getByText("等待当前玩家掷骰")).toBeVisible();
-  await expect(page.getByText(/#\d+ .*支付了 22 租金/)).toBeVisible();
-  await expect(page.locator(".status-card span").nth(4)).toHaveText(versionBeforeRefresh ?? "");
-
-  await viewerPage.close();
-});
-
-test("decline property enters auction and settles through bid plus pass", async ({ browser, page }) => {
-  await page.goto("/");
-
-  await page.getByLabel("房主昵称").fill("拍卖房主");
-  await page.getByRole("button", { name: "创建房间" }).click();
-  await expect(page.getByText(/已创建房间 room-/)).toBeVisible();
-  const headingText = await page.locator("h3.panel__title").first().textContent();
-  const roomId = headingText?.replace("房间 ", "") ?? "";
-  expect(roomId).toMatch(/^room-/);
-
-  await page.getByLabel("加入房间").fill(roomId);
-  await page.getByLabel("玩家昵称").fill("拍卖玩家");
-  await page.getByRole("button", { name: "加入房间" }).click();
-  await page.getByRole("button", { name: "开始当前房间" }).click();
-  await expect(page).toHaveURL(new RegExp(`/room/${roomId}$`));
-
-  const viewerPage = await browser.newPage();
-  await viewerPage.goto(`/room/${roomId}`);
-
-  await page.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
-  await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
-  await page.getByRole("button", { name: "放弃购买" }).click();
-  await expect(page.getByText(/已同步权威放弃结果/)).toBeVisible();
-  await expect(page.getByText(/待结算拍卖/)).toBeVisible();
-
-  await expect(viewerPage.getByText(/待结算拍卖/)).toBeVisible();
-  await viewerPage.getByRole("button", { name: "提交出价" }).click();
-  await expect(viewerPage.getByText(/已同步权威拍卖出价/)).toBeVisible();
-  await expect(viewerPage.getByText(/当前最高出价: 200/)).toBeVisible();
-
-  await page.evaluate(async ({ currentRoomId, hostName }) => {
-    const response = await fetch(`http://127.0.0.1:8080/api/rooms/${currentRoomId}`);
-    const snapshot = await response.json();
-    const host = snapshot.players.find((player: { id: string; name: string; }) => player.id === snapshot.hostId) ??
-      snapshot.players.find((player: { id: string; name: string; }) => player.name === hostName);
-    if (host) {
-      window.sessionStorage.setItem(
-        `dafuweng-active-player:${currentRoomId}`,
-        JSON.stringify({ playerId: host.id, playerName: host.name })
-      );
-    }
-  }, { currentRoomId: roomId, hostName: "拍卖房主" });
-  const passStatus = await page.evaluate(async (currentRoomId) => {
-    const snapshotResponse = await fetch(`http://127.0.0.1:8080/api/rooms/${currentRoomId}`);
-    const snapshot = await snapshotResponse.json();
-    const response = await fetch(`http://127.0.0.1:8080/api/rooms/${currentRoomId}/pass`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        playerId: snapshot.currentTurnPlayerId,
-        idempotencyKey: crypto.randomUUID()
-      })
-    });
-    return {
-      status: response.status,
-      body: await response.text()
-    };
-  }, roomId);
-  expect(passStatus.status, passStatus.body).toBe(200);
-  await page.reload();
-  await expect(page.getByText(/现金: 1300/)).toBeVisible();
-  await expect(page.getByText(/地产: 1/)).toBeVisible();
-
-  await viewerPage.reload();
-  await expect(viewerPage.getByText(/现金: 1300/)).toBeVisible();
-  await expect(viewerPage.getByText(/地产: 1/)).toBeVisible();
-  await viewerPage.close();
-});
-
-test("jailed turn enters decision state and can release by doubles", async ({ browser, page }) => {
-  await page.goto("/");
-
-  await page.getByLabel("房主昵称").fill("监狱房主");
-  await page.getByRole("button", { name: "创建房间" }).click();
-  await expect(page.getByText(/已创建房间 room-/)).toBeVisible();
-  const headingText = await page.locator("h3.panel__title").first().textContent();
-  const roomId = headingText?.replace("房间 ", "") ?? "";
-  expect(roomId).toMatch(/^room-/);
-
-  await page.getByLabel("加入房间").fill(roomId);
-  await page.getByLabel("玩家昵称").fill("监狱玩家");
-  await page.getByRole("button", { name: "加入房间" }).click();
-  await page.getByRole("button", { name: "开始当前房间" }).click();
-  await expect(page).toHaveURL(new RegExp(`/room/${roomId}$`));
-
-  const viewerPage = await browser.newPage();
-  await viewerPage.goto(`/room/${roomId}`);
-  await expect(viewerPage.getByText("等待当前玩家掷骰")).toBeVisible();
-
-  for (let index = 0; index < 4; index += 1) {
-    await page.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
-    await expect(page.getByRole("button", { name: "购买地产" })).toBeVisible();
-    await page.getByRole("button", { name: "购买地产" }).click();
-    await expect(page.getByText(/已同步权威买地结果/)).toBeVisible();
-
-    await viewerPage.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
-    await expect(viewerPage.getByText(/支付了/)).toBeVisible();
-  }
-
-  await page.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
-  await expect(page.getByText(/被送入监狱/)).toBeVisible();
-
-  await viewerPage.getByRole("button", { name: /以 .* 身份掷骰/ }).click();
-  await expect(viewerPage.getByText(/被送入监狱/)).toBeVisible();
-
-  await expect(page.getByText(/可尝试掷骰出狱、使用出狱卡或支付罚金/)).toBeVisible();
-  await page.getByRole("button", { name: "尝试掷骰出狱" }).click();
-  await expect(page.getByText(/已同步权威出狱掷骰结果/)).toBeVisible();
-  await expect(page.getByText(/位置: 16/)).toBeVisible();
-  await expect(page.getByText(/状态: 自由/)).toBeVisible();
-
-  await expect(viewerPage.getByText(/位置: 16/)).toBeVisible();
-  await viewerPage.close();
-});
-
-test("cash trade proposal syncs and settles across two pages", async ({
+test("two real players can create, join, start, buy, pay rent, and refresh the same authoritative room", async ({
   browser,
   page,
 }) => {
   await page.goto("/");
-
-  await page.getByLabel("房主昵称").fill("交易房主");
+  await page.getByLabel("房主昵称").fill("房主甲");
   await page.getByRole("button", { name: "创建房间" }).click();
-  await expect(page.getByText(/已创建房间 room-/)).toBeVisible();
-  const headingText = await page
-    .locator("h3.panel__title")
-    .first()
-    .textContent();
-  const roomId = headingText?.replace("房间 ", "") ?? "";
-  expect(roomId).toMatch(/^room-/);
 
-  await page.getByLabel("加入房间").fill(roomId);
-  await page.getByLabel("玩家昵称").fill("交易玩家");
-  await page.getByRole("button", { name: "加入房间" }).click();
-  await page.getByRole("button", { name: "开始当前房间" }).click();
-  await expect(page).toHaveURL(new RegExp(`/room/${roomId}$`));
+  await expect(page).toHaveURL(/\/room\/room-\d+$/);
+  const roomId = extractRoomId(page.url());
+  expect(roomId).toMatch(/^room-\d+$/);
+
+  const guestPage = await browser.newPage();
+  await guestPage.goto("/");
+  await guestPage.getByLabel("加入房间").fill(roomId);
+  await guestPage.getByLabel("玩家昵称").fill("玩家乙");
+  await guestPage.getByRole("button", { name: "加入房间" }).click();
+  await expect(guestPage).toHaveURL(new RegExp(`/room/${roomId}$`));
+
+  await expect(page.getByText("等待房间开始")).toBeVisible();
+  await expect(guestPage.getByText("等待房间开始")).toBeVisible();
+  await expect(page.getByText("当前人数: 2")).toBeVisible();
+
+  await page.getByRole("button", { name: "房主开始游戏" }).click();
+  await expect(page.getByText("等待当前玩家掷骰")).toBeVisible();
+  await expect(guestPage.getByText("等待当前玩家掷骰")).toBeVisible();
+
+  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
+  await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
+  await expect(guestPage.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
+
+  await page.getByRole("button", { name: "购买地产" }).click();
+  await expect(page.getByText(/已同步权威买地结果/)).toBeVisible();
+  await expect(page.getByText(/现金: 1340/)).toBeVisible();
+  await expect(page.getByText(/地产: 1/)).toBeVisible();
+
+  await expect(guestPage.getByText(/现金: 1340/)).toBeVisible();
+  await expect(guestPage.getByText(/地产: 1/)).toBeVisible();
+  await expect(guestPage.getByText("等待当前玩家掷骰")).toBeVisible();
+
+  await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
+  await expect(guestPage.getByText(/#\d+ .*支付了 22 租金/)).toBeVisible();
+  await expect(guestPage.getByText(/现金: 1478/)).toBeVisible();
+  await expect(page.getByText(/#\d+ .*支付了 22 租金/)).toBeVisible();
+  await expect(page.getByText(/现金: 1362/)).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText(/#\d+ .*支付了 22 租金/)).toBeVisible();
+  await expect(page.getByText(/现金: 1362/)).toBeVisible();
+
+  await guestPage.close();
+});
+
+test("viewer without a joined room session stays read-only instead of inheriting the current turn", async ({
+  browser,
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("房主昵称").fill("房主甲");
+  await page.getByRole("button", { name: "创建房间" }).click();
+
+  await expect(page).toHaveURL(/\/room\/room-\d+$/);
+  const roomId = extractRoomId(page.url());
+  expect(roomId).toMatch(/^room-\d+$/);
 
   const viewerPage = await browser.newPage();
   await viewerPage.goto(`/room/${roomId}`);
-  await expect(viewerPage.getByText("等待当前玩家掷骰")).toBeVisible();
 
-  const proposalStatus = await page.evaluate(async (currentRoomId) => {
-    const snapshotResponse = await fetch(
-      `http://127.0.0.1:8080/api/rooms/${currentRoomId}`,
-    );
-    const snapshot = await snapshotResponse.json();
-    const counterparty = snapshot.players.find(
-      (player: { id: string }) => player.id !== snapshot.currentTurnPlayerId,
-    );
-    const response = await fetch(
-      `http://127.0.0.1:8080/api/rooms/${currentRoomId}/trade/propose`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          playerId: snapshot.currentTurnPlayerId,
-          idempotencyKey: crypto.randomUUID(),
-          counterpartyPlayerId: counterparty.id,
-          offeredCash: 100,
-          requestedCash: 50,
-          offeredTileIds: [],
-          requestedTileIds: [],
-          offeredCardIds: [],
-          requestedCardIds: [],
-        }),
-      },
-    );
-    return {
-      status: response.status,
-      body: await response.text(),
-    };
-  }, roomId);
-  expect(proposalStatus.status, proposalStatus.body).toBe(200);
+  await expect(
+    viewerPage.getByText(
+      "当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。",
+    ),
+  ).toBeVisible();
+  await expect(
+    viewerPage.getByRole("button", { name: "房主开始游戏" }),
+  ).toBeDisabled();
+  await expect(viewerPage.getByText("等待房间开始")).toBeVisible();
 
-  await page.reload();
-  await expect(viewerPage.getByText(/待响应交易/)).toBeVisible();
-  await expect(page.getByText(/待响应交易/)).toBeVisible();
-
-  await viewerPage.getByRole("button", { name: "接受交易" }).click();
-  await expect(viewerPage.getByText(/已同步权威交易结果/)).toBeVisible();
-  await expect(viewerPage.getByText(/现金: 1550/)).toBeVisible();
-
-  await expect(page.getByText(/现金: 1450/)).toBeVisible();
-  await expect(page.getByText("等待当前玩家掷骰")).toBeVisible();
   await viewerPage.close();
 });

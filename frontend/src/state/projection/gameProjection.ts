@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
-import type { PlayerState, ProjectionEvent, ProjectionSnapshot, RoomEventCatchUpResponse, RoomEventStreamEnvelope } from "@dafuweng/contracts";
-import { sampleProjection } from "@dafuweng/board-config";
+import type {
+  PlayerState,
+  ProjectionEvent,
+  ProjectionSnapshot,
+  RoomEventCatchUpResponse,
+  RoomEventStreamEnvelope,
+} from "@dafuweng/contracts";
 import { getRoom, getRoomEvents, subscribeRoomEventStream } from "../../network/roomApi";
 
 type PlayerSummary = Pick<
@@ -32,6 +37,28 @@ export type GameProjectionState = {
   refreshProjection: () => Promise<void>;
 };
 
+function createEmptyProjection(roomId: string): ProjectionSnapshot {
+  return {
+    roomId,
+    roomState: "lobby",
+    hostId: undefined,
+    snapshotVersion: 0,
+    eventSequence: 0,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "",
+    pendingActionLabel: "正在连接房间...",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [],
+    recentEvents: [],
+  };
+}
+
 export function toProjectionView(snapshot: ProjectionSnapshot): ProjectionView {
   const currentPlayer = snapshot.players.find(
     (player) => player.id === snapshot.currentTurnPlayerId
@@ -54,6 +81,12 @@ function mergeRecentEvents(existingEvents: ProjectionEvent[], nextEvents: Projec
   return [...byId.values()]
     .sort((left, right) => left.sequence - right.sequence)
     .slice(-10);
+}
+
+function requiresSnapshotRefresh(events: ProjectionEvent[]) {
+  return events.some(
+    (event) => event.type === "room-created" || event.type === "player-joined",
+  );
 }
 
 function updatePlayer(
@@ -816,7 +849,9 @@ export function applyStreamEnvelope(snapshot: ProjectionSnapshot, envelope: Room
 }
 
 export function useGameProjection(roomId: string): GameProjectionState {
-  const [projection, setProjection] = useState<ProjectionView>(toProjectionView(sampleProjection));
+  const [projection, setProjection] = useState<ProjectionView>(
+    toProjectionView(createEmptyProjection(roomId)),
+  );
   const [isFallback, setIsFallback] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -831,10 +866,7 @@ export function useGameProjection(roomId: string): GameProjectionState {
       setIsFallback(false);
       setIsLoading(false);
     } catch (requestError: unknown) {
-      setProjection(toProjectionView({
-        ...sampleProjection,
-        roomId
-      }));
+      setProjection(toProjectionView(createEmptyProjection(roomId)));
       setIsFallback(true);
       setIsLoading(false);
       setError(requestError instanceof Error ? requestError.message : "无法读取房间状态");
@@ -852,6 +884,11 @@ export function useGameProjection(roomId: string): GameProjectionState {
         return;
       }
 
+      if (!response.snapshot && requiresSnapshotRefresh(response.events)) {
+        await refreshProjection();
+        return;
+      }
+
       setProjection((current) => toProjectionView(applyCatchUpResponse(current, response)));
       setError(null);
     } catch {
@@ -866,10 +903,21 @@ export function useGameProjection(roomId: string): GameProjectionState {
   useEffect(() => {
     const unsubscribe = subscribeRoomEventStream(roomId, 0, {
       onEnvelope(envelope) {
+        if (
+          envelope.kind === "event" &&
+          requiresSnapshotRefresh([envelope.event])
+        ) {
+          void refreshProjection();
+          return;
+        }
+
         setProjection((current) => toProjectionView(applyStreamEnvelope(current, envelope)));
         setIsFallback(false);
         setIsLoading(false);
         setError(null);
+      },
+      onError() {
+        setError((current) => current ?? "实时同步中断，正在尝试恢复房间状态");
       }
     });
 

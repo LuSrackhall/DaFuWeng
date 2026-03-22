@@ -21,6 +21,10 @@ type fixedDiceRoller struct {
 	value [2]int
 }
 
+const playerTokenHeader = "X-DaFuWeng-Player-Token"
+
+var roomPlayerTokens = map[string]map[string]string{}
+
 func (roller fixedDiceRoller) Roll() [2]int {
 	return roller.value
 }
@@ -43,6 +47,35 @@ func newServiceForTestWithDice(t *testing.T, dice [2]int) (*rooms.Service, *http
 	return service, mux, dataPath
 }
 
+func rememberPlayerToken(roomID string, playerID string, token string) {
+	if roomPlayerTokens[roomID] == nil {
+		roomPlayerTokens[roomID] = map[string]string{}
+	}
+	roomPlayerTokens[roomID][playerID] = token
+}
+
+func playerToken(roomID string, playerID string) string {
+	return roomPlayerTokens[roomID][playerID]
+}
+
+func decodeRoomEntryResponse(t *testing.T, recorder *httptest.ResponseRecorder) (map[string]any, map[string]any) {
+	t.Helper()
+
+	var response map[string]any
+	_ = json.Unmarshal(recorder.Body.Bytes(), &response)
+	snapshot := response["snapshot"].(map[string]any)
+	session := response["session"].(map[string]any)
+	return snapshot, session
+}
+
+func authorizedRequest(method string, path string, payload []byte, token string) *http.Request {
+	request := httptest.NewRequest(method, path, bytes.NewReader(payload))
+	if token != "" {
+		request.Header.Set(playerTokenHeader, token)
+	}
+	return request
+}
+
 func createStartedRoom(t *testing.T, mux *http.ServeMux) (string, string, string, map[string]any) {
 	t.Helper()
 
@@ -54,10 +87,10 @@ func createStartedRoom(t *testing.T, mux *http.ServeMux) (string, string, string
 		t.Fatalf("expected created status, got %d", createRecorder.Code)
 	}
 
-	var created map[string]any
-	_ = json.Unmarshal(createRecorder.Body.Bytes(), &created)
+	created, hostSession := decodeRoomEntryResponse(t, createRecorder)
 	roomID := created["roomId"].(string)
 	hostID := created["hostId"].(string)
+	rememberPlayerToken(roomID, hostID, hostSession["playerToken"].(string))
 
 	joinPayload, _ := json.Marshal(map[string]string{"playerName": "第二位玩家"})
 	joinRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/join", bytes.NewReader(joinPayload))
@@ -67,13 +100,13 @@ func createStartedRoom(t *testing.T, mux *http.ServeMux) (string, string, string
 		t.Fatalf("expected join status 200, got %d", joinRecorder.Code)
 	}
 
-	var joined map[string]any
-	_ = json.Unmarshal(joinRecorder.Body.Bytes(), &joined)
+	joined, secondSession := decodeRoomEntryResponse(t, joinRecorder)
 	players := joined["players"].([]any)
 	secondPlayerID := players[len(players)-1].(map[string]any)["id"].(string)
+	rememberPlayerToken(roomID, secondPlayerID, secondSession["playerToken"].(string))
 
 	startPayload, _ := json.Marshal(map[string]string{"hostId": hostID})
-	startRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/start", bytes.NewReader(startPayload))
+	startRequest := authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/start", startPayload, playerToken(roomID, hostID))
 	startRecorder := httptest.NewRecorder()
 	mux.ServeHTTP(startRecorder, startRequest)
 	if startRecorder.Code != http.StatusOK {
@@ -85,15 +118,24 @@ func createStartedRoom(t *testing.T, mux *http.ServeMux) (string, string, string
 	return roomID, hostID, secondPlayerID, started
 }
 
-func TestDemoRoomSnapshotReturnsOK(t *testing.T) {
+func TestRoomCreateReturnsSessionEnvelope(t *testing.T) {
 	_, mux, _ := newServiceForTest(t)
-	request := httptest.NewRequest(http.MethodGet, "/api/rooms/demo-room", nil)
+	createPayload, _ := json.Marshal(map[string]string{"hostName": "测试房主"})
+	request := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(createPayload))
 	recorder := httptest.NewRecorder()
 
 	mux.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, recorder.Code)
+	}
+
+	snapshot, session := decodeRoomEntryResponse(t, recorder)
+	if snapshot["roomId"] == "" {
+		t.Fatalf("expected create response to include room snapshot")
+	}
+	if session["playerToken"] == "" {
+		t.Fatalf("expected create response to include player token")
 	}
 }
 
@@ -103,7 +145,7 @@ func TestPurchaseFlowCatchUpAndRestartRecovery(t *testing.T) {
 	startedSequence := int(started["eventSequence"].(float64))
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "roll-1"})
-	rollRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload))
+	rollRequest := authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID))
 	rollRecorder := httptest.NewRecorder()
 	mux.ServeHTTP(rollRecorder, rollRequest)
 	if rollRecorder.Code != http.StatusOK {
@@ -121,7 +163,7 @@ func TestPurchaseFlowCatchUpAndRestartRecovery(t *testing.T) {
 	}
 
 	purchasePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "buy-1"})
-	purchaseRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/purchase", bytes.NewReader(purchasePayload))
+	purchaseRequest := authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/purchase", purchasePayload, playerToken(roomID, hostID))
 	purchaseRecorder := httptest.NewRecorder()
 	mux.ServeHTTP(purchaseRecorder, purchaseRequest)
 	if purchaseRecorder.Code != http.StatusOK {
@@ -129,7 +171,7 @@ func TestPurchaseFlowCatchUpAndRestartRecovery(t *testing.T) {
 	}
 
 	secondPurchaseRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(secondPurchaseRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/purchase", bytes.NewReader(purchasePayload)))
+	mux.ServeHTTP(secondPurchaseRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/purchase", purchasePayload, playerToken(roomID, hostID)))
 	if secondPurchaseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected purchase replay status 200, got %d", secondPurchaseRecorder.Code)
 	}
@@ -193,10 +235,10 @@ func TestDeclineFlowRejectsWrongPlayer(t *testing.T) {
 	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "roll-1"})
-	mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(httptest.NewRecorder(), authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 
 	invalidDeclinePayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "decline-invalid"})
-	invalidDeclineRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/decline", bytes.NewReader(invalidDeclinePayload))
+	invalidDeclineRequest := authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/decline", invalidDeclinePayload, playerToken(roomID, secondPlayerID))
 	invalidDeclineRecorder := httptest.NewRecorder()
 	mux.ServeHTTP(invalidDeclineRecorder, invalidDeclineRequest)
 	if invalidDeclineRecorder.Code != http.StatusBadRequest {
@@ -204,7 +246,7 @@ func TestDeclineFlowRejectsWrongPlayer(t *testing.T) {
 	}
 
 	declinePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "decline-1"})
-	declineRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/decline", bytes.NewReader(declinePayload))
+	declineRequest := authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/decline", declinePayload, playerToken(roomID, hostID))
 	declineRecorder := httptest.NewRecorder()
 	mux.ServeHTTP(declineRecorder, declineRequest)
 	if declineRecorder.Code != http.StatusOK {
@@ -237,20 +279,20 @@ func TestAuctionBidAndPassSettlesWinner(t *testing.T) {
 	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "roll-1"})
-	mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(httptest.NewRecorder(), authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	declinePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "decline-1"})
-	mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/decline", bytes.NewReader(declinePayload)))
+	mux.ServeHTTP(httptest.NewRecorder(), authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/decline", declinePayload, playerToken(roomID, hostID)))
 
 	bidPayload, _ := json.Marshal(map[string]any{"playerId": secondPlayerID, "idempotencyKey": "bid-1", "amount": 200})
 	bidRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(bidRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/bid", bytes.NewReader(bidPayload)))
+	mux.ServeHTTP(bidRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/bid", bidPayload, playerToken(roomID, secondPlayerID)))
 	if bidRecorder.Code != http.StatusOK {
 		t.Fatalf("expected auction bid status 200, got %d", bidRecorder.Code)
 	}
 
 	passPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "pass-1"})
 	passRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(passRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/pass", bytes.NewReader(passPayload)))
+	mux.ServeHTTP(passRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/pass", passPayload, playerToken(roomID, hostID)))
 	if passRecorder.Code != http.StatusOK {
 		t.Fatalf("expected auction pass status 200, got %d", passRecorder.Code)
 	}
@@ -279,12 +321,12 @@ func TestOwnedTileRentSettlement(t *testing.T) {
 	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "roll-1"})
-	mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(httptest.NewRecorder(), authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	purchasePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "buy-1"})
-	mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/purchase", bytes.NewReader(purchasePayload)))
+	mux.ServeHTTP(httptest.NewRecorder(), authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/purchase", purchasePayload, playerToken(roomID, hostID)))
 
 	secondRollPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "roll-2"})
-	secondRollRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(secondRollPayload))
+	secondRollRequest := authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", secondRollPayload, playerToken(roomID, secondPlayerID))
 	secondRollRecorder := httptest.NewRecorder()
 	mux.ServeHTTP(secondRollRecorder, secondRollRequest)
 	if secondRollRecorder.Code != http.StatusOK {
@@ -325,8 +367,8 @@ func TestRoomStreamPublishesRentSettlement(t *testing.T) {
 
 	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
 
-	postJSON(t, server.URL+"/api/rooms/"+roomID+"/roll", map[string]string{"playerId": hostID, "idempotencyKey": "roll-1"})
-	purchased := postJSON(t, server.URL+"/api/rooms/"+roomID+"/purchase", map[string]string{"playerId": hostID, "idempotencyKey": "buy-1"})
+	postJSON(t, server.URL+"/api/rooms/"+roomID+"/roll", map[string]string{"playerId": hostID, "idempotencyKey": "roll-1"}, playerToken(roomID, hostID))
+	purchased := postJSON(t, server.URL+"/api/rooms/"+roomID+"/purchase", map[string]string{"playerId": hostID, "idempotencyKey": "buy-1"}, playerToken(roomID, hostID))
 	afterSequence := int(purchased["eventSequence"].(float64))
 
 	streamResponse, err := http.Get(server.URL + "/api/rooms/" + roomID + "/stream?afterSequence=" + strconv.Itoa(afterSequence))
@@ -367,7 +409,7 @@ func TestRoomStreamPublishesRentSettlement(t *testing.T) {
 		streamError <- fmt.Errorf("stream closed before rent event")
 	}()
 
-	postJSON(t, server.URL+"/api/rooms/"+roomID+"/roll", map[string]string{"playerId": secondPlayerID, "idempotencyKey": "roll-2"})
+	postJSON(t, server.URL+"/api/rooms/"+roomID+"/roll", map[string]string{"playerId": secondPlayerID, "idempotencyKey": "roll-2"}, playerToken(roomID, secondPlayerID))
 
 	select {
 	case event := <-streamEvent:
@@ -390,7 +432,7 @@ func TestCommunityTileResolvesDeterministicCardEffect(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "roll-card"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected card roll status 200, got %d", rollRecorder.Code)
 	}
@@ -424,7 +466,7 @@ func TestChanceRelativeMoveCardChainsIntoTargetTile(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "chance-relative"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected relative move card roll status 200, got %d", rollRecorder.Code)
 	}
@@ -455,7 +497,7 @@ func TestChanceNearestRailwayCardOffersTargetTile(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "chance-railway"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected nearest railway card roll status 200, got %d", rollRecorder.Code)
 	}
@@ -489,7 +531,7 @@ func TestCommunityRepairFeeCanEnterCardDeficit(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "repair-deficit"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected repair fee card roll status 200, got %d", rollRecorder.Code)
 	}
@@ -514,7 +556,7 @@ func TestGoToJailAndPayFineFlow(t *testing.T) {
 	rollFor := func(playerID string, key string) map[string]any {
 		payload, _ := json.Marshal(map[string]string{"playerId": playerID, "idempotencyKey": key})
 		recorder := httptest.NewRecorder()
-		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(payload)))
+		mux.ServeHTTP(recorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", payload, playerToken(roomID, playerID)))
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected roll status 200, got %d", recorder.Code)
 		}
@@ -540,7 +582,7 @@ func TestGoToJailAndPayFineFlow(t *testing.T) {
 
 	releasePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "release-1"})
 	releaseRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(releaseRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/jail-release", bytes.NewReader(releasePayload)))
+	mux.ServeHTTP(releaseRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/jail-release", releasePayload, playerToken(roomID, hostID)))
 	if releaseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected jail release status 200, got %d", releaseRecorder.Code)
 	}
@@ -565,7 +607,7 @@ func TestChanceDeckCanHoldAndUseJailCard(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "chance-card"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected chance card roll status 200, got %d", rollRecorder.Code)
 	}
@@ -596,7 +638,7 @@ func TestChanceDeckCanHoldAndUseJailCard(t *testing.T) {
 
 	usePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "use-card"})
 	useRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(useRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/jail-card", bytes.NewReader(usePayload)))
+	mux.ServeHTTP(useRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/jail-card", usePayload, playerToken(roomID, hostID)))
 	if useRecorder.Code != http.StatusOK {
 		t.Fatalf("expected jail card use status 200, got %d", useRecorder.Code)
 	}
@@ -629,7 +671,7 @@ func TestJailRollAttemptFailureIncrementsCounter(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "jail-roll-1"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/jail-roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/jail-roll", rollPayload, playerToken(roomID, hostID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected jail roll status 200, got %d", rollRecorder.Code)
 	}
@@ -645,10 +687,18 @@ func TestJailRollAttemptFailureIncrementsCounter(t *testing.T) {
 	}
 }
 
-func postJSON(t *testing.T, url string, payload map[string]string) map[string]any {
+func postJSON(t *testing.T, url string, payload map[string]string, token string) map[string]any {
 	t.Helper()
 	raw, _ := json.Marshal(payload)
-	response, err := http.Post(url, "application/json", bytes.NewReader(raw))
+	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("expected request construction to succeed: %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		request.Header.Set(playerTokenHeader, token)
+	}
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatalf("expected post request to succeed: %v", err)
 	}
@@ -709,7 +759,7 @@ func TestTaxTileDeductsCashWhenAffordable(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "tax-roll"})
 	recorder := httptest.NewRecorder()
-	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(recorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected tax roll status 200, got %d", recorder.Code)
 	}
@@ -738,7 +788,7 @@ func TestTaxDeficitCanBeResolvedByMortgage(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "deficit-roll"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected deficit roll status 200, got %d", rollRecorder.Code)
 	}
@@ -753,7 +803,7 @@ func TestTaxDeficitCanBeResolvedByMortgage(t *testing.T) {
 
 	mortgagePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "mortgage-1", "tileId": "tile-39"})
 	mortgageRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(mortgageRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/mortgage", bytes.NewReader(mortgagePayload)))
+	mux.ServeHTTP(mortgageRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/mortgage", mortgagePayload, playerToken(roomID, hostID)))
 	if mortgageRecorder.Code != http.StatusOK {
 		t.Fatalf("expected mortgage status 200, got %d", mortgageRecorder.Code)
 	}
@@ -787,11 +837,11 @@ func TestTaxDeficitCanEndInBankruptcy(t *testing.T) {
 	mux = reloadMuxWithDice(t, dataPath, [2]int{2, 2})
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "bankrupt-roll"})
-	mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(httptest.NewRecorder(), authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, hostID)))
 
 	bankruptcyPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "bankrupt-1"})
 	bankruptcyRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(bankruptcyRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bytes.NewReader(bankruptcyPayload)))
+	mux.ServeHTTP(bankruptcyRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bankruptcyPayload, playerToken(roomID, hostID)))
 	if bankruptcyRecorder.Code != http.StatusOK {
 		t.Fatalf("expected bankruptcy status 200, got %d", bankruptcyRecorder.Code)
 	}
@@ -823,14 +873,14 @@ func TestBuildImprovementAndImprovedRent(t *testing.T) {
 
 	buildPayload1, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "build-1", "tileId": "tile-1"})
 	buildRecorder1 := httptest.NewRecorder()
-	mux.ServeHTTP(buildRecorder1, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/build", bytes.NewReader(buildPayload1)))
+	mux.ServeHTTP(buildRecorder1, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/build", buildPayload1, playerToken(roomID, hostID)))
 	if buildRecorder1.Code != http.StatusOK {
 		t.Fatalf("expected first build status 200, got %d", buildRecorder1.Code)
 	}
 
 	buildPayload2, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "build-2", "tileId": "tile-3"})
 	buildRecorder2 := httptest.NewRecorder()
-	mux.ServeHTTP(buildRecorder2, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/build", bytes.NewReader(buildPayload2)))
+	mux.ServeHTTP(buildRecorder2, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/build", buildPayload2, playerToken(roomID, hostID)))
 	if buildRecorder2.Code != http.StatusOK {
 		t.Fatalf("expected second build status 200, got %d", buildRecorder2.Code)
 	}
@@ -843,7 +893,7 @@ func TestBuildImprovementAndImprovedRent(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-1"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, secondPlayerID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected improved rent roll status 200, got %d", rollRecorder.Code)
 	}
@@ -881,7 +931,7 @@ func TestImprovedRentCanEnterDeficitRecovery(t *testing.T) {
 
 	rollPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-deficit"})
 	rollRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(rollRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", bytes.NewReader(rollPayload)))
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, secondPlayerID)))
 	if rollRecorder.Code != http.StatusOK {
 		t.Fatalf("expected improved rent deficit roll status 200, got %d", rollRecorder.Code)
 	}
@@ -922,7 +972,7 @@ func TestBankruptcyTransfersAssetsToPlayerCreditor(t *testing.T) {
 
 	bankruptcyPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "player-creditor-bankruptcy"})
 	bankruptcyRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(bankruptcyRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bytes.NewReader(bankruptcyPayload)))
+	mux.ServeHTTP(bankruptcyRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bankruptcyPayload, playerToken(roomID, hostID)))
 	if bankruptcyRecorder.Code != http.StatusOK {
 		t.Fatalf("expected player creditor bankruptcy status 200, got %d", bankruptcyRecorder.Code)
 	}
@@ -981,7 +1031,7 @@ func TestBankruptcyReturnsHeldCardsToDeckForBankCreditor(t *testing.T) {
 
 	bankruptcyPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "bank-creditor-bankruptcy"})
 	bankruptcyRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(bankruptcyRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bytes.NewReader(bankruptcyPayload)))
+	mux.ServeHTTP(bankruptcyRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bankruptcyPayload, playerToken(roomID, hostID)))
 	if bankruptcyRecorder.Code != http.StatusOK {
 		t.Fatalf("expected bank creditor bankruptcy status 200, got %d", bankruptcyRecorder.Code)
 	}
@@ -1018,7 +1068,7 @@ func TestCashTradeProposalAndAcceptance(t *testing.T) {
 		"requestedCardIds": []string{},
 	})
 	proposalRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(proposalRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/trade/propose", bytes.NewReader(proposalPayload)))
+	mux.ServeHTTP(proposalRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/trade/propose", proposalPayload, playerToken(roomID, hostID)))
 	if proposalRecorder.Code != http.StatusOK {
 		t.Fatalf("expected trade proposal status 200, got %d", proposalRecorder.Code)
 	}
@@ -1033,7 +1083,7 @@ func TestCashTradeProposalAndAcceptance(t *testing.T) {
 
 	acceptPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "trade-accept-1"})
 	acceptRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(acceptRecorder, httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/trade/accept", bytes.NewReader(acceptPayload)))
+	mux.ServeHTTP(acceptRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/trade/accept", acceptPayload, playerToken(roomID, secondPlayerID)))
 	if acceptRecorder.Code != http.StatusOK {
 		t.Fatalf("expected trade acceptance status 200, got %d", acceptRecorder.Code)
 	}

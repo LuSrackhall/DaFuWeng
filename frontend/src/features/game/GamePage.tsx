@@ -1,7 +1,8 @@
 import { sampleBoard } from "@dafuweng/board-config";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useParams } from "react-router-dom";
-import { acceptTrade, attemptJailRoll, buildImprovement, declareBankruptcy, declineProperty, mortgageProperty, passAuction, payJailFine, proposeTrade, purchaseProperty, rejectTrade, rollDice, sellImprovement, submitAuctionBid, useJailCard } from "../../network/roomApi";
+import { acceptTrade, attemptJailRoll, buildImprovement, declareBankruptcy, declineProperty, mortgageProperty, passAuction, payJailFine, proposeTrade, purchaseProperty, rejectTrade, rollDice, sellImprovement, startRoom, submitAuctionBid, useJailCard } from "../../network/roomApi";
 import { BoardScene } from "../../scene/board/BoardScene";
 import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
@@ -9,7 +10,7 @@ import { usePresentationState } from "../../state/presentation/gamePresentation"
 
 export function GamePage() {
   const params = useParams();
-  const roomId = params.roomId ?? "demo-room";
+  const roomId = params.roomId ?? "";
   const { projection, isFallback, isLoading, error, applySnapshot, refreshProjection } = useGameProjection(roomId);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [auctionBid, setAuctionBid] = useState("200");
@@ -23,57 +24,71 @@ export function GamePage() {
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const presentation = usePresentationState(projection.currentTurnPlayerId, projection.players);
-  const activePlayer = getActivePlayer(roomId) ?? {
-    playerId: projection.currentTurnPlayerId,
-    playerName: projection.currentTurnPlayerName
-  };
+  const activePlayer = getActivePlayer(roomId);
+  const activePlayerId = activePlayer?.playerId ?? "";
+  const activePlayerName = activePlayer?.playerName ?? "观战者";
+  const isSpectator = !activePlayer;
+  const canStartRoom = !isFallback
+    && !isLoading
+    && !isSubmittingCommand
+    && projection.roomState === "lobby"
+    && activePlayerId === projection.hostId
+    && projection.players.length >= 2;
   const canRoll = !isFallback
     && !isLoading
     && !isSubmittingCommand
+    && projection.roomState === "in-game"
     && projection.turnState === "awaiting-roll"
-    && activePlayer.playerId === projection.currentTurnPlayerId;
+    && activePlayerId === projection.currentTurnPlayerId;
   const canResolveProperty = !isFallback
     && !isLoading
     && !isSubmittingCommand
+    && projection.roomState === "in-game"
     && projection.turnState === "awaiting-property-decision"
     && projection.pendingProperty !== null
-    && activePlayer.playerId === projection.currentTurnPlayerId;
+    && activePlayerId === projection.currentTurnPlayerId;
   const canAuction = !isFallback
     && !isLoading
     && !isSubmittingCommand
+    && projection.roomState === "in-game"
     && projection.turnState === "awaiting-auction"
     && projection.pendingAuction !== null
-    && activePlayer.playerId === projection.currentTurnPlayerId;
+    && activePlayerId === projection.currentTurnPlayerId;
   const canResolveJail = !isFallback
     && !isLoading
     && !isSubmittingCommand
+    && projection.roomState === "in-game"
     && projection.turnState === "awaiting-jail-decision"
-    && activePlayer.playerId === projection.currentTurnPlayerId;
+    && activePlayerId === projection.currentTurnPlayerId;
   const canResolveDeficit = !isFallback
     && !isLoading
     && !isSubmittingCommand
+    && projection.roomState === "in-game"
     && projection.turnState === "awaiting-deficit-resolution"
     && projection.pendingPayment !== null
-    && activePlayer.playerId === projection.currentTurnPlayerId;
+    && activePlayerId === projection.currentTurnPlayerId;
   const canManageImprovements = !isFallback
     && !isLoading
     && !isSubmittingCommand
+    && projection.roomState === "in-game"
     && projection.turnState === "awaiting-roll"
-    && activePlayer.playerId === projection.currentTurnPlayerId;
+    && activePlayerId === projection.currentTurnPlayerId;
   const canProposeTrade = !isFallback
     && !isLoading
     && !isSubmittingCommand
+    && projection.roomState === "in-game"
     && projection.turnState === "awaiting-roll"
     && projection.pendingTrade === null
-    && activePlayer.playerId === projection.currentTurnPlayerId;
+    && activePlayerId === projection.currentTurnPlayerId;
   const canResolveTrade = !isFallback
     && !isLoading
     && !isSubmittingCommand
+    && projection.roomState === "in-game"
     && projection.turnState === "awaiting-trade-response"
     && projection.pendingTrade !== null
-    && activePlayer.playerId === projection.pendingTrade.counterpartyPlayerId;
+    && activePlayerId === projection.pendingTrade.counterpartyPlayerId;
 
-  const otherPlayers = projection.players.filter((player) => player.id !== activePlayer.playerId && !player.isBankrupt);
+  const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
@@ -81,17 +96,38 @@ export function GamePage() {
     }
   }, [otherPlayers, tradeCounterpartyId]);
 
+  async function handleStartRoom() {
+    if (!projection.hostId) {
+      setActionMessage("当前房间缺少房主信息。");
+      return;
+    }
+
+    setIsSubmittingCommand(true);
+    setActionMessage(null);
+
+    try {
+      const snapshot = await startRoom(roomId, { hostId: projection.hostId });
+      applySnapshot(snapshot);
+      setActionMessage("房主已开始本局。所有玩家现在会看到同一权威对局。");
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "开始房间失败");
+      await refreshProjection();
+    } finally {
+      setIsSubmittingCommand(false);
+    }
+  }
+
   async function handleRollDice() {
     setIsSubmittingCommand(true);
     setActionMessage(null);
 
     try {
       const snapshot = await rollDice(roomId, {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
-      setActionMessage(`${activePlayer.playerName} 的权威掷骰结果已同步。`);
+      setActionMessage(`${activePlayerName} 的权威掷骰结果已同步。`);
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "掷骰失败");
       await refreshProjection();
@@ -106,7 +142,7 @@ export function GamePage() {
 
     try {
       const request = {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID()
       };
       const snapshot = decision === "purchase"
@@ -128,7 +164,7 @@ export function GamePage() {
 
     try {
       const request = {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID()
       };
       const snapshot = action === "bid"
@@ -150,7 +186,7 @@ export function GamePage() {
 
     try {
       const snapshot = await payJailFine(roomId, {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
@@ -169,7 +205,7 @@ export function GamePage() {
 
     try {
       const snapshot = await attemptJailRoll(roomId, {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
@@ -188,7 +224,7 @@ export function GamePage() {
 
     try {
       const snapshot = await useJailCard(roomId, {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
@@ -208,7 +244,7 @@ export function GamePage() {
 
     try {
       const snapshot = await mortgageProperty(roomId, {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID(),
         tileId
       });
@@ -229,7 +265,7 @@ export function GamePage() {
 
     try {
       const snapshot = await declareBankruptcy(roomId, {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
@@ -248,7 +284,7 @@ export function GamePage() {
 
     try {
       const request = {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID(),
         tileId
       };
@@ -275,7 +311,7 @@ export function GamePage() {
 
     try {
       const snapshot = await proposeTrade(roomId, {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID(),
         counterpartyPlayerId: tradeCounterpartyId,
         offeredCash: Number(tradeOfferedCash) || 0,
@@ -301,7 +337,7 @@ export function GamePage() {
 
     try {
       const payload = {
-        playerId: activePlayer.playerId,
+        playerId: activePlayerId,
         idempotencyKey: crypto.randomUUID()
       };
       const snapshot = action === "accept"
@@ -317,7 +353,7 @@ export function GamePage() {
     }
   }
 
-  const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayer.playerId);
+  const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
   const mortgageCandidates = (activeProjectionPlayer?.properties ?? []).filter(
     (tileId) => !(activeProjectionPlayer?.mortgagedProperties ?? []).includes(tileId)
   );
@@ -341,6 +377,26 @@ export function GamePage() {
         <h3 className="panel__title">房间 {projection.roomId}</h3>
         {error ? <p className="panel__subtitle">{error}</p> : null}
         {actionMessage ? <p className="panel__subtitle">{actionMessage}</p> : null}
+        {isSpectator ? <p className="panel__subtitle">当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。</p> : null}
+        {isFallback ? <p className="panel__subtitle">房间尚未成功连接到权威后端，当前仅显示加载或失败状态。</p> : null}
+
+        {projection.roomState === "lobby" ? (
+          <section className="player-card">
+            <strong>等待房间开始</strong>
+            <span>房间码: {projection.roomId}</span>
+            <span>房主: {projection.players.find((player) => player.id === projection.hostId)?.name ?? "未知房主"}</span>
+            <span>当前人数: {projection.players.length}</span>
+            <span>{projection.players.length >= 2 ? "已满足开局最少人数" : "至少还需要 1 名玩家加入"}</span>
+            <div className="lobby__actions">
+              <button className="button button--primary" type="button" onClick={handleStartRoom} disabled={!canStartRoom}>
+                {isSubmittingCommand && canStartRoom ? "开始中..." : "房主开始游戏"}
+              </button>
+              <Link className="button button--secondary" to="/">
+                返回大厅
+              </Link>
+            </div>
+          </section>
+        ) : null}
         <div className="status-grid">
           <article className="status-card">
             <strong>当前回合</strong>
@@ -370,7 +426,7 @@ export function GamePage() {
 
         <div className="lobby__actions">
           <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
-            {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayer.playerName} 身份掷骰`}
+            {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayerName} 身份掷骰`}
           </button>
           <button className="button button--secondary" type="button" onClick={handleJailRelease} disabled={!canResolveJail}>
             支付 50 罚金

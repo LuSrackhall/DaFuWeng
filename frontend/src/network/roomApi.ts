@@ -13,6 +13,7 @@ import type {
   PurchasePropertyRequest,
   ResolveTradeRequest,
   RollDiceRequest,
+  RoomEntryResponse,
   RoomEventCatchUpResponse,
   RoomEventStreamEnvelope,
   StartGameRequest,
@@ -20,8 +21,10 @@ import type {
   SellImprovementRequest,
   UseJailCardRequest,
 } from "@dafuweng/contracts";
+import { getActivePlayer } from "../state/projection/activePlayer";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
+const PLAYER_TOKEN_HEADER = "X-DaFuWeng-Player-Token";
 
 function resolveApiBaseUrl() {
   return import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL;
@@ -57,6 +60,21 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+function withPlayerSession(roomId: string, init?: RequestInit): RequestInit {
+  const activePlayer = getActivePlayer(roomId);
+  const headers = {
+    ...(init?.headers ?? {}),
+    ...(activePlayer?.playerToken
+      ? { [PLAYER_TOKEN_HEADER]: activePlayer.playerToken }
+      : {}),
+  };
+
+  return {
+    ...init,
+    headers,
+  };
+}
+
 export function getRoom(roomId: string) {
   return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}`);
 }
@@ -66,129 +84,177 @@ export function getRoomEvents(roomId: string, afterSequence: number) {
 }
 
 export function createRoom(payload: CreateRoomRequest) {
-  return requestJson<ProjectionSnapshot>("/api/rooms", {
+  return requestJson<RoomEntryResponse>("/api/rooms", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
 export function joinRoom(roomId: string, payload: JoinRoomRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/join`, {
+  return requestJson<RoomEntryResponse>(`/api/rooms/${roomId}/join`, {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
 export function startRoom(roomId: string, payload: StartGameRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/start`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/start`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function rollDice(roomId: string, payload: RollDiceRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/roll`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/roll`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function purchaseProperty(roomId: string, payload: PurchasePropertyRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/purchase`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/purchase`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function declineProperty(roomId: string, payload: DeclinePropertyRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/decline`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/decline`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function submitAuctionBid(roomId: string, payload: SubmitAuctionBidRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/bid`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/bid`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function passAuction(roomId: string, payload: PassAuctionRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/pass`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/pass`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function payJailFine(roomId: string, payload: PayJailFineRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/jail-release`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/jail-release`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function attemptJailRoll(roomId: string, payload: AttemptJailRollRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/jail-roll`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/jail-roll`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function useJailCard(roomId: string, payload: UseJailCardRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/jail-card`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/jail-card`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function mortgageProperty(roomId: string, payload: MortgagePropertyRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/mortgage`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/mortgage`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function declareBankruptcy(roomId: string, payload: DeclareBankruptcyRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/bankruptcy`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/bankruptcy`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function buildImprovement(roomId: string, payload: BuildImprovementRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/build`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/build`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function sellImprovement(roomId: string, payload: SellImprovementRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/sell`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/sell`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function proposeTrade(roomId: string, payload: ProposeTradeRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/trade/propose`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/trade/propose`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function acceptTrade(roomId: string, payload: ResolveTradeRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/trade/accept`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/trade/accept`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function rejectTrade(roomId: string, payload: ResolveTradeRequest) {
-  return requestJson<ProjectionSnapshot>(`/api/rooms/${roomId}/trade/reject`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return requestJson<ProjectionSnapshot>(
+    `/api/rooms/${roomId}/trade/reject`,
+    withPlayerSession(roomId, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export function subscribeRoomEventStream(roomId: string, afterSequence: number, handlers: StreamHandlers) {

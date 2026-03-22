@@ -29,6 +29,7 @@ type PersistedRoomSnapshot struct {
 	CommunityDeckJSON   []byte
 	LastRoll            [2]int
 	PlayersJSON         []byte
+	PlayerSessionsJSON  []byte
 }
 
 type PersistedRoomEvent struct {

@@ -200,6 +200,17 @@ export type JoinRoomRequest = {
   playerName: string;
 };
 
+export type RoomPlayerSession = {
+  playerId: string;
+  playerName: string;
+  playerToken: string;
+};
+
+export type RoomEntryResponse = {
+  snapshot: ProjectionSnapshot;
+  session: RoomPlayerSession;
+};
+
 export type StartGameCommand = {
   kind: "start-game";
   roomId: string;

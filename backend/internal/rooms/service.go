@@ -1,6 +1,8 @@
 package rooms
 
 import (
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -21,6 +23,7 @@ const (
 	jailTileIndex       = 10
 	jailFine            = 50
 	taxPaymentAmount    = 200
+	playerTokenHeader   = "X-DaFuWeng-Player-Token"
 )
 
 var boardLabels = []string{
@@ -253,6 +256,17 @@ type RoomEventCatchUpResponse struct {
 	Snapshot       *RoomResponse `json:"snapshot"`
 }
 
+type RoomPlayerSession struct {
+	PlayerID    string `json:"playerId"`
+	PlayerName  string `json:"playerName"`
+	PlayerToken string `json:"playerToken"`
+}
+
+type RoomEntryResponse struct {
+	Snapshot RoomResponse       `json:"snapshot"`
+	Session  RoomPlayerSession  `json:"session"`
+}
+
 type roomStreamEnvelope struct {
 	Kind     string        `json:"kind"`
 	Event    *Event        `json:"event,omitempty"`
@@ -345,6 +359,7 @@ type roomRecord struct {
 	CommunityDeck       cardDeckState
 	LastRoll            [2]int
 	Players             []Player
+	PlayerSessions      map[string]string
 	RecentEvents        []Event
 }
 
@@ -455,7 +470,6 @@ func NewServiceWithDependencies(store *pocketbase.Client, diceRoller DiceRoller)
 		nextPlayerID: 1,
 		streamSubscribers: make(map[string]map[int]chan roomStreamEnvelope),
 	}
-	service.seedDemoRoom()
 	service.syncCounters()
 	return service
 }
@@ -487,8 +501,8 @@ func (service *Service) HandleRooms(writer http.ResponseWriter, request *http.Re
 		return
 	}
 
-	room := service.createRoom(hostName)
-	writeJSON(writer, http.StatusCreated, room.toResponse())
+	room, session := service.createRoom(hostName)
+	writeJSON(writer, http.StatusCreated, RoomEntryResponse{Snapshot: room.toResponse(), Session: session})
 }
 
 func (service *Service) HandleRoomRoute(writer http.ResponseWriter, request *http.Request) {
@@ -685,19 +699,23 @@ func (service *Service) handleJoinRoom(writer http.ResponseWriter, request *http
 		return
 	}
 
-	room, err := service.joinRoom(roomID, strings.TrimSpace(payload.PlayerName))
+	room, session, err := service.joinRoom(roomID, strings.TrimSpace(payload.PlayerName))
 	if err != nil {
 		writeError(writer, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	writeJSON(writer, http.StatusOK, room.toResponse())
+	writeJSON(writer, http.StatusOK, RoomEntryResponse{Snapshot: room.toResponse(), Session: session})
 }
 
 func (service *Service) handleStartRoom(writer http.ResponseWriter, request *http.Request, roomID string) {
 	var payload StartGameRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid start payload")
+		return
+	}
+	if err := service.validateHostSession(roomID, strings.TrimSpace(payload.HostID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -716,6 +734,10 @@ func (service *Service) handleRollDice(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, "invalid roll payload")
 		return
 	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
+		return
+	}
 
 	room, err := service.rollDice(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
 	if err != nil {
@@ -730,6 +752,10 @@ func (service *Service) handlePurchaseProperty(writer http.ResponseWriter, reque
 	var payload PropertyDecisionRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid purchase payload")
+		return
+	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -748,6 +774,10 @@ func (service *Service) handleDeclineProperty(writer http.ResponseWriter, reques
 		writeError(writer, http.StatusBadRequest, "invalid decline payload")
 		return
 	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
+		return
+	}
 
 	room, err := service.declineProperty(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
 	if err != nil {
@@ -762,6 +792,10 @@ func (service *Service) handleAuctionBid(writer http.ResponseWriter, request *ht
 	var payload AuctionBidRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid bid payload")
+		return
+	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -780,6 +814,10 @@ func (service *Service) handleAuctionPass(writer http.ResponseWriter, request *h
 		writeError(writer, http.StatusBadRequest, "invalid auction pass payload")
 		return
 	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
+		return
+	}
 
 	room, err := service.passAuction(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
 	if err != nil {
@@ -794,6 +832,10 @@ func (service *Service) handleJailRelease(writer http.ResponseWriter, request *h
 	var payload PropertyDecisionRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid jail release payload")
+		return
+	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -812,6 +854,10 @@ func (service *Service) handleAttemptJailRoll(writer http.ResponseWriter, reques
 		writeError(writer, http.StatusBadRequest, "invalid jail roll payload")
 		return
 	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
+		return
+	}
 
 	room, err := service.attemptJailRoll(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
 	if err != nil {
@@ -826,6 +872,10 @@ func (service *Service) handleUseJailCard(writer http.ResponseWriter, request *h
 	var payload PropertyDecisionRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid jail card payload")
+		return
+	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -844,6 +894,10 @@ func (service *Service) handleMortgageProperty(writer http.ResponseWriter, reque
 		writeError(writer, http.StatusBadRequest, "invalid mortgage payload")
 		return
 	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
+		return
+	}
 
 	room, err := service.mortgageProperty(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey), strings.TrimSpace(payload.TileID))
 	if err != nil {
@@ -858,6 +912,10 @@ func (service *Service) handleDeclareBankruptcy(writer http.ResponseWriter, requ
 	var payload PropertyDecisionRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid bankruptcy payload")
+		return
+	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -876,6 +934,10 @@ func (service *Service) handleBuildImprovement(writer http.ResponseWriter, reque
 		writeError(writer, http.StatusBadRequest, "invalid build payload")
 		return
 	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
+		return
+	}
 
 	room, err := service.buildImprovement(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey), strings.TrimSpace(payload.TileID))
 	if err != nil {
@@ -890,6 +952,10 @@ func (service *Service) handleSellImprovement(writer http.ResponseWriter, reques
 	var payload MortgagePropertyRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid sell payload")
+		return
+	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -908,6 +974,10 @@ func (service *Service) handleProposeTrade(writer http.ResponseWriter, request *
 		writeError(writer, http.StatusBadRequest, "invalid trade proposal payload")
 		return
 	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
+		return
+	}
 
 	room, err := service.proposeTrade(roomID, payload)
 	if err != nil {
@@ -922,6 +992,10 @@ func (service *Service) handleAcceptTrade(writer http.ResponseWriter, request *h
 	var payload TradeResolutionRequest
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeError(writer, http.StatusBadRequest, "invalid trade resolution payload")
+		return
+	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -940,6 +1014,10 @@ func (service *Service) handleRejectTrade(writer http.ResponseWriter, request *h
 		writeError(writer, http.StatusBadRequest, "invalid trade resolution payload")
 		return
 	}
+	if err := service.validatePlayerSession(roomID, strings.TrimSpace(payload.PlayerID), playerTokenFromRequest(request)); err != nil {
+		writeError(writer, http.StatusUnauthorized, err.Error())
+		return
+	}
 
 	room, err := service.rejectTrade(roomID, strings.TrimSpace(payload.PlayerID), strings.TrimSpace(payload.IdempotencyKey))
 	if err != nil {
@@ -950,13 +1028,14 @@ func (service *Service) handleRejectTrade(writer http.ResponseWriter, request *h
 	writeJSON(writer, http.StatusOK, room.toResponse())
 }
 
-func (service *Service) createRoom(hostName string) roomRecord {
+func (service *Service) createRoom(hostName string) (roomRecord, RoomPlayerSession) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
 	roomID := fmt.Sprintf("room-%03d", service.nextRoomID)
 	service.nextRoomID++
 	hostPlayer := service.newPlayer(hostName)
+	hostToken := newPlayerToken()
 	hostPlayer.Ready = true
 
 	room := roomRecord{
@@ -975,10 +1054,11 @@ func (service *Service) createRoom(hostName string) roomRecord {
 		CommunityDeck:       newDeckState(communityDeckOrder),
 		LastRoll:            [2]int{0, 0},
 		Players:             []Player{hostPlayer},
+		PlayerSessions:      map[string]string{hostPlayer.ID: hostToken},
 	}
 
 	service.commitRoomMutation(&room, []eventDraft{{Type: "room-created", Summary: fmt.Sprintf("%s 创建了房间。", hostPlayer.Name)}})
-	return room
+	return room, RoomPlayerSession{PlayerID: hostPlayer.ID, PlayerName: hostPlayer.Name, PlayerToken: hostToken}
 }
 
 func (service *Service) getRoom(roomID string) (roomRecord, bool) {
@@ -988,6 +1068,47 @@ func (service *Service) getRoom(roomID string) (roomRecord, bool) {
 	}
 
 	return service.hydrateRoom(snapshot), true
+}
+
+func (service *Service) validatePlayerSession(roomID string, playerID string, token string) error {
+	if playerID == "" {
+		return fmt.Errorf("playerId is required")
+	}
+	if token == "" {
+		return fmt.Errorf("player session token is required")
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return fmt.Errorf("room not found")
+	}
+	expectedToken, ok := room.PlayerSessions[playerID]
+	if !ok || expectedToken == "" {
+		return fmt.Errorf("player session not found")
+	}
+	if token != expectedToken {
+		return fmt.Errorf("player session is invalid")
+	}
+	return nil
+}
+
+func (service *Service) validateHostSession(roomID string, hostID string, token string) error {
+	if err := service.validatePlayerSession(roomID, hostID, token); err != nil {
+		return err
+	}
+
+	room, ok := service.getRoom(roomID)
+	if !ok {
+		return fmt.Errorf("room not found")
+	}
+	if room.HostID != hostID {
+		return fmt.Errorf("only host can start the room")
+	}
+	return nil
+}
+
+func playerTokenFromRequest(request *http.Request) string {
+	return strings.TrimSpace(request.Header.Get(playerTokenHeader))
 }
 
 func (service *Service) catchUpRoomEvents(roomID string, afterSequence int) (RoomEventCatchUpResponse, error) {
@@ -1017,36 +1138,41 @@ func (service *Service) catchUpRoomEvents(roomID string, afterSequence int) (Roo
 	return response, nil
 }
 
-func (service *Service) joinRoom(roomID string, playerName string) (roomRecord, error) {
+func (service *Service) joinRoom(roomID string, playerName string) (roomRecord, RoomPlayerSession, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
 	if playerName == "" {
-		return roomRecord{}, fmt.Errorf("playerName is required")
+		return roomRecord{}, RoomPlayerSession{}, fmt.Errorf("playerName is required")
 	}
 
 	room, ok := service.getRoom(roomID)
 	if !ok {
-		return roomRecord{}, fmt.Errorf("room not found")
+		return roomRecord{}, RoomPlayerSession{}, fmt.Errorf("room not found")
 	}
 	if room.State != "lobby" {
-		return roomRecord{}, fmt.Errorf("room is not joinable")
+		return roomRecord{}, RoomPlayerSession{}, fmt.Errorf("room is not joinable")
 	}
 	if len(room.Players) >= 4 {
-		return roomRecord{}, fmt.Errorf("room is full")
+		return roomRecord{}, RoomPlayerSession{}, fmt.Errorf("room is full")
 	}
 	for _, player := range room.Players {
 		if player.Name == playerName {
-			return roomRecord{}, fmt.Errorf("player name already exists in room")
+			return roomRecord{}, RoomPlayerSession{}, fmt.Errorf("player name already exists in room")
 		}
 	}
 
 	player := service.newPlayer(playerName)
+	playerToken := newPlayerToken()
 	room.Players = append(room.Players, player)
+	if room.PlayerSessions == nil {
+		room.PlayerSessions = map[string]string{}
+	}
+	room.PlayerSessions[player.ID] = playerToken
 	room.PendingAction = "房主可在准备完成后开始游戏"
 	service.commitRoomMutation(&room, []eventDraft{{Type: "player-joined", Summary: fmt.Sprintf("%s 加入了房间。", player.Name)}})
 
-	return room, nil
+	return room, RoomPlayerSession{PlayerID: player.ID, PlayerName: player.Name, PlayerToken: playerToken}, nil
 }
 
 func (service *Service) startRoom(roomID string, hostID string) (roomRecord, error) {
@@ -2107,6 +2233,7 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 
 func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) roomRecord {
 	var players []Player
+	var playerSessions map[string]string
 	var pendingProperty *PendingProperty
 	var pendingAuction *PendingAuction
 	var pendingPayment *PendingPayment
@@ -2140,6 +2267,10 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 	}
 	_ = json.Unmarshal(snapshot.ChanceDeckJSON, &chanceDeck)
 	_ = json.Unmarshal(snapshot.CommunityDeckJSON, &communityDeck)
+	_ = json.Unmarshal(snapshot.PlayerSessionsJSON, &playerSessions)
+	if playerSessions == nil {
+		playerSessions = map[string]string{}
+	}
 
 	events := toRoomEvents(service.store.ListRoomEvents(snapshot.RoomID))
 	return roomRecord{
@@ -2159,6 +2290,7 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 		CommunityDeck:       communityDeck,
 		LastRoll:            snapshot.LastRoll,
 		Players:             players,
+		PlayerSessions:      playerSessions,
 		RecentEvents:        tailEvents(events, 10),
 	}
 }
@@ -2179,36 +2311,12 @@ func (service *Service) newPlayer(name string) Player {
 	}
 }
 
-func (service *Service) seedDemoRoom() {
-	if _, ok := service.store.LoadRoomState("demo-room"); ok {
-		return
+func newPlayerToken() string {
+	raw := make([]byte, 16)
+	if _, err := cryptorand.Read(raw); err != nil {
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
 	}
-
-	host := service.newPlayer("房主")
-	host.Ready = true
-	second := service.newPlayer("玩家二")
-	third := service.newPlayer("玩家三")
-	room := roomRecord{
-		RoomID:              "demo-room",
-		State:               "lobby",
-		HostID:              host.ID,
-		SnapshotVersion:     0,
-		EventSequence:       0,
-		TurnState:           "awaiting-roll",
-		CurrentTurnPlayerID: host.ID,
-		PendingAction:       "等待房主开始游戏",
-		PendingProperty:     nil,
-		PendingAuction:      nil,
-		PendingPayment:      nil,
-		ChanceDeck:          newDeckState(chanceDeckOrder),
-		CommunityDeck:       newDeckState(communityDeckOrder),
-		LastRoll:            [2]int{0, 0},
-		Players:             []Player{host, second, third},
-	}
-	service.commitRoomMutation(&room, []eventDraft{{Type: "room-created", Summary: "演示房间已就绪。"}})
-	service.commitRoomMutation(&room, []eventDraft{{Type: "player-joined", Summary: "玩家二加入了演示房间。"}})
-	service.commitRoomMutation(&room, []eventDraft{{Type: "player-joined", Summary: "玩家三加入了演示房间。"}})
-	service.syncCounters()
+	return hex.EncodeToString(raw)
 }
 
 func (service *Service) syncCounters() {
@@ -2237,7 +2345,7 @@ func (service *Service) syncCounters() {
 
 func (service *Service) handlePreflight(writer http.ResponseWriter, request *http.Request, methods ...string) bool {
 	writer.Header().Set("Access-Control-Allow-Origin", "*")
-	writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, "+playerTokenHeader)
 	writer.Header().Set("Access-Control-Allow-Methods", strings.Join(append(methods, http.MethodOptions), ", "))
 	if request.Method == http.MethodOptions {
 		writer.WriteHeader(http.StatusNoContent)
@@ -2346,6 +2454,7 @@ func (room roomRecord) tileIsOwned(tileID string) bool {
 
 func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 	playersJSON, _ := json.Marshal(room.Players)
+	playerSessionsJSON, _ := json.Marshal(room.PlayerSessions)
 	pendingPropertyJSON, _ := json.Marshal(room.PendingProperty)
 	pendingAuctionJSON, _ := json.Marshal(room.PendingAuction)
 	pendingPaymentJSON, _ := json.Marshal(room.PendingPayment)
@@ -2369,6 +2478,7 @@ func (room roomRecord) toPersistedSnapshot() pocketbase.PersistedRoomSnapshot {
 		CommunityDeckJSON:   communityDeckJSON,
 		LastRoll:            room.LastRoll,
 		PlayersJSON:         playersJSON,
+		PlayerSessionsJSON:  playerSessionsJSON,
 	}
 }
 
