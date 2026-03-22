@@ -1,3 +1,15 @@
+# [1.1.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.0.0...v1.1.0) (2026-03-22)
+
+
+### Features
+
+* **gameplay:** add jail decks and property improvements ([f7c6ff0](https://github.com/LuSrackhall/DaFuWeng/commit/f7c6ff0735e4a0c6d0c18cb0991dc9f02b9940f1))
+* **gameplay:** add persisted property decision recovery ([6b1e650](https://github.com/LuSrackhall/DaFuWeng/commit/6b1e6509de2ed624b5a24f0fac8a2c48bd2b5636))
+* **gameplay:** add rent streaming auction and jail loops ([b0621d2](https://github.com/LuSrackhall/DaFuWeng/commit/b0621d270d7e85b73d98377c8cfa257c1a28b977))
+* **gameplay:** add tax deficit mortgage bankruptcy loop ([3d9fea5](https://github.com/LuSrackhall/DaFuWeng/commit/3d9fea57824bdacf4b0accfc658b1e11b7c5fc72))
+* **turns:** add persisted authoritative roll loop ([4391f08](https://github.com/LuSrackhall/DaFuWeng/commit/4391f08ccfadc12e7656d1a3f3aa05952b73742a))
+* 完成权威经济闭环并固化代理工作流 ([25af8f7](https://github.com/LuSrackhall/DaFuWeng/commit/25af8f7c6c9c5e9dbaa3b4f13249a4e6191f7b30))
+
 # 1.0.0 (2026-03-21)
 
 
