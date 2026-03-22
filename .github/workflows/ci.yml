@@ -93,6 +93,25 @@ jobs:
       - name: Validate OpenSpec structure
         run: |
           test -f openspec/config.yaml
-          test -f openspec/changes/web-first-authoritative-multiplayer-foundation/proposal.md
-          test -f openspec/changes/web-first-authoritative-multiplayer-foundation/design.md
-          test -f openspec/changes/web-first-authoritative-multiplayer-foundation/tasks.md
+          test -d openspec/changes
+
+          mapfile -t active_changes < <(find openspec/changes -mindepth 1 -maxdepth 1 -type d ! -name archive -exec basename {} \; | sort)
+
+          if [ "${#active_changes[@]}" -eq 0 ]; then
+            echo "No active OpenSpec changes found under openspec/changes"
+            exit 1
+          fi
+
+          for change in "${active_changes[@]}"; do
+            change_dir="openspec/changes/$change"
+
+            for required_file in .openspec.yaml proposal.md design.md tasks.md; do
+              if [ ! -f "$change_dir/$required_file" ]; then
+                echo "Missing required OpenSpec artifact: $change_dir/$required_file"
+                exit 1
+              fi
+            done
+          done
+
+          echo "Validated OpenSpec changes:"
+          printf ' - %s\n' "${active_changes[@]}"
