@@ -266,6 +266,40 @@ body {
   border-color: rgba(232, 205, 143, 0.18);
 }
 
+.turn-tools-shelf {
+  display: grid;
+  gap: 12px;
+  background: rgba(8, 15, 20, 0.36);
+  border-color: rgba(124, 142, 168, 0.18);
+}
+
+.turn-tools-shelf__header,
+.turn-tools-shelf__copy,
+.turn-tools-shelf__body {
+  display: grid;
+  gap: 10px;
+}
+
+.turn-tools-shelf__toggle {
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f6ecd4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.turn-tools-shelf__summary,
+.turn-tools-shelf__hint {
+  margin: 0;
+  color: rgba(246, 236, 212, 0.76);
+}
+
+.turn-tools-shelf__card {
+  margin-top: 0;
+}
+
 .action-surface__summary,
 .action-surface__hint,
 .action-surface__meta {
@@ -521,6 +555,10 @@ body {
 
   .shell__header {
     flex-direction: column;
+  }
+
+  .turn-tools-shelf__header {
+    grid-template-columns: 1fr;
   }
 
   .status-grid,

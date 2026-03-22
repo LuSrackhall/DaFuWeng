@@ -165,7 +165,9 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
   await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
-  await expect(page.getByText("发起双边交易报价")).toBeVisible();
+  await expect(page.getByRole("button", { name: "展开回合工具区" })).toBeVisible();
+  await page.getByRole("button", { name: "展开回合工具区" }).click();
+  await expect(page.getByText("发起双边交易报价", { exact: true })).toBeVisible();
 
   await page.getByLabel("我出现金").fill("120");
   await page.getByLabel("我索要现金").fill("30");
@@ -602,4 +604,108 @@ test("contextual action surface only shows jail decisions without unrelated gene
   await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "购买地产" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "放弃购买" })).toHaveCount(0);
+});
+
+test("turn tools shelf stays collapsed by default and reveals optional tools on demand", async ({
+  page,
+}) => {
+  const roomId = "room-turn-tools";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 41,
+    eventSequence: 41,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 1320,
+        position: 6,
+        properties: ["tile-6"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1500,
+        position: 0,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-41",
+        type: "turn-started",
+        sequence: 41,
+        snapshotVersion: 41,
+        summary: "轮到房主甲掷骰。",
+        playerId: "p1",
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: snapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  await expect(page.getByText(/可发起交易/)).toBeVisible();
+  await expect(page.getByText(/可开发地产 1 处/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "展开回合工具区" })).toBeVisible();
+  await expect(page.getByText("发起双边交易报价", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("地产开发", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "展开回合工具区" }).click();
+
+  await expect(page.getByText("发起双边交易报价", { exact: true })).toBeVisible();
+  await expect(page.getByText("地产开发", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "发起交易" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "建房" })).toBeVisible();
 });
