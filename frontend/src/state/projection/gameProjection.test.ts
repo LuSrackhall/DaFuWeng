@@ -190,6 +190,101 @@ describe("toProjectionView", () => {
     expect(projection.auctionSummary?.passedBidderCount).toBe(1);
   });
 
+  test("derives a readable unsold auction result summary", () => {
+    const updated = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-9",
+        type: "auction-started",
+        sequence: 9,
+        snapshotVersion: 9,
+        summary: "东湖路 进入拍卖。",
+        playerId: "p1",
+        nextPlayerId: "p2",
+        tileId: "tile-6",
+        tileIndex: 6,
+        tileLabel: "东湖路",
+        tilePrice: 160,
+      },
+      {
+        id: "evt-10",
+        type: "auction-pass-submitted",
+        sequence: 10,
+        snapshotVersion: 10,
+        summary: "玩家二 放弃竞拍。",
+        playerId: "p2",
+        nextPlayerId: "p1",
+      },
+      {
+        id: "evt-11",
+        type: "auction-pass-submitted",
+        sequence: 11,
+        snapshotVersion: 11,
+        summary: "房主 放弃竞拍。",
+        playerId: "p1",
+        nextPlayerId: "p1",
+      },
+      {
+        id: "evt-12",
+        type: "auction-ended-unsold",
+        sequence: 12,
+        snapshotVersion: 12,
+        summary: "东湖路 流拍。",
+        tileId: "tile-6",
+        tileIndex: 6,
+        tileLabel: "东湖路",
+      },
+    ]);
+
+    const projection = toProjectionView(updated);
+    expect(projection.auctionSummary).toBeNull();
+    expect(projection.latestSettlementSummary?.title).toContain("流拍");
+    expect(projection.latestSettlementSummary?.detail).toContain("产权保持未售出状态");
+  });
+
+  test("prefers the latest formal result over an older unsold auction event", () => {
+    const updated = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-9",
+        type: "auction-ended-unsold",
+        sequence: 9,
+        snapshotVersion: 9,
+        summary: "东湖路 流拍。",
+        tileId: "tile-6",
+        tileIndex: 6,
+        tileLabel: "东湖路",
+      },
+      {
+        id: "evt-10",
+        type: "trade-proposed",
+        sequence: 10,
+        snapshotVersion: 10,
+        summary: "房主 向 玩家二 发起了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p2",
+        offeredCash: 100,
+        requestedCash: 50,
+      },
+      {
+        id: "evt-11",
+        type: "trade-accepted",
+        sequence: 11,
+        snapshotVersion: 11,
+        summary: "玩家二 接受了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p1",
+        offeredCash: 100,
+        requestedCash: 50,
+        cashAfterByPlayer: { p1: 1450, p2: 1550 },
+      },
+    ]);
+
+    const projection = toProjectionView(updated);
+    expect(projection.latestSettlementSummary?.title).toContain("接受了");
+    expect(projection.latestSettlementSummary?.title).not.toContain("流拍");
+  });
+
   test("applies jail and card events from authoritative updates", () => {
     const updated = applyRoomEvents(sampleProjection, [
       {

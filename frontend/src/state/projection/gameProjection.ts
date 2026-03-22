@@ -329,27 +329,26 @@ function buildTradeSummary(snapshot: ProjectionSnapshot): TradeSummary | null {
 }
 
 function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementSummary | null {
-  const recentTradeEvent = [...snapshot.recentEvents]
-    .reverse()
-    .find(
-      (event) =>
-        event.type === "trade-accepted" || event.type === "trade-rejected",
-    );
-  const recentTradeProposal = [...snapshot.recentEvents]
-    .reverse()
-    .find((event) => event.type === "trade-proposed");
+  const latestFormalEvent = [...snapshot.recentEvents]
+    .filter((event) =>
+      event.type === "bankruptcy-declared"
+      || event.type === "trade-accepted"
+      || event.type === "trade-rejected"
+      || event.type === "auction-ended-unsold",
+    )
+    .sort((left, right) => right.sequence - left.sequence)[0];
 
-  const bankruptcyEvent = [...snapshot.recentEvents]
-    .reverse()
-    .find((event) => event.type === "bankruptcy-declared");
+  if (!latestFormalEvent) {
+    return null;
+  }
 
-  if (bankruptcyEvent?.playerId) {
-    const debtorName = getPlayerName(snapshot.players, bankruptcyEvent.playerId);
+  if (latestFormalEvent.type === "bankruptcy-declared" && latestFormalEvent.playerId) {
+    const debtorName = getPlayerName(snapshot.players, latestFormalEvent.playerId);
 
-    if (bankruptcyEvent.ownerPlayerId) {
-      const creditorName = getPlayerName(snapshot.players, bankruptcyEvent.ownerPlayerId);
-      const transferredPropertyCount = bankruptcyEvent.transferredPropertyIds?.length ?? 0;
-      const transferredCardCount = bankruptcyEvent.transferredCardIds?.length ?? 0;
+    if (latestFormalEvent.ownerPlayerId) {
+      const creditorName = getPlayerName(snapshot.players, latestFormalEvent.ownerPlayerId);
+      const transferredPropertyCount = latestFormalEvent.transferredPropertyIds?.length ?? 0;
+      const transferredCardCount = latestFormalEvent.transferredCardIds?.length ?? 0;
 
       return {
         title: `${debtorName} 已向 ${creditorName} 破产结算`,
@@ -373,7 +372,32 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
     };
   }
 
-  if (recentTradeEvent && recentTradeProposal && recentTradeProposal.playerId && recentTradeProposal.ownerPlayerId) {
+  if (latestFormalEvent.type === "auction-ended-unsold") {
+    return {
+      title: `${latestFormalEvent.tileLabel ?? "当前拍品"} 本轮流拍`,
+      detail: `没有玩家赢得 ${latestFormalEvent.tileLabel ?? "该地产"}，产权保持未售出状态，也没有任何现金结算。`,
+      nextStepLabel: snapshot.pendingActionLabel,
+      tone: "neutral",
+    };
+  }
+
+  if (
+    (latestFormalEvent.type === "trade-accepted" || latestFormalEvent.type === "trade-rejected")
+    && latestFormalEvent.playerId
+    && latestFormalEvent.ownerPlayerId
+  ) {
+    const recentTradeProposal = [...snapshot.recentEvents]
+      .filter(
+        (event) =>
+          event.type === "trade-proposed"
+          && event.sequence <= latestFormalEvent.sequence,
+      )
+      .sort((left, right) => right.sequence - left.sequence)[0];
+
+    if (!recentTradeProposal?.playerId || !recentTradeProposal.ownerPlayerId) {
+      return null;
+    }
+
     const tradeSummary = buildTradeSummaryFromPendingTrade(snapshot.players, {
       proposerPlayerId: recentTradeProposal.playerId,
       counterpartyPlayerId: recentTradeProposal.ownerPlayerId,
@@ -387,7 +411,7 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
         recentTradeProposal.tradeSnapshotVersion ?? snapshot.snapshotVersion,
     });
 
-    if (recentTradeEvent.type === "trade-accepted") {
+    if (latestFormalEvent.type === "trade-accepted") {
       return {
         title: `${tradeSummary.counterpartyName} 接受了 ${tradeSummary.proposerName} 的交易报价`,
         detail: `${tradeSummary.proposerName} 交出 ${tradeSummary.offeredCash} 现金与 ${tradeSummary.offeredTileLabels.join("、") || "无地产"}${tradeSummary.offeredCardLabels.length > 0 ? `，并附带 ${tradeSummary.offeredCardLabels.join("、")}` : ""}；作为交换，获得 ${tradeSummary.requestedCash} 现金与 ${tradeSummary.requestedTileLabels.join("、") || "无地产"}${tradeSummary.requestedCardLabels.length > 0 ? `，并接收 ${tradeSummary.requestedCardLabels.join("、")}` : ""}。`,
