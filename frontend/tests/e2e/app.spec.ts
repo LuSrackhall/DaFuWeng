@@ -471,19 +471,26 @@ test("mobile room page prioritizes the current stage before overview without hor
   const tradeStage = page.locator(".stage-card--trade");
   const overviewStage = page.locator(".stage-card--overview");
   const supportGrid = page.locator(".status-grid--support");
+  const roomStatePanel = page.locator(".panel--room-state");
+  const boardPanel = page.locator(".panel--board");
   const tradePanels = page.locator(".stage-card--trade .trade-stage__grid > .trade-side");
 
   await expect(tradeStage.getByText("双边交易待响应")).toBeVisible();
   await expect(overviewStage.getByText("房间总览")).toBeVisible();
   await expect(supportGrid.getByText("最近骰子")).toBeVisible();
+  await expect(boardPanel.getByText("当前棋盘")).toBeVisible();
 
+  const roomStateBox = await roomStatePanel.boundingBox();
+  const boardBox = await boardPanel.boundingBox();
   const tradeBox = await tradeStage.boundingBox();
   const overviewBox = await overviewStage.boundingBox();
   const supportBox = await supportGrid.boundingBox();
   const firstTradePanel = await tradePanels.nth(0).boundingBox();
   const secondTradePanel = await tradePanels.nth(1).boundingBox();
 
+  expect(roomStateBox?.y).toBeLessThan(boardBox?.y ?? Number.POSITIVE_INFINITY);
   expect(tradeBox?.y).toBeLessThan(overviewBox?.y ?? Number.POSITIVE_INFINITY);
+  expect(tradeBox?.y).toBeLessThan(boardBox?.y ?? Number.POSITIVE_INFINITY);
   expect(tradeBox?.y).toBeLessThan(supportBox?.y ?? Number.POSITIVE_INFINITY);
   expect(secondTradePanel?.y).toBeGreaterThan(firstTradePanel?.y ?? 0);
 

@@ -544,7 +544,7 @@ export function GamePage() {
 
   return (
     <main className="game">
-      <section className="panel board">
+      <section className="panel panel--board board">
         <p className="panel__meta">当前棋盘</p>
         {isLoading ? <p className="panel__subtitle">正在同步房间状态...</p> : null}
         {isFallback ? <p className="panel__subtitle">尚未成功同步到权威后端，请稍后重试。</p> : null}

@@ -488,6 +488,14 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .game > .panel--room-state {
+    order: 1;
+  }
+
+  .game > .panel--board {
+    order: 2;
+  }
+
   .shell__header {
     flex-direction: column;
   }
