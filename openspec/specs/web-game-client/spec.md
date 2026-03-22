@@ -106,6 +106,20 @@ The system SHALL present a recovery-oriented room stage when a player is resolvi
 - **WHEN** the room is waiting on the deficit player to mortgage assets or declare bankruptcy
 - **THEN** the room page SHALL explain the debt, show who may act, present visible recovery assets with readable action consequences, and keep non-acting viewers in a clear read-only state
 
+### Requirement: The mobile room page prioritizes the current stage
+The system SHALL emphasize the current authoritative room stage above supporting overview detail on narrow screens.
+
+#### Scenario: Player opens the room page on mobile
+- **WHEN** the room page is rendered in a narrow mobile viewport
+- **THEN** the current stage card SHALL appear before the overview card in the main reading flow and SHALL remain the dominant decision surface
+
+### Requirement: Mobile room-stage actions remain readable without horizontal pressure
+The system SHALL keep stage actions and asset groups readable on narrow screens.
+
+#### Scenario: Mobile player reviews a dense stage
+- **WHEN** the room page renders auction, trade, or deficit recovery content on a mobile viewport
+- **THEN** the client SHALL present stage details, actions, and asset selections in a single readable column without requiring horizontal scrolling
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
