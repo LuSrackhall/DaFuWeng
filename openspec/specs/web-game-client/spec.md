@@ -175,6 +175,17 @@ The system SHALL present the final step of the normal-turn trade composer as a d
 - **WHEN** the acting player has not added any cash, property, or card to either side of the trade draft
 - **THEN** the room page SHALL block entry into the final review step and explain that there is no trade content to confirm yet
 
+### Requirement: The final trade confirmation surface highlights risk and consequence
+The system SHALL present the final normal-turn trade confirmation step as a consequence-oriented review surface before a proposal is sent.
+
+#### Scenario: Player reviews a risky trade draft
+- **WHEN** the acting player reaches the final confirmation step with traded properties, cards, or cash
+- **THEN** the room page SHALL show the traded asset state details, post-trade cash landing points, and the main consequences of sending the offer
+
+#### Scenario: Player returns to edit the draft
+- **WHEN** the acting player returns from the final confirmation surface back to the earlier trade steps
+- **THEN** the room page SHALL preserve the current draft selections so the player can continue editing without rebuilding the proposal
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
