@@ -164,6 +164,17 @@ The system SHALL guide the acting player through a stepwise trade-drafting flow 
 - **WHEN** the acting player reaches the final review step and confirms the draft
 - **THEN** the room page SHALL send the existing trade proposal command and transition all clients into the current pending trade response stage
 
+### Requirement: The final trade step acts as a review card
+The system SHALL present the final step of the normal-turn trade composer as a dedicated review card before a proposal is submitted.
+
+#### Scenario: Player reviews a non-empty draft
+- **WHEN** the acting player reaches the final step with a non-empty trade draft
+- **THEN** the room page SHALL show grouped exchange details for both sides, a readable net cash-flow summary, and a clear reminder that the player can return to edit without losing the draft
+
+#### Scenario: Player tries to review an empty draft
+- **WHEN** the acting player has not added any cash, property, or card to either side of the trade draft
+- **THEN** the room page SHALL block entry into the final review step and explain that there is no trade content to confirm yet
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
