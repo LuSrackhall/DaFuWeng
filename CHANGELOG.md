@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.5.2...v1.6.0) (2026-03-22)
+
+
+### Features
+
+* 完成房间页权威状态驱动的情境化动作面 ([7b351cc](https://github.com/LuSrackhall/DaFuWeng/commit/7b351cc254496c6eb5643cd8f24e7b66b048d3c5))
+
 ## [1.5.2](https://github.com/LuSrackhall/DaFuWeng/compare/v1.5.1...v1.5.2) (2026-03-22)
 
 
