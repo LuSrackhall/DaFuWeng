@@ -342,11 +342,30 @@ body {
   gap: 12px;
 }
 
+.trade-review-card__hero,
+.trade-review-card__details,
+.trade-review-card__critical {
+  display: grid;
+  gap: 10px;
+}
+
 .trade-review-card--risk {
   background:
     linear-gradient(135deg, rgba(170, 114, 33, 0.18), rgba(128, 38, 38, 0.12)),
     rgba(4, 12, 10, 0.24);
   border-color: rgba(229, 191, 105, 0.24);
+}
+
+.trade-review-card__hero {
+  padding-bottom: 8px;
+}
+
+.trade-review-card__critical {
+  border-radius: 18px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(156, 34, 34, 0.34), rgba(120, 26, 26, 0.2));
+  border: 1px solid rgba(255, 196, 196, 0.28);
+  box-shadow: 0 14px 28px rgba(40, 8, 8, 0.22);
 }
 
 .trade-review-card__grid {
@@ -362,12 +381,27 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.trade-review-card__details {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
 .trade-review-card__tag,
 .trade-review-card__note {
   border-radius: 999px;
   padding: 8px 10px;
   background: rgba(255, 255, 255, 0.06);
   color: #f6ecd4;
+}
+
+.trade-review-card__tag {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.trade-review-card__note {
+  background: rgba(170, 114, 33, 0.18);
 }
 
 .action-surface__summary,

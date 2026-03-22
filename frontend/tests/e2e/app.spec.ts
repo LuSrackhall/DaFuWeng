@@ -176,10 +176,13 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await page.getByRole("button", { name: "下一步：选择我索取的内容" }).click();
   await page.getByLabel("我索要现金").fill("30");
   await page.getByRole("button", { name: "下一步：确认报价摘要" }).click();
-  await expect(page.getByText("成交审核卡", { exact: true })).toBeVisible();
+  await expect(page.getByText("高风险交易确认面", { exact: true })).toBeVisible();
+  await expect(page.getByText("最高优先后果", { exact: true })).toBeVisible();
+  await expect(page.getByText("先看这些风险与后果", { exact: true })).toBeVisible();
+  await expect(page.getByText("再看交换明细", { exact: true })).toBeVisible();
   await expect(page.getByText(/现金净流向: 你净支付 90 给 玩家乙/)).toBeVisible();
   await expect(page.getByText(/交易后现金: 你 \d+ · 玩家乙 \d+/)).toBeVisible();
-  await expect(page.getByText(/报价发出后房间会暂停，等待 玩家乙 接受或拒绝/)).toBeVisible();
+  await expect(page.getByText(/点击确认后将正式向 玩家乙 发出报价，房间会暂停等待回应/)).toBeVisible();
   await page.getByRole("button", { name: "返回继续编辑草案" }).click();
   await expect(page.getByLabel("我索要现金")).toHaveValue("30");
   await page.getByRole("button", { name: "返回选择我给出的内容" }).click();
@@ -873,7 +876,8 @@ test("stepwise trade composer guides the draft before entering pending trade res
   await page.getByRole("button", { name: "下一步：选择我索取的内容" }).click();
 
   await page.getByRole("button", { name: "下一步：确认报价摘要" }).click();
-  await expect(page.getByText("成交审核卡", { exact: true })).toBeVisible();
+  await expect(page.getByText("高风险交易确认面", { exact: true })).toBeVisible();
+  await expect(page.getByText("最高优先后果", { exact: true })).toBeVisible();
   await expect(page.getByText(/现金净流向: 你净支付 120 给 玩家乙/)).toBeVisible();
   await expect(page.getByText(/东湖路 · 已抵押/)).toBeVisible();
   await expect(page.getByText(/你将让出已抵押资产: 东湖路/)).toBeVisible();

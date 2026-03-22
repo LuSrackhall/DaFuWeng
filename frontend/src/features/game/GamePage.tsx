@@ -279,7 +279,7 @@ export function GamePage() {
       .map((tileId) => boardTileById.get(tileId)?.colorGroup)
       .filter((colorGroup): colorGroup is string => Boolean(colorGroup)),
   ));
-  const tradeConsequenceNotes = [
+  const tradeRiskNotes = [
     ...relevantTradeColorGroups.flatMap((colorGroup) => {
       const total = colorGroupTotals.get(colorGroup) ?? 0;
       const activeBefore = Array.from(activeCurrentProperties).filter((tileId) => boardTileById.get(tileId)?.colorGroup === colorGroup).length === total;
@@ -310,15 +310,15 @@ export function GamePage() {
     ...(selectedOfferedProperties.filter((option) => option.detail.includes("已抵押")).length > 0
       ? [`你将让出已抵押资产: ${selectedOfferedProperties.filter((option) => option.detail.includes("已抵押")).map((option) => option.label).join(" / ")}`]
       : []),
-    ...((Number(tradeOfferedCash) > 0
-      || Number(tradeRequestedCash) > 0
-      || tradeOfferedTileIds.length > 0
-      || tradeRequestedTileIds.length > 0
-      || tradeOfferedCardIds.length > 0
-      || tradeRequestedCardIds.length > 0)
-      ? [`报价发出后房间会暂停，等待 ${selectedCounterparty?.name ?? "对手"} 接受或拒绝。`]
-      : []),
   ];
+  const tradeCriticalConsequence = (Number(tradeOfferedCash) > 0
+    || Number(tradeRequestedCash) > 0
+    || tradeOfferedTileIds.length > 0
+    || tradeRequestedTileIds.length > 0
+    || tradeOfferedCardIds.length > 0
+    || tradeRequestedCardIds.length > 0)
+    ? `点击确认后将正式向 ${selectedCounterparty?.name ?? "对手"} 发出报价，房间会暂停等待回应，当前动作内无法撤回。`
+    : null;
   const deficitViewerLabel = projection.resolutionSummary
     ? canResolveDeficit
       ? `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。选择一项可抵押资产，或直接宣告破产。`
@@ -1041,12 +1041,29 @@ export function GamePage() {
                 {tradeComposerStep === "review" ? (
                   <div className="trade-composer__panel">
                     <div className="trade-composer__review trade-review-card trade-review-card--risk">
-                      <strong>成交审核卡</strong>
-                      <span>{selectedCounterparty ? `报价对象: ${selectedCounterparty.name}` : "尚未选择报价对象"}</span>
-                      <span>{tradeNetCashLabel}</span>
-                      <span>{`交易后现金: 你 ${activePlayerCashAfterTrade} · ${selectedCounterparty?.name ?? "对手"} ${counterpartyCashAfterTrade}`}</span>
-                      <span>{hasTradeDraft ? "返回上一步继续编辑不会丢失当前草案。请先完成最后一眼核对，再决定是否提交。" : "当前草案仍为空，请先返回前一步补充报价内容。"}</span>
-                      <div className="trade-review-card__grid">
+                      <div className="trade-review-card__hero">
+                        <p className="shell__eyebrow">发起前最后确认</p>
+                        <strong>高风险交易确认面</strong>
+                        <span>{selectedCounterparty ? `报价对象: ${selectedCounterparty.name}` : "尚未选择报价对象"}</span>
+                        <span>{tradeNetCashLabel}</span>
+                        <span>{`交易后现金: 你 ${activePlayerCashAfterTrade} · ${selectedCounterparty?.name ?? "对手"} ${counterpartyCashAfterTrade}`}</span>
+                        <span>{hasTradeDraft ? "返回上一步继续编辑不会丢失当前草案。请先看清后果，再核对交换明细。" : "当前草案仍为空，请先返回前一步补充报价内容。"}</span>
+                      </div>
+                      {tradeCriticalConsequence ? (
+                        <div className="trade-review-card__critical">
+                          <strong>最高优先后果</strong>
+                          <span>{tradeCriticalConsequence}</span>
+                        </div>
+                      ) : null}
+                      <div className="trade-review-card__consequences">
+                        <strong>先看这些风险与后果</strong>
+                        {tradeRiskNotes.length > 0 ? tradeRiskNotes.map((note) => (
+                          <span className="trade-review-card__note" key={note}>{note}</span>
+                        )) : <span className="trade-review-card__note">当前没有额外风险提示。</span>}
+                      </div>
+                      <div className="trade-review-card__details">
+                        <strong>再看交换明细</strong>
+                        <div className="trade-review-card__grid">
                         <article className="trade-side">
                           <strong>你给出</strong>
                           <span>现金: {Number(tradeOfferedCash) || 0}</span>
@@ -1072,11 +1089,6 @@ export function GamePage() {
                           ))}
                         </article>
                       </div>
-                      <div className="trade-review-card__consequences">
-                        <strong>成交后果</strong>
-                        {tradeConsequenceNotes.length > 0 ? tradeConsequenceNotes.map((note) => (
-                          <span className="trade-review-card__note" key={note}>{note}</span>
-                        )) : <span className="trade-review-card__note">当前没有额外风险提示。</span>}
                       </div>
                     </div>
                     <div className="lobby__actions">
