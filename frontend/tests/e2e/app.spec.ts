@@ -176,6 +176,8 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await page.getByRole("button", { name: "下一步：选择我索取的内容" }).click();
   await page.getByLabel("我索要现金").fill("30");
   await page.getByRole("button", { name: "下一步：确认报价摘要" }).click();
+  await expect(page.getByText("成交审核卡", { exact: true })).toBeVisible();
+  await expect(page.getByText(/现金净流向: 你净支付 90 给 玩家乙/)).toBeVisible();
   await page.getByRole("button", { name: "确认并发起交易" }).click();
 
   await expect(page.getByText("双边交易待响应")).toBeVisible();
@@ -851,14 +853,20 @@ test("stepwise trade composer guides the draft before entering pending trade res
 
   await page.getByRole("button", { name: "下一步：选择我给出的内容" }).click();
   await expect(page.getByLabel("我出现金")).toBeVisible();
-  await page.getByLabel("我出现金").fill("120");
-  await page.getByRole("button", { name: "选择我出让的地产 东湖路" }).click();
-
   await page.getByRole("button", { name: "下一步：选择我索取的内容" }).click();
   await expect(page.getByLabel("我索要现金")).toBeVisible();
+  await expect(page.getByText(/当前还没有可成交内容/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "下一步：确认报价摘要" })).toBeDisabled();
+
+  await page.getByRole("button", { name: "返回选择我给出的内容" }).click();
+  await page.getByLabel("我出现金").fill("120");
+  await page.getByRole("button", { name: "选择我出让的地产 东湖路" }).click();
+  await page.getByRole("button", { name: "下一步：选择我索取的内容" }).click();
 
   await page.getByRole("button", { name: "下一步：确认报价摘要" }).click();
-  await expect(page.getByText("最终报价摘要", { exact: true })).toBeVisible();
+  await expect(page.getByText("成交审核卡", { exact: true })).toBeVisible();
+  await expect(page.getByText(/现金净流向: 你净支付 120 给 玩家乙/)).toBeVisible();
+  await expect(page.getByText(/返回上一步继续编辑不会丢失当前草案/)).toBeVisible();
   await page.getByRole("button", { name: "确认并发起交易" }).click();
 
   await expect(page.getByText("双边交易待响应")).toBeVisible();

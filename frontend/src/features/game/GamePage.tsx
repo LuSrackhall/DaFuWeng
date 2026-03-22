@@ -166,6 +166,22 @@ export function GamePage() {
   const resolutionActor = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
   const activeJailCardCount = activeProjectionPlayer?.heldCardIds?.length ?? 0;
   const currentTurnJailCardCount = currentTurnProjectionPlayer?.heldCardIds?.length ?? 0;
+  const tradeNetCash = Number(tradeOfferedCash) - Number(tradeRequestedCash);
+  const tradeNetCashLabel = tradeNetCash === 0
+    ? "现金净流向: 无净变化"
+    : tradeNetCash > 0
+      ? `现金净流向: 你净支付 ${tradeNetCash} 给 ${selectedCounterparty?.name ?? "对手"}`
+      : `现金净流向: ${selectedCounterparty?.name ?? "对手"} 净支付 ${Math.abs(tradeNetCash)} 给你`;
+
+  function clearTradeDraft() {
+    setTradeComposerStep("counterparty");
+    setTradeOfferedCash("0");
+    setTradeRequestedCash("0");
+    setTradeOfferedTileIds([]);
+    setTradeRequestedTileIds([]);
+    setTradeOfferedCardIds([]);
+    setTradeRequestedCardIds([]);
+  }
 
   function getTradeBlockReason(tileId: string) {
     const tile = boardTileById.get(tileId);
@@ -523,7 +539,7 @@ export function GamePage() {
         requestedCardIds: tradeRequestedCardIds
       });
       applySnapshot(snapshot);
-      setTradeComposerStep("counterparty");
+      clearTradeDraft();
       setIsTurnToolsOpen(false);
       setActionMessage("已同步权威交易报价。");
     } catch (requestError) {
@@ -939,11 +955,12 @@ export function GamePage() {
                         )}
                       </section>
                     </div>
+                    {!hasTradeDraft ? <p className="trade-composer__validation">当前还没有可成交内容，至少加入一项现金、地产或卡牌后才能进入审核。</p> : null}
                     <div className="lobby__actions">
                       <button className="button button--secondary" type="button" onClick={() => setTradeComposerStep("offered")}>
                         返回选择我给出的内容
                       </button>
-                      <button className="button button--primary" type="button" onClick={() => setTradeComposerStep("review")}>
+                      <button className="button button--primary" type="button" onClick={() => setTradeComposerStep("review")} disabled={!hasTradeDraft}>
                         下一步：确认报价摘要
                       </button>
                     </div>
@@ -952,24 +969,31 @@ export function GamePage() {
 
                 {tradeComposerStep === "review" ? (
                   <div className="trade-composer__panel">
-                    <div className="trade-composer__review">
-                      <strong>最终报价摘要</strong>
+                    <div className="trade-composer__review trade-review-card">
+                      <strong>成交审核卡</strong>
                       <span>{selectedCounterparty ? `报价对象: ${selectedCounterparty.name}` : "尚未选择报价对象"}</span>
-                      <span>{hasTradeDraft ? "请确认双方资产方向无误后再发起交易。" : "当前草案仍为空，请先返回前一步补充报价内容。"}</span>
+                      <span>{tradeNetCashLabel}</span>
+                      <span>{hasTradeDraft ? "返回上一步继续编辑不会丢失当前草案。请先完成最后一眼核对，再决定是否提交。" : "当前草案仍为空，请先返回前一步补充报价内容。"}</span>
+                      <div className="trade-review-card__grid">
+                        <article className="trade-side">
+                          <strong>你给出</strong>
+                          <span>现金: {Number(tradeOfferedCash) || 0}</span>
+                          <span>地产: {draftTradeOfferedTileLabels.join(" / ") || "无"}</span>
+                          <span>卡牌: {draftTradeOfferedCardLabels.join(" / ") || "无"}</span>
+                        </article>
+                        <article className="trade-side">
+                          <strong>你获得</strong>
+                          <span>现金: {Number(tradeRequestedCash) || 0}</span>
+                          <span>地产: {draftTradeRequestedTileLabels.join(" / ") || "无"}</span>
+                          <span>卡牌: {draftTradeRequestedCardLabels.join(" / ") || "无"}</span>
+                        </article>
+                      </div>
                     </div>
                     <div className="lobby__actions">
                       <button className="button button--secondary" type="button" onClick={() => setTradeComposerStep("requested")}>
-                        返回选择我索取的内容
+                        返回继续编辑草案
                       </button>
-                      <button className="button button--secondary button--danger" type="button" onClick={() => {
-                        setTradeComposerStep("counterparty");
-                        setTradeOfferedCash("0");
-                        setTradeRequestedCash("0");
-                        setTradeOfferedTileIds([]);
-                        setTradeRequestedTileIds([]);
-                        setTradeOfferedCardIds([]);
-                        setTradeRequestedCardIds([]);
-                      }}>
+                      <button className="button button--secondary button--danger" type="button" onClick={clearTradeDraft}>
                         放弃当前草案
                       </button>
                       <button className="button button--primary" type="button" onClick={handleProposeTrade} disabled={!canProposeTrade || !tradeCounterpartyId || !hasTradeDraft}>
