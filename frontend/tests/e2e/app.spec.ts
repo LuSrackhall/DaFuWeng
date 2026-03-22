@@ -356,3 +356,137 @@ test("deficit recovery panel shows mortgage impact and resolves through the reco
   await expect(page.getByText(/现金: 145/)).toBeVisible();
   await expect(page.getByText(/抵押: 1/)).toBeVisible();
 });
+
+test("mobile room page prioritizes the current stage before overview without horizontal scrolling", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  const roomId = "room-mobile-trade";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 22,
+    eventSequence: 22,
+    turnState: "awaiting-trade-response",
+    currentTurnPlayerId: "p2",
+    pendingActionLabel: "等待 玩家乙 响应交易。",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: {
+      proposerPlayerId: "p1",
+      counterpartyPlayerId: "p2",
+      offeredCash: 120,
+      requestedCash: 30,
+      offeredTileIds: ["tile-6"],
+      requestedTileIds: [],
+      offeredCardIds: [],
+      requestedCardIds: [],
+      snapshotVersion: 22,
+    },
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [3, 3],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 1380,
+        position: 6,
+        properties: ["tile-6"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1500,
+        position: 0,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-22",
+        type: "trade-proposed",
+        sequence: 22,
+        snapshotVersion: 22,
+        summary: "房主甲 向 玩家乙 发起了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p2",
+        offeredCash: 120,
+        requestedCash: 30,
+        offeredTileIds: ["tile-6"],
+        requestedTileIds: [],
+        offeredCardIds: [],
+        requestedCardIds: [],
+        tradeSnapshotVersion: 22,
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p2",
+        playerName: "玩家乙",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: snapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const tradeStage = page.locator(".stage-card--trade");
+  const overviewStage = page.locator(".stage-card--overview");
+  const supportGrid = page.locator(".status-grid--support");
+  const tradePanels = page.locator(".stage-card--trade .trade-stage__grid > .trade-side");
+
+  await expect(tradeStage.getByText("双边交易待响应")).toBeVisible();
+  await expect(overviewStage.getByText("房间总览")).toBeVisible();
+  await expect(supportGrid.getByText("最近骰子")).toBeVisible();
+
+  const tradeBox = await tradeStage.boundingBox();
+  const overviewBox = await overviewStage.boundingBox();
+  const supportBox = await supportGrid.boundingBox();
+  const firstTradePanel = await tradePanels.nth(0).boundingBox();
+  const secondTradePanel = await tradePanels.nth(1).boundingBox();
+
+  expect(tradeBox?.y).toBeLessThan(overviewBox?.y ?? Number.POSITIVE_INFINITY);
+  expect(tradeBox?.y).toBeLessThan(supportBox?.y ?? Number.POSITIVE_INFINITY);
+  expect(secondTradePanel?.y).toBeGreaterThan(firstTradePanel?.y ?? 0);
+
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(hasHorizontalOverflow).toBe(false);
+});

@@ -555,7 +555,7 @@ export function GamePage() {
           highlightedTileId={presentation.highlightedTileId}
         />
       </section>
-      <aside className="panel">
+      <aside className="panel panel--room-state">
         <p className="panel__meta">当前房间态势</p>
         <h3 className="panel__title">房间 {projection.roomId}</h3>
         {error ? <p className="panel__subtitle">{error}</p> : null}
@@ -1044,7 +1044,7 @@ export function GamePage() {
           </section>
         ) : null}
 
-        <h4 className="panel__title">玩家资产</h4>
+        <h4 className="panel__title panel__title--assets">玩家资产</h4>
         <div className="asset-grid">
           {projection.players.map((player) => (
             <article className="tile-card" key={player.id}>

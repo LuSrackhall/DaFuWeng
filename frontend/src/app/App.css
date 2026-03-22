@@ -86,6 +86,11 @@ body {
   backdrop-filter: blur(12px);
 }
 
+.panel--room-state {
+  display: flex;
+  flex-direction: column;
+}
+
 .panel__title {
   margin: 0 0 8px;
   font-size: 1.5rem;
@@ -492,8 +497,144 @@ body {
   .room-overview__grid,
   .auction-stage__grid,
   .trade-stage__grid,
+  .deficit-stage__grid,
   .diagnostics-grid,
   .trade-editor__grid {
     grid-template-columns: 1fr;
+  }
+
+  .lobby__actions {
+    flex-direction: column;
+  }
+
+  .lobby__actions .button {
+    width: 100%;
+  }
+
+  .asset-chip-list,
+  .auction-quick-bids {
+    flex-direction: column;
+  }
+
+  .asset-chip {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .room-overview__roster,
+  .stage-card__seat-list {
+    grid-template-columns: 1fr;
+  }
+
+  .panel--room-state .stage-card:not(.stage-card--overview) {
+    order: 1;
+  }
+
+  .panel--room-state .stage-card--overview {
+    order: 2;
+  }
+
+  .panel--room-state > .status-grid--support,
+  .panel--room-state > .player-card {
+    order: 3;
+  }
+
+  .panel--room-state > .panel__title--assets,
+  .panel--room-state > .asset-grid {
+    order: 4;
+  }
+
+  .panel--room-state .diagnostics-drawer {
+    order: 5;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    padding: 14px;
+  }
+
+  .panel {
+    padding: 16px;
+    border-radius: 22px;
+  }
+
+  .shell__header {
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .shell__header h1 {
+    font-size: clamp(1.8rem, 9vw, 2.8rem);
+  }
+
+  .panel__title {
+    font-size: 1.2rem;
+  }
+
+  .stage-card,
+  .trade-side,
+  .room-chip,
+  .status-card,
+  .player-card,
+  .asset-picker__section,
+  .diagnostics-drawer {
+    padding: 14px;
+  }
+
+  .stage-card {
+    gap: 8px;
+  }
+
+  .asset-picker {
+    gap: 10px;
+  }
+
+  .asset-chip {
+    border-radius: 14px;
+    padding: 11px 12px;
+  }
+
+  .button {
+    padding: 12px 16px;
+  }
+
+  .board {
+    min-height: 420px;
+  }
+
+  .board__surface {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .board__tile {
+    padding: 4px;
+  }
+
+  .board__tile-label {
+    font-size: 0.62rem;
+  }
+
+  .board__tile-owner {
+    font-size: 0.56rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .shell {
+    padding: 10px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .shell__status {
+    width: 100%;
+  }
+
+  .board {
+    min-height: 360px;
   }
 }
