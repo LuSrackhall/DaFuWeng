@@ -1408,23 +1408,25 @@ export function GamePage() {
               <div className="trade-settlement-card__grid">
                 <article className="trade-side">
                   <strong>{projection.latestSettlementSummary.tradeSettlement.proposerName}</strong>
+                  <span className="trade-side__summary">{projection.latestSettlementSummary.tradeSettlement.proposerSummary}</span>
                   {projection.latestSettlementSummary.tradeSettlement.proposerGives.map((line) => (
-                    <span key={`proposer-gives-${line}`}>交出: {line}</span>
+                    <span className="trade-side__detail" key={`proposer-gives-${line}`}>交出: {line}</span>
                   ))}
                   {projection.latestSettlementSummary.tradeSettlement.proposerGets.map((line) => (
-                    <span key={`proposer-gets-${line}`}>获得: {line}</span>
+                    <span className="trade-side__detail" key={`proposer-gets-${line}`}>获得: {line}</span>
                   ))}
-                  <span>{`成交后现金: ${projection.latestSettlementSummary.tradeSettlement.proposerCashAfter ?? "未知"}`}</span>
+                  <span className="trade-side__detail">{`成交后现金: ${projection.latestSettlementSummary.tradeSettlement.proposerCashAfter ?? "未知"}`}</span>
                 </article>
                 <article className="trade-side">
                   <strong>{projection.latestSettlementSummary.tradeSettlement.counterpartyName}</strong>
+                  <span className="trade-side__summary">{projection.latestSettlementSummary.tradeSettlement.counterpartySummary}</span>
                   {projection.latestSettlementSummary.tradeSettlement.counterpartyGives.map((line) => (
-                    <span key={`counterparty-gives-${line}`}>交出: {line}</span>
+                    <span className="trade-side__detail" key={`counterparty-gives-${line}`}>交出: {line}</span>
                   ))}
                   {projection.latestSettlementSummary.tradeSettlement.counterpartyGets.map((line) => (
-                    <span key={`counterparty-gets-${line}`}>获得: {line}</span>
+                    <span className="trade-side__detail" key={`counterparty-gets-${line}`}>获得: {line}</span>
                   ))}
-                  <span>{`成交后现金: ${projection.latestSettlementSummary.tradeSettlement.counterpartyCashAfter ?? "未知"}`}</span>
+                  <span className="trade-side__detail">{`成交后现金: ${projection.latestSettlementSummary.tradeSettlement.counterpartyCashAfter ?? "未知"}`}</span>
                 </article>
               </div>
               <span>{projection.latestSettlementSummary.nextStepLabel}</span>
@@ -1442,14 +1444,16 @@ export function GamePage() {
               <div className="trade-settlement-card__grid">
                 <article className="trade-side">
                   <strong>{projection.latestSettlementSummary.tradeRejection.proposerName} 原本想交出</strong>
+                  <span className="trade-side__summary">{projection.latestSettlementSummary.tradeRejection.proposerOfferedSummary}</span>
                   {projection.latestSettlementSummary.tradeRejection.proposerOffered.map((line) => (
-                    <span key={`rejected-offered-${line}`}>{line}</span>
+                    <span className="trade-side__detail" key={`rejected-offered-${line}`}>{line}</span>
                   ))}
                 </article>
                 <article className="trade-side">
                   <strong>{projection.latestSettlementSummary.tradeRejection.proposerName} 原本想获得</strong>
+                  <span className="trade-side__summary">{projection.latestSettlementSummary.tradeRejection.proposerRequestedSummary}</span>
                   {projection.latestSettlementSummary.tradeRejection.proposerRequested.map((line) => (
-                    <span key={`rejected-requested-${line}`}>{line}</span>
+                    <span className="trade-side__detail" key={`rejected-requested-${line}`}>{line}</span>
                   ))}
                 </article>
               </div>

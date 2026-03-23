@@ -106,6 +106,8 @@ type SettlementSummary = {
   tradeSettlement?: {
     proposerName: string;
     counterpartyName: string;
+    proposerSummary: string;
+    counterpartySummary: string;
     proposerGives: string[];
     proposerGets: string[];
     counterpartyGives: string[];
@@ -116,6 +118,8 @@ type SettlementSummary = {
   tradeRejection?: {
     proposerName: string;
     counterpartyName: string;
+    proposerOfferedSummary: string;
+    proposerRequestedSummary: string;
     proposerOffered: string[];
     proposerRequested: string[];
     nextActorName: string;
@@ -346,6 +350,40 @@ function buildTradeSummary(snapshot: ProjectionSnapshot): TradeSummary | null {
   return buildTradeSummaryFromPendingTrade(snapshot.players, snapshot.pendingTrade);
 }
 
+function buildTradeAssetLines(cash: number, tileLabels: string[], cardLabels: string[]) {
+  const lines: string[] = [];
+
+  if (cash > 0) {
+    lines.push(`现金 ${cash}`);
+  }
+  if (tileLabels.length > 0) {
+    lines.push(`地产 ${tileLabels.join(" / ")}`);
+  }
+  if (cardLabels.length > 0) {
+    lines.push(`卡牌 ${cardLabels.join(" / ")}`);
+  }
+
+  return lines;
+}
+
+function countTradeAssetEntries(cash: number, tileLabels: string[], cardLabels: string[]) {
+  return Number(cash > 0) + Number(tileLabels.length > 0) + Number(cardLabels.length > 0);
+}
+
+function buildTradeSideSummary(giveCount: number, getCount: number) {
+  const giveLabel = giveCount > 0 ? `交出 ${giveCount} 项` : "没有额外交出";
+  const getLabel = getCount > 0 ? `获得 ${getCount} 项` : "没有额外获得";
+  return `${giveLabel} · ${getLabel}`;
+}
+
+function buildRejectedTradeSummary(count: number, verb: "交出" | "获得") {
+  if (count === 0) {
+    return verb === "交出" ? "原本没有额外交出" : "原本没有额外索要";
+  }
+
+  return `原本想${verb} ${count} 项`;
+}
+
 function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementSummary | null {
   const latestFormalEvent = [...snapshot.recentEvents]
     .filter((event) =>
@@ -444,6 +482,46 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
     if (latestFormalEvent.type === "trade-accepted") {
       const proposerCashAfter = latestFormalEvent.cashAfterByPlayer?.[tradeSummary.proposerPlayerId] ?? null;
       const counterpartyCashAfter = latestFormalEvent.cashAfterByPlayer?.[tradeSummary.counterpartyPlayerId] ?? null;
+      const proposerGives = buildTradeAssetLines(
+        tradeSummary.offeredCash,
+        tradeSummary.offeredTileLabels,
+        tradeSummary.offeredCardLabels,
+      );
+      const proposerGiveCount = countTradeAssetEntries(
+        tradeSummary.offeredCash,
+        tradeSummary.offeredTileLabels,
+        tradeSummary.offeredCardLabels,
+      );
+      const proposerGets = buildTradeAssetLines(
+        tradeSummary.requestedCash,
+        tradeSummary.requestedTileLabels,
+        tradeSummary.requestedCardLabels,
+      );
+      const proposerGetCount = countTradeAssetEntries(
+        tradeSummary.requestedCash,
+        tradeSummary.requestedTileLabels,
+        tradeSummary.requestedCardLabels,
+      );
+      const counterpartyGives = buildTradeAssetLines(
+        tradeSummary.requestedCash,
+        tradeSummary.requestedTileLabels,
+        tradeSummary.requestedCardLabels,
+      );
+      const counterpartyGiveCount = countTradeAssetEntries(
+        tradeSummary.requestedCash,
+        tradeSummary.requestedTileLabels,
+        tradeSummary.requestedCardLabels,
+      );
+      const counterpartyGets = buildTradeAssetLines(
+        tradeSummary.offeredCash,
+        tradeSummary.offeredTileLabels,
+        tradeSummary.offeredCardLabels,
+      );
+      const counterpartyGetCount = countTradeAssetEntries(
+        tradeSummary.offeredCash,
+        tradeSummary.offeredTileLabels,
+        tradeSummary.offeredCardLabels,
+      );
       return {
         title: `${tradeSummary.counterpartyName} 接受了 ${tradeSummary.proposerName} 的交易报价`,
         detail: "这笔交换已经成交，双方的钱和资产都已经换手。",
@@ -453,31 +531,38 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
         tradeSettlement: {
           proposerName: tradeSummary.proposerName,
           counterpartyName: tradeSummary.counterpartyName,
-          proposerGives: [
-            `现金 ${tradeSummary.offeredCash}`,
-            `地产 ${tradeSummary.offeredTileLabels.join(" / ") || "无"}`,
-            `卡牌 ${tradeSummary.offeredCardLabels.join(" / ") || "无"}`,
-          ],
-          proposerGets: [
-            `现金 ${tradeSummary.requestedCash}`,
-            `地产 ${tradeSummary.requestedTileLabels.join(" / ") || "无"}`,
-            `卡牌 ${tradeSummary.requestedCardLabels.join(" / ") || "无"}`,
-          ],
-          counterpartyGives: [
-            `现金 ${tradeSummary.requestedCash}`,
-            `地产 ${tradeSummary.requestedTileLabels.join(" / ") || "无"}`,
-            `卡牌 ${tradeSummary.requestedCardLabels.join(" / ") || "无"}`,
-          ],
-          counterpartyGets: [
-            `现金 ${tradeSummary.offeredCash}`,
-            `地产 ${tradeSummary.offeredTileLabels.join(" / ") || "无"}`,
-            `卡牌 ${tradeSummary.offeredCardLabels.join(" / ") || "无"}`,
-          ],
+          proposerSummary: buildTradeSideSummary(proposerGiveCount, proposerGetCount),
+          counterpartySummary: buildTradeSideSummary(counterpartyGiveCount, counterpartyGetCount),
+          proposerGives,
+          proposerGets,
+          counterpartyGives,
+          counterpartyGets,
           proposerCashAfter,
           counterpartyCashAfter,
         },
       };
     }
+
+    const proposerOffered = buildTradeAssetLines(
+      tradeSummary.offeredCash,
+      tradeSummary.offeredTileLabels,
+      tradeSummary.offeredCardLabels,
+    );
+    const proposerOfferedCount = countTradeAssetEntries(
+      tradeSummary.offeredCash,
+      tradeSummary.offeredTileLabels,
+      tradeSummary.offeredCardLabels,
+    );
+    const proposerRequested = buildTradeAssetLines(
+      tradeSummary.requestedCash,
+      tradeSummary.requestedTileLabels,
+      tradeSummary.requestedCardLabels,
+    );
+    const proposerRequestedCount = countTradeAssetEntries(
+      tradeSummary.requestedCash,
+      tradeSummary.requestedTileLabels,
+      tradeSummary.requestedCardLabels,
+    );
 
     return {
       title: `${tradeSummary.counterpartyName} 拒绝了 ${tradeSummary.proposerName} 的交易报价`,
@@ -488,16 +573,10 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
       tradeRejection: {
         proposerName: tradeSummary.proposerName,
         counterpartyName: tradeSummary.counterpartyName,
-        proposerOffered: [
-          `现金 ${tradeSummary.offeredCash}`,
-          `地产 ${tradeSummary.offeredTileLabels.join(" / ") || "无"}`,
-          `卡牌 ${tradeSummary.offeredCardLabels.join(" / ") || "无"}`,
-        ],
-        proposerRequested: [
-          `现金 ${tradeSummary.requestedCash}`,
-          `地产 ${tradeSummary.requestedTileLabels.join(" / ") || "无"}`,
-          `卡牌 ${tradeSummary.requestedCardLabels.join(" / ") || "无"}`,
-        ],
+        proposerOfferedSummary: buildRejectedTradeSummary(proposerOfferedCount, "交出"),
+        proposerRequestedSummary: buildRejectedTradeSummary(proposerRequestedCount, "获得"),
+        proposerOffered,
+        proposerRequested,
         nextActorName: getPlayerName(snapshot.players, snapshot.currentTurnPlayerId),
       },
     };

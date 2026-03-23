@@ -575,7 +575,7 @@ describe("toProjectionView", () => {
     expect(proposedProjection.tradeSummary?.proposerName).toBe("房主");
     expect(proposedProjection.tradeSummary?.counterpartyName).toBe("玩家二");
     expect(proposedProjection.tradeSummary?.offeredCash).toBe(100);
-    expect(proposedProjection.tradeSummary?.stageLabel).toContain("等待 玩家二 决定");
+    expect(proposedProjection.tradeSummary?.stageLabel).toContain("现在等 玩家二 表态");
 
     const accepted = applyRoomEvents(proposed, [
       {
@@ -604,6 +604,9 @@ describe("toProjectionView", () => {
     expect(acceptedProjection.latestSettlementSummary?.kind).toBe("trade-accepted");
     expect(acceptedProjection.latestSettlementSummary?.tradeSettlement?.proposerName).toBe("房主");
     expect(acceptedProjection.latestSettlementSummary?.tradeSettlement?.counterpartyCashAfter).toBe(1550);
+    expect(acceptedProjection.latestSettlementSummary?.tradeSettlement?.proposerSummary).toBe("交出 1 项 · 获得 1 项");
+    expect(acceptedProjection.latestSettlementSummary?.tradeSettlement?.proposerGives).toEqual(["现金 100"]);
+    expect(acceptedProjection.latestSettlementSummary?.tradeSettlement?.proposerGets).toEqual(["现金 50"]);
 
     const rejected = applyRoomEvents(proposed, [
       {
@@ -628,12 +631,45 @@ describe("toProjectionView", () => {
     expect(rejectedProjection.latestSettlementSummary?.title).toContain("拒绝了");
     expect(rejectedProjection.latestSettlementSummary?.kind).toBe("trade-rejected");
     expect(rejectedProjection.latestSettlementSummary?.tradeRejection?.nextActorName).toBe("房主");
+    expect(rejectedProjection.latestSettlementSummary?.tradeRejection?.proposerOfferedSummary).toBe("原本想交出 1 项");
+    expect(rejectedProjection.latestSettlementSummary?.tradeRejection?.proposerRequestedSummary).toBe("原本想获得 1 项");
 
     const replaySafeRejectedProjection = toProjectionView({
       ...rejected,
       recentEvents: rejected.recentEvents.filter((event) => event.type !== "trade-proposed"),
     });
     expect(replaySafeRejectedProjection.latestSettlementSummary?.title).toContain("拒绝了");
-    expect(replaySafeRejectedProjection.latestSettlementSummary?.tradeRejection?.proposerRequested[0]).toContain("现金 50");
+    expect(replaySafeRejectedProjection.latestSettlementSummary?.tradeRejection?.proposerRequested).toEqual(["现金 50"]);
+
+    const oneSidedProposal = applyRoomEvents(sampleProjection, [
+      {
+        id: "evt-29",
+        type: "trade-proposed",
+        sequence: 29,
+        snapshotVersion: 29,
+        summary: "房主 向 玩家二 发起了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p2",
+        offeredCash: 0,
+        requestedCash: 50,
+      },
+      {
+        id: "evt-30",
+        type: "trade-rejected",
+        sequence: 30,
+        snapshotVersion: 30,
+        summary: "玩家二 拒绝了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p1",
+        offeredCash: 0,
+        requestedCash: 50,
+      },
+    ]);
+
+    const oneSidedProjection = toProjectionView(oneSidedProposal);
+    expect(oneSidedProjection.latestSettlementSummary?.tradeRejection?.proposerOfferedSummary).toBe("原本没有额外交出");
+    expect(oneSidedProjection.latestSettlementSummary?.tradeRejection?.proposerRequestedSummary).toBe("原本想获得 1 项");
   });
 });
