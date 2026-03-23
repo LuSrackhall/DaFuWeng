@@ -69,6 +69,93 @@ body {
   gap: 20px;
 }
 
+.room-shell {
+  min-height: 100vh;
+  padding: 20px;
+  display: grid;
+  gap: 18px;
+}
+
+.room-shell__topbar,
+.room-shell__identity {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.room-shell__title {
+  margin: 4px 0 0;
+  font-size: clamp(1.8rem, 3vw, 3rem);
+}
+
+.room-shell__title-group,
+.room-shell__meta,
+.room-shell__pill,
+.room-shell__layout,
+.board__hero,
+.board__hero-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.room-shell__meta {
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  min-width: min(100%, 440px);
+}
+
+.room-shell__pill {
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(14, 24, 20, 0.72);
+  border: 1px solid rgba(232, 205, 143, 0.14);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
+}
+
+.room-shell__layout {
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.6fr);
+  align-items: start;
+}
+
+.room-shell__board {
+  position: sticky;
+  top: 20px;
+}
+
+.room-shell__rail {
+  display: flex;
+  flex-direction: column;
+}
+
+.room-shell__rail > .stage-card:not(.stage-card--overview) {
+  order: 1;
+}
+
+.room-shell__rail > .player-card--contextual {
+  order: 2;
+}
+
+.room-shell__rail > .turn-tools-shelf {
+  order: 3;
+}
+
+.room-shell__rail > .stage-card--overview {
+  order: 4;
+}
+
+.room-shell__rail > .status-grid--support {
+  order: 5;
+}
+
+.room-shell__rail > .panel__title--assets,
+.room-shell__rail > .asset-grid {
+  order: 6;
+}
+
+.room-shell__rail > .diagnostics-drawer {
+  order: 7;
+}
+
 .lobby {
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
 }
@@ -637,6 +724,17 @@ body {
   overflow: hidden;
 }
 
+.board__hero {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.board__hero-copy {
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .board__surface {
   display: grid;
   grid-template-columns: repeat(11, minmax(32px, 1fr));
@@ -699,6 +797,31 @@ body {
 @media (max-width: 960px) {
   .shell {
     padding: 20px;
+  }
+
+  .room-shell {
+    padding: 18px;
+  }
+
+  .room-shell__topbar,
+  .room-shell__identity {
+    flex-direction: column;
+  }
+
+  .room-shell__meta,
+  .room-shell__layout,
+  .board__hero {
+    grid-template-columns: 1fr;
+  }
+
+  .room-shell__board {
+    position: relative;
+    top: auto;
+    order: 2;
+  }
+
+  .room-shell__rail {
+    order: 1;
   }
 
   .lobby,
@@ -792,6 +915,10 @@ body {
     padding: 14px;
   }
 
+  .room-shell {
+    padding: 14px;
+  }
+
   .panel {
     padding: 16px;
     border-radius: 22px;
@@ -808,6 +935,10 @@ body {
 
   .panel__title {
     font-size: 1.2rem;
+  }
+
+  .room-shell__title {
+    font-size: clamp(1.4rem, 8vw, 2.2rem);
   }
 
   .stage-card,
@@ -870,6 +1001,10 @@ body {
 
 @media (max-width: 480px) {
   .shell {
+    padding: 10px;
+  }
+
+  .room-shell {
     padding: 10px;
   }
 

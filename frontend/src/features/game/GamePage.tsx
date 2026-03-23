@@ -121,6 +121,7 @@ export function GamePage() {
         : projection.turnState === "awaiting-deficit-resolution"
           ? "资金结算"
           : "对局进行中";
+          const roomShellTitle = projection.waitingRoomSummary ? "等待开局" : roomPhaseLabel;
   const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
   const auctionSummary = projection.auctionSummary;
   const tradeSummary = projection.tradeSummary;
@@ -1141,9 +1142,51 @@ export function GamePage() {
   }
 
   return (
-    <main className="game">
-      <section className="panel panel--board board">
-        <p className="panel__meta">当前棋盘</p>
+    <main className="room-shell">
+      <header className="room-shell__topbar">
+        <div className="room-shell__identity">
+          <div className="room-shell__title-group">
+            <p className="shell__eyebrow">房间 {projection.roomId}</p>
+            <h1 className="room-shell__title">{roomShellTitle}</h1>
+            <p className="panel__subtitle">{activeIdentityLabel}</p>
+          </div>
+          <Link className="button button--secondary room-shell__back" to="/">
+            返回大厅
+          </Link>
+        </div>
+        <div className="room-shell__meta">
+          <article className="room-shell__pill">
+            <strong>当前回合</strong>
+            <span>{projection.currentTurnPlayerName}</span>
+          </article>
+          <article className="room-shell__pill">
+            <strong>当前阶段</strong>
+            <span>{roomPhaseLabel}</span>
+          </article>
+          <article className="room-shell__pill">
+            <strong>房内玩家</strong>
+            <span>{projection.players.length} 人</span>
+          </article>
+        </div>
+      </header>
+
+      <div className="room-shell__layout">
+      <section className="panel panel--board board room-shell__board">
+        <div className="board__hero">
+          <div className="board__hero-copy">
+            <p className="shell__eyebrow">当前棋盘</p>
+            <strong>{roomPhaseLabel}</strong>
+            <span>
+              {presentation.highlightedTileId
+                ? `焦点地块：${boardTileLabels.get(presentation.highlightedTileId) ?? presentation.highlightedTileId}`
+                : "棋盘会在这里突出当前地块与玩家位置。"}
+            </span>
+          </div>
+          <div className="board__hero-copy">
+            <strong>{projection.currentTurnPlayerName}</strong>
+            <span>{isSpectator ? "当前只读观战" : `当前身份：${activePlayerName}`}</span>
+          </div>
+        </div>
         {isLoading ? <p className="panel__subtitle">正在同步房间状态...</p> : null}
         {isFallback ? <p className="panel__subtitle">尚未成功同步到权威后端，请稍后重试。</p> : null}
         <BoardScene
@@ -1153,9 +1196,9 @@ export function GamePage() {
           highlightedTileId={presentation.highlightedTileId}
         />
       </section>
-      <aside className="panel panel--room-state">
-        <p className="panel__meta">当前房间态势</p>
-        <h3 className="panel__title">房间 {projection.roomId}</h3>
+      <aside className="panel panel--room-state room-shell__rail">
+        <p className="panel__meta">当前阶段与操作</p>
+        <h2 className="panel__title">对局侧栏</h2>
         {error ? <p className="panel__subtitle">{error}</p> : null}
         {actionMessage ? <p className="panel__subtitle">{actionMessage}</p> : null}
         {isSpectator ? <p className="panel__subtitle">当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。</p> : null}
@@ -1539,6 +1582,7 @@ export function GamePage() {
           ) : null}
         </section>
       </aside>
+      </div>
     </main>
   );
 }

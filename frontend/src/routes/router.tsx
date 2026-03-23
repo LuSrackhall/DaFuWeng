@@ -11,11 +11,11 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <LobbyPage />
-      },
-      {
-        path: "room/:roomId",
-        element: <GamePage />
       }
     ]
+  },
+  {
+    path: "/room/:roomId",
+    element: <GamePage />
   }
 ]);

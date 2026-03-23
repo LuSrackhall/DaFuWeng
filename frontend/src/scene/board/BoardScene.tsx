@@ -47,10 +47,10 @@ export function BoardScene(props: BoardSceneProps) {
       })}
       <div className="board__center">
         <div>
-          <p className="shell__eyebrow">Board scene boundary</p>
-          <h2>服务端权威，前端投影</h2>
+          <p className="shell__eyebrow">棋盘舞台</p>
+          <h2>当前棋局的视觉焦点</h2>
           <p>
-            这里是首版棋盘场景占位。后续会将 PixiJS 画布、棋子动画、事件时间线和镜头编排接入这个边界。
+            当前位置、归属和当前行动会先在这里汇聚。后续会继续把 PixiJS 画布、棋子动画和镜头编排接进来。
           </p>
         </div>
       </div>

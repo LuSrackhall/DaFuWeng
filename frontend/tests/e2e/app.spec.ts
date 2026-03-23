@@ -16,6 +16,9 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(page).toHaveURL(/\/room\/room-\d+$/);
   const roomId = extractRoomId(page.url());
   expect(roomId).toMatch(/^room-\d+$/);
+  await expect(page.getByRole("heading", { name: "Da Fu Weng" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "等待开局" })).toBeVisible();
+  await expect(page.locator("header").getByRole("link", { name: "返回大厅" })).toBeVisible();
 
   const guestPage = await browser.newPage();
   await guestPage.goto("/");
