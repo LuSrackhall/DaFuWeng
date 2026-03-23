@@ -289,6 +289,17 @@ The system SHALL present accepted and rejected trade result cards with concise s
 - **WHEN** a rejected trade result has only a subset of cash, property, or card content
 - **THEN** the room page SHALL omit empty categories from the rejected summary and SHALL still make clear what the proposer was offering or requesting
 
+### Requirement: The room page uses a scene-first shell
+The system SHALL present the playable room route through a dedicated scene-first shell instead of the generic lobby shell.
+
+#### Scenario: Player enters a real room
+- **WHEN** a player opens a room route
+- **THEN** the page SHALL present a lightweight room top bar, a primary board stage, and a secondary room rail instead of the lobby hero shell
+
+#### Scenario: Player needs the current action
+- **WHEN** the room page renders an active room stage
+- **THEN** the room rail SHALL prioritize the current stage and primary action before overview, assets, or diagnostics
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
