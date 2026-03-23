@@ -267,6 +267,17 @@ The system SHALL recover accepted and rejected trade result cards after a joined
 - **WHEN** a joined player reloads the browser after a trade has been rejected and the result card is visible
 - **THEN** the room page SHALL still show the rejected trade result and the resumed next-step room state
 
+### Requirement: Trade result cards survive browser reload across viewer roles
+The system SHALL recover accepted and rejected trade result cards consistently after responder or spectator views reload the room page.
+
+#### Scenario: Responder reloads an accepted or rejected result
+- **WHEN** the trade responder reloads the browser after an accepted or rejected trade result is visible
+- **THEN** the room page SHALL still show the correct result card and the resumed room state from the responder's perspective
+
+#### Scenario: Spectator reloads an accepted or rejected result
+- **WHEN** a read-only spectator reloads the browser after an accepted or rejected trade result is visible
+- **THEN** the room page SHALL still show the correct result card and remain clearly read-only without returning to a pending trade stage
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
