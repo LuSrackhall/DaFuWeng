@@ -1,3 +1,10 @@
+## [1.13.1](https://github.com/LuSrackhall/DaFuWeng/compare/v1.13.0...v1.13.1) (2026-03-23)
+
+
+### Bug Fixes
+
+* 补齐交易拒绝后的恢复反馈 ([fb2897f](https://github.com/LuSrackhall/DaFuWeng/commit/fb2897fd2e0840be5fd015e20aca6147d3078268))
+
 # [1.13.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.12.0...v1.13.0) (2026-03-22)
 
 
