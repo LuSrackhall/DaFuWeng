@@ -223,6 +223,17 @@ The system SHALL present an accepted trade as a dedicated bilateral settlement c
 - **WHEN** a player or read-only viewer sees the accepted trade result after settlement
 - **THEN** the room page SHALL present the same bilateral settlement summary consistently across clients
 
+### Requirement: Rejected trades render as a recovery-oriented result card
+The system SHALL present a rejected trade as a dedicated recovery result card after the room exits the waiting-for-response state.
+
+#### Scenario: Rejected trade restores the proposer's turn
+- **WHEN** a pending trade is rejected and the room returns to its next authoritative step
+- **THEN** the room page SHALL explain who rejected whose offer, that no cash or assets changed hands, and that the proposer has resumed the room flow
+
+#### Scenario: Rejected trade result survives replay and recovery
+- **WHEN** a client reconstructs room state after a rejected trade through refresh, reconnect, or event catch-up
+- **THEN** the room page SHALL still render the rejected offer summary without depending on a separately retained proposal event
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
