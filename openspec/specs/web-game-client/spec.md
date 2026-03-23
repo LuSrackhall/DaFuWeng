@@ -380,6 +380,17 @@ The system SHALL surface recent authoritative results in the Pixi room board cen
 - **WHEN** the room page refreshes after a recent authoritative result
 - **THEN** the Pixi room board SHALL restore the same recent result feedback from the recovered room projection
 
+### Requirement: Neutral room results keep a confirmation-state tone
+The system SHALL present neutral room results as resolved state confirmations rather than celebratory success feedback.
+
+#### Scenario: Trade offer is rejected
+- **WHEN** a pending trade is formally rejected and the room returns to the proposer
+- **THEN** the room board and result card SHALL present that outcome with a neutral confirmation tone
+
+#### Scenario: Auction ends without a winner
+- **WHEN** an auction ends unsold and the property remains unowned
+- **THEN** the room board and result card SHALL present that outcome with a neutral confirmation tone
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
