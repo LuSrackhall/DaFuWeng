@@ -369,6 +369,17 @@ The system SHALL keep the primary action anchor visible on narrow screens while 
 - **WHEN** the room page is rendered on a narrow screen with a persistent action tray
 - **THEN** the page layout SHALL reserve enough bottom space that the final interactive room content is not hidden behind the tray
 
+### Requirement: The Pixi room board reflects recent authoritative results
+The system SHALL surface recent authoritative results in the Pixi room board center HUD when a new outcome has just been resolved.
+
+#### Scenario: Formal room result becomes the latest outcome
+- **WHEN** the latest room projection includes a formal result such as a completed trade, bankruptcy settlement, or unsold auction
+- **THEN** the Pixi room board SHALL surface that result title and consequence in its center HUD
+
+#### Scenario: Room page recovers after refresh
+- **WHEN** the room page refreshes after a recent authoritative result
+- **THEN** the Pixi room board SHALL restore the same recent result feedback from the recovered room projection
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
