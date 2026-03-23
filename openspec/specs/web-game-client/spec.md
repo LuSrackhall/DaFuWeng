@@ -256,6 +256,17 @@ The system SHALL keep accepted and rejected trade result cards readable on narro
 - **WHEN** the room page renders a rejected trade result on a narrow mobile viewport
 - **THEN** the result card SHALL present the recovery content in a single readable column without horizontal scrolling and SHALL keep the next-step guidance visible
 
+### Requirement: Trade result cards survive browser reload for joined players
+The system SHALL recover accepted and rejected trade result cards after a joined player reloads the room page.
+
+#### Scenario: Accepted trade result survives reload
+- **WHEN** a joined player reloads the browser after a trade has been accepted and the result card is visible
+- **THEN** the room page SHALL still show the accepted trade result and the resumed next-step room state
+
+#### Scenario: Rejected trade result survives reload
+- **WHEN** a joined player reloads the browser after a trade has been rejected and the result card is visible
+- **THEN** the room page SHALL still show the rejected trade result and the resumed next-step room state
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
