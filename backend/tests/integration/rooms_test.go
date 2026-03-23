@@ -1105,3 +1105,48 @@ func TestCashTradeProposalAndAcceptance(t *testing.T) {
 		t.Fatalf("expected second player cash 1550 after trade, got %v", second["cash"])
 	}
 }
+
+func TestCashTradeProposalAndRejection(t *testing.T) {
+	_, mux, _ := newServiceForTest(t)
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+
+	proposalPayload, _ := json.Marshal(map[string]any{
+		"playerId": hostID,
+		"idempotencyKey": "trade-reject-1",
+		"counterpartyPlayerId": secondPlayerID,
+		"offeredCash": 100,
+		"requestedCash": 50,
+		"offeredTileIds": []string{},
+		"requestedTileIds": []string{},
+		"offeredCardIds": []string{},
+		"requestedCardIds": []string{},
+	})
+	proposalRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(proposalRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/trade/propose", proposalPayload, playerToken(roomID, hostID)))
+	if proposalRecorder.Code != http.StatusOK {
+		t.Fatalf("expected trade proposal status 200, got %d", proposalRecorder.Code)
+	}
+
+	rejectPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "trade-reject-accept-1"})
+	rejectRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rejectRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/trade/reject", rejectPayload, playerToken(roomID, secondPlayerID)))
+	if rejectRecorder.Code != http.StatusOK {
+		t.Fatalf("expected trade rejection status 200, got %d", rejectRecorder.Code)
+	}
+	var rejected map[string]any
+	_ = json.Unmarshal(rejectRecorder.Body.Bytes(), &rejected)
+	if rejected["turnState"] != "awaiting-roll" {
+		t.Fatalf("expected rejected trade to restore awaiting-roll, got %v", rejected["turnState"])
+	}
+	if rejected["currentTurnPlayerId"] != hostID {
+		t.Fatalf("expected proposer to resume turn after rejection, got %v", rejected["currentTurnPlayerId"])
+	}
+	recentEvents := rejected["recentEvents"].([]any)
+	latestEvent := recentEvents[len(recentEvents)-1].(map[string]any)
+	if latestEvent["type"] != "trade-rejected" {
+		t.Fatalf("expected latest event trade-rejected, got %v", latestEvent["type"])
+	}
+	if latestEvent["offeredCash"] != float64(100) || latestEvent["requestedCash"] != float64(50) {
+		t.Fatalf("expected rejected trade event to keep trade cash snapshot, got %v / %v", latestEvent["offeredCash"], latestEvent["requestedCash"])
+	}
+}

@@ -230,6 +230,56 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await guestPage.close();
 });
 
+test("rejected trade shows a recovery card and restores the proposer's turn", async ({
+  browser,
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("房主昵称").fill("房主甲");
+  await page.getByRole("button", { name: "创建房间" }).click();
+
+  await expect(page).toHaveURL(/\/room\/room-\d+$/);
+  const roomId = extractRoomId(page.url());
+
+  const guestPage = await browser.newPage();
+  await guestPage.goto("/");
+  await guestPage.getByLabel("加入房间").fill(roomId);
+  await guestPage.getByLabel("玩家昵称").fill("玩家乙");
+  await guestPage.getByRole("button", { name: "加入房间" }).click();
+  await expect(guestPage).toHaveURL(new RegExp(`/room/${roomId}$`));
+
+  const spectatorPage = await browser.newPage();
+  await spectatorPage.goto(`/room/${roomId}`);
+
+  await page.getByRole("button", { name: "房主开始游戏" }).click();
+  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
+  await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
+  await page.getByRole("button", { name: "购买地产" }).click();
+  await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
+
+  await page.getByRole("button", { name: "展开回合工具区" }).click();
+  await page.getByText("发起双边交易报价", { exact: true }).isVisible();
+  await page.getByRole("button", { name: "下一步：选择我给出的内容" }).click();
+  await page.getByLabel("我出现金").fill("120");
+  await page.getByRole("button", { name: "下一步：选择我索取的内容" }).click();
+  await page.getByLabel("我索要现金").fill("30");
+  await page.getByRole("button", { name: "下一步：确认报价摘要" }).click();
+  await page.getByRole("button", { name: "确认并发起交易" }).click();
+
+  await guestPage.getByRole("button", { name: "拒绝交易" }).click();
+
+  await expect(page.getByText("交易未成交", { exact: true })).toBeVisible();
+  await expect(page.getByText(/没有发生任何现金、地产或卡牌转移/)).toBeVisible();
+  await expect(page.getByText(/房主甲 已恢复当前回合推进/)).toBeVisible();
+  await expect(page.getByText(/房主甲 原本想交出/)).toBeVisible();
+  await expect(guestPage.getByText("交易未成交", { exact: true })).toBeVisible();
+  await expect(spectatorPage.getByText("交易未成交", { exact: true })).toBeVisible();
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
+  await spectatorPage.close();
+  await guestPage.close();
+});
+
 test("deficit recovery panel shows mortgage impact and resolves through the recovery action", async ({
   page,
 }) => {

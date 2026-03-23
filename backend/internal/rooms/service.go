@@ -1886,7 +1886,7 @@ func (service *Service) rejectTrade(roomID string, playerID string, idempotencyK
 	room.TurnState = "awaiting-roll"
 	room.CurrentTurnPlayerID = trade.ProposerPlayerID
 	room.PendingAction = "等待当前玩家掷骰"
-	service.commitRoomMutation(&room, []eventDraft{{Type: "trade-rejected", Summary: fmt.Sprintf("%s 拒绝了交易报价。", room.playerName(playerID)), PlayerID: trade.ProposerPlayerID, OwnerPlayerID: playerID, NextPlayerID: trade.ProposerPlayerID}})
+	service.commitRoomMutation(&room, []eventDraft{{Type: "trade-rejected", Summary: fmt.Sprintf("%s 拒绝了交易报价。", room.playerName(playerID)), PlayerID: trade.ProposerPlayerID, OwnerPlayerID: playerID, NextPlayerID: trade.ProposerPlayerID, OfferedCash: trade.OfferedCash, RequestedCash: trade.RequestedCash, OfferedTileIDs: copyStringSlice(trade.OfferedTileIDs), RequestedTileIDs: copyStringSlice(trade.RequestedTileIDs), OfferedCardIDs: copyStringSlice(trade.OfferedCardIDs), RequestedCardIDs: copyStringSlice(trade.RequestedCardIDs), TradeSnapshotVersion: trade.SnapshotVersion}})
 	service.store.SaveCommandResult(pocketbase.PersistedCommandResult{RoomID: room.RoomID, PlayerID: playerID, CommandKind: "reject-trade", IdempotencyKey: idempotencyKey, Snapshot: room.toPersistedSnapshot(), RecentRoomEvent: toPersistedEvents(room.RoomID, room.RecentEvents)})
 	return room, nil
 }

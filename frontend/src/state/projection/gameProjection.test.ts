@@ -615,6 +615,8 @@ describe("toProjectionView", () => {
         playerId: "p1",
         ownerPlayerId: "p2",
         nextPlayerId: "p1",
+        offeredCash: 100,
+        requestedCash: 50,
       },
     ]);
 
@@ -624,5 +626,14 @@ describe("toProjectionView", () => {
 
     const rejectedProjection = toProjectionView(rejected);
     expect(rejectedProjection.latestSettlementSummary?.title).toContain("拒绝了");
+    expect(rejectedProjection.latestSettlementSummary?.kind).toBe("trade-rejected");
+    expect(rejectedProjection.latestSettlementSummary?.tradeRejection?.nextActorName).toBe("房主");
+
+    const replaySafeRejectedProjection = toProjectionView({
+      ...rejected,
+      recentEvents: rejected.recentEvents.filter((event) => event.type !== "trade-proposed"),
+    });
+    expect(replaySafeRejectedProjection.latestSettlementSummary?.title).toContain("拒绝了");
+    expect(replaySafeRejectedProjection.latestSettlementSummary?.tradeRejection?.proposerRequested[0]).toContain("现金 50");
   });
 });

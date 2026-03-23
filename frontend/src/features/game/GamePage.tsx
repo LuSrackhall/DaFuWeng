@@ -1429,6 +1429,32 @@ export function GamePage() {
               </div>
               <span>{projection.latestSettlementSummary.nextStepLabel}</span>
             </section>
+          ) : projection.latestSettlementSummary.kind === "trade-rejected" && projection.latestSettlementSummary.tradeRejection ? (
+            <section className="stage-card stage-card--result trade-rejection-card">
+              <p className="shell__eyebrow">交易未成交</p>
+              <strong>{projection.latestSettlementSummary.title}</strong>
+              <span>{projection.latestSettlementSummary.detail}</span>
+              <div className="trade-response-stage__readonly trade-rejection-card__hero">
+                <strong>这笔报价已失效</strong>
+                <span>没有发生任何现金、地产或卡牌转移。</span>
+                <span>{`${projection.latestSettlementSummary.tradeRejection.nextActorName} 已恢复当前回合推进。`}</span>
+              </div>
+              <div className="trade-settlement-card__grid">
+                <article className="trade-side">
+                  <strong>{projection.latestSettlementSummary.tradeRejection.proposerName} 原本想交出</strong>
+                  {projection.latestSettlementSummary.tradeRejection.proposerOffered.map((line) => (
+                    <span key={`rejected-offered-${line}`}>{line}</span>
+                  ))}
+                </article>
+                <article className="trade-side">
+                  <strong>{projection.latestSettlementSummary.tradeRejection.proposerName} 原本想获得</strong>
+                  {projection.latestSettlementSummary.tradeRejection.proposerRequested.map((line) => (
+                    <span key={`rejected-requested-${line}`}>{line}</span>
+                  ))}
+                </article>
+              </div>
+              <span>{projection.latestSettlementSummary.nextStepLabel}</span>
+            </section>
           ) : (
             <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--result"}`}>
               <p className="shell__eyebrow">最近结果</p>

@@ -102,7 +102,7 @@ type SettlementSummary = {
   detail: string;
   nextStepLabel: string;
   tone: "danger" | "neutral";
-  kind?: "trade-accepted" | "generic";
+  kind?: "trade-accepted" | "trade-rejected" | "generic";
   tradeSettlement?: {
     proposerName: string;
     counterpartyName: string;
@@ -112,6 +112,13 @@ type SettlementSummary = {
     counterpartyGets: string[];
     proposerCashAfter: number | null;
     counterpartyCashAfter: number | null;
+  };
+  tradeRejection?: {
+    proposerName: string;
+    counterpartyName: string;
+    proposerOffered: string[];
+    proposerRequested: string[];
+    nextActorName: string;
   };
 };
 
@@ -408,21 +415,30 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
       )
       .sort((left, right) => right.sequence - left.sequence)[0];
 
-    if (!recentTradeProposal?.playerId || !recentTradeProposal.ownerPlayerId) {
+    const tradeSourceEvent = latestFormalEvent.offeredCash !== undefined
+      || latestFormalEvent.requestedCash !== undefined
+      || (latestFormalEvent.offeredTileIds?.length ?? 0) > 0
+      || (latestFormalEvent.requestedTileIds?.length ?? 0) > 0
+      || (latestFormalEvent.offeredCardIds?.length ?? 0) > 0
+      || (latestFormalEvent.requestedCardIds?.length ?? 0) > 0
+      ? latestFormalEvent
+      : recentTradeProposal;
+
+    if (!tradeSourceEvent?.playerId || !tradeSourceEvent.ownerPlayerId) {
       return null;
     }
 
     const tradeSummary = buildTradeSummaryFromPendingTrade(snapshot.players, {
-      proposerPlayerId: recentTradeProposal.playerId,
-      counterpartyPlayerId: recentTradeProposal.ownerPlayerId,
-      offeredCash: recentTradeProposal.offeredCash ?? 0,
-      requestedCash: recentTradeProposal.requestedCash ?? 0,
-      offeredTileIds: recentTradeProposal.offeredTileIds ?? [],
-      requestedTileIds: recentTradeProposal.requestedTileIds ?? [],
-      offeredCardIds: recentTradeProposal.offeredCardIds ?? [],
-      requestedCardIds: recentTradeProposal.requestedCardIds ?? [],
+      proposerPlayerId: tradeSourceEvent.playerId,
+      counterpartyPlayerId: tradeSourceEvent.ownerPlayerId,
+      offeredCash: tradeSourceEvent.offeredCash ?? 0,
+      requestedCash: tradeSourceEvent.requestedCash ?? 0,
+      offeredTileIds: tradeSourceEvent.offeredTileIds ?? [],
+      requestedTileIds: tradeSourceEvent.requestedTileIds ?? [],
+      offeredCardIds: tradeSourceEvent.offeredCardIds ?? [],
+      requestedCardIds: tradeSourceEvent.requestedCardIds ?? [],
       snapshotVersion:
-        recentTradeProposal.tradeSnapshotVersion ?? snapshot.snapshotVersion,
+        tradeSourceEvent.tradeSnapshotVersion ?? snapshot.snapshotVersion,
     });
 
     if (latestFormalEvent.type === "trade-accepted") {
@@ -465,10 +481,25 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
 
     return {
       title: `${tradeSummary.counterpartyName} 拒绝了 ${tradeSummary.proposerName} 的交易报价`,
-      detail: `房间不再等待交易响应，${tradeSummary.proposerName} 的回合恢复为正常行动阶段。`,
+      detail: "这笔报价没有成交，现金、地产和卡牌都保持原状，房间已退出等待交易回应阶段。",
       nextStepLabel: snapshot.pendingActionLabel,
       tone: "neutral",
-      kind: "generic",
+      kind: "trade-rejected",
+      tradeRejection: {
+        proposerName: tradeSummary.proposerName,
+        counterpartyName: tradeSummary.counterpartyName,
+        proposerOffered: [
+          `现金 ${tradeSummary.offeredCash}`,
+          `地产 ${tradeSummary.offeredTileLabels.join(" / ") || "无"}`,
+          `卡牌 ${tradeSummary.offeredCardLabels.join(" / ") || "无"}`,
+        ],
+        proposerRequested: [
+          `现金 ${tradeSummary.requestedCash}`,
+          `地产 ${tradeSummary.requestedTileLabels.join(" / ") || "无"}`,
+          `卡牌 ${tradeSummary.requestedCardLabels.join(" / ") || "无"}`,
+        ],
+        nextActorName: getPlayerName(snapshot.players, snapshot.currentTurnPlayerId),
+      },
     };
   }
 
