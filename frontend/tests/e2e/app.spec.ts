@@ -150,6 +150,45 @@ test("declined property enters a readable live auction stage across two pages", 
   await guestPage.close();
 });
 
+test("unsold auction uses a neutral result card and board semantics", async ({
+  browser,
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("房主昵称").fill("房主甲");
+  await page.getByRole("button", { name: "创建房间" }).click();
+
+  await expect(page).toHaveURL(/\/room\/room-\d+$/);
+  const roomId = extractRoomId(page.url());
+
+  const guestPage = await browser.newPage();
+  await guestPage.goto("/");
+  await guestPage.getByLabel("加入房间").fill(roomId);
+  await guestPage.getByLabel("玩家昵称").fill("玩家乙");
+  await guestPage.getByRole("button", { name: "加入房间" }).click();
+
+  await page.getByRole("button", { name: "房主开始游戏" }).click();
+  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
+  await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
+
+  await page.getByRole("button", { name: "放弃购买" }).click();
+  await guestPage.getByRole("button", { name: "放弃本轮竞拍" }).click();
+  await page.getByRole("button", { name: "放弃本轮竞拍" }).click();
+
+  await expect(page.getByText("拍卖未成交", { exact: true })).toBeVisible();
+  await expect(page.getByText(/没有玩家接手这块地产，产权仍保持未售出状态。/)).toBeVisible();
+  await expect(page.locator(".stage-card--neutral").getByText("东湖路 本轮流拍")).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /最近结果 东湖路 本轮流拍/);
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("拍卖未成交", { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(/没有玩家接手这块地产，产权仍保持未售出状态。/)).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /最近结果 东湖路 本轮流拍/);
+
+  await guestPage.close();
+});
+
 test("live trade response uses a dominant stage card and keeps diagnostics collapsible", async ({
   browser,
   page,
@@ -962,11 +1001,12 @@ test("mobile accepted trade result stays readable without horizontal overflow", 
 
   const settlementCard = page.locator(".trade-settlement-card");
   const settlementSides = settlementCard.locator(".trade-side");
+  const supportGrid = page.locator(".status-grid--support");
 
   await expect(settlementCard.getByText("交易已成交", { exact: true })).toBeVisible();
   await expect(settlementCard.getByText("玩家乙乙乙乙乙乙 接受了 房主甲甲甲甲甲甲 的交易报价")).toBeVisible();
   await expect(settlementCard.getByText(/成交后现金/).first()).toBeVisible();
-  await expect(settlementCard.getByText("等待当前玩家掷骰")).toBeVisible();
+  await expect(supportGrid.getByText("等待当前玩家掷骰")).toBeVisible();
 
   const firstSide = await settlementSides.nth(0).boundingBox();
   const secondSide = await settlementSides.nth(1).boundingBox();
@@ -1096,11 +1136,12 @@ test("mobile rejected trade result stays readable without horizontal overflow", 
 
   const rejectionCard = page.locator(".trade-rejection-card");
   const rejectionSides = rejectionCard.locator(".trade-side");
+  const supportGrid = page.locator(".status-grid--support");
 
   await expect(rejectionCard.getByText("交易未成交", { exact: true })).toBeVisible();
   await expect(rejectionCard.getByText(/没有发生任何现金、地产或卡牌转移/)).toBeVisible();
   await expect(rejectionCard.getByText(/房主甲甲甲甲甲甲 继续这一回合/)).toBeVisible();
-  await expect(rejectionCard.getByText("等待当前玩家掷骰")).toBeVisible();
+  await expect(supportGrid.getByText("等待当前玩家掷骰")).toBeVisible();
 
   const firstSide = await rejectionSides.nth(0).boundingBox();
   const secondSide = await rejectionSides.nth(1).boundingBox();

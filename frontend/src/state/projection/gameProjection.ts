@@ -102,7 +102,7 @@ type SettlementSummary = {
   detail: string;
   nextStepLabel: string;
   tone: "danger" | "neutral";
-  kind?: "trade-accepted" | "trade-rejected" | "generic";
+  kind?: "trade-accepted" | "trade-rejected" | "auction-unsold" | "generic";
   tradeSettlement?: {
     proposerName: string;
     counterpartyName: string;
@@ -436,7 +436,7 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
       detail: `没有玩家赢得 ${latestFormalEvent.tileLabel ?? "该地产"}，产权保持未售出状态，也没有任何现金结算。`,
       nextStepLabel: snapshot.pendingActionLabel,
       tone: "neutral",
-      kind: "generic",
+      kind: "auction-unsold",
     };
   }
 

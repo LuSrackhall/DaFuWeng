@@ -14,7 +14,9 @@ type PrimaryAnchorTone = "default" | "warning" | "danger" | "success";
 type BoardResultFeedbackTone = PrimaryAnchorTone | "neutral";
 
 type BoardResultFeedback = {
+  eyebrowLabel: string;
   title: string;
+  metaLabel: string;
   detail: string;
   nextLabel: string;
   diceLabel: string | null;
@@ -165,7 +167,7 @@ export function GamePage() {
           : "对局进行中";
           const roomShellTitle = projection.waitingRoomSummary ? "等待开局" : roomPhaseLabel;
   const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
-          const latestProjectionEvent = projection.recentEvents.at(-1) ?? null;
+  const latestProjectionEvent = projection.recentEvents.at(-1) ?? null;
   const auctionSummary = projection.auctionSummary;
   const tradeSummary = projection.tradeSummary;
   const auctionQuickBidOptions = auctionSummary
@@ -441,16 +443,32 @@ export function GamePage() {
         ? "现金与资产已换手"
         : settlement.kind === "trade-rejected"
           ? "未发生资产转移"
+          : settlement.kind === "auction-unsold"
+            ? "产权仍未售出"
           : settlement.tone === "danger"
             ? "高压结果已生效"
             : "正式结果已落地";
 
       return {
+        eyebrowLabel: settlement.kind === "trade-accepted"
+          ? "结果达成"
+          : settlement.tone === "danger"
+            ? "危险结果"
+            : "结果确认",
         title: settlement.title,
+        metaLabel: settlement.kind === "trade-accepted"
+          ? "收益与交换结果已落地"
+          : settlement.kind === "trade-rejected"
+            ? "报价失效 · 回合已交还"
+            : settlement.kind === "auction-unsold"
+              ? "拍卖未成交 · 产权仍未售出"
+              : settlement.tone === "danger"
+                ? "高压结果已生效"
+                : "正式结果已记录",
         detail: settlement.detail,
         nextLabel: settlement.nextStepLabel,
         diceLabel: projection.lastRoll[0] || projection.lastRoll[1] ? `${projection.lastRoll[0]} + ${projection.lastRoll[1]}` : null,
-        chipLabel: "结果后果",
+        chipLabel: settlement.kind === "trade-accepted" ? "完成结果" : "确认结果",
         chipValue,
         tone: settlement.kind === "trade-accepted"
           ? "success"
@@ -479,7 +497,9 @@ export function GamePage() {
     switch (latestProjectionEvent.type) {
       case "property-purchased":
         return {
+          eyebrowLabel: "结果达成",
           title: `${actorName} 买下 ${latestProjectionEvent.tileLabel ?? "地产"}`,
+          metaLabel: "买地结果已落地",
           detail: `支付 ${latestProjectionEvent.amount ?? 0}，归属已经完成同步。`,
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -489,7 +509,9 @@ export function GamePage() {
         };
       case "rent-charged":
         return {
+          eyebrowLabel: "即时后果",
           title: `${actorName} 支付租金`,
+          metaLabel: "现金结果已同步",
           detail: `${ownerName ?? "收租方"} 收到 ${latestProjectionEvent.amount ?? 0}，当前回合已继续推进。`,
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -499,7 +521,9 @@ export function GamePage() {
         };
       case "tax-paid":
         return {
+          eyebrowLabel: "即时后果",
           title: `${actorName} 支付税费`,
+          metaLabel: "税费结算已同步",
           detail: `向银行支付 ${latestProjectionEvent.amount ?? 0}，税费结算已完成。`,
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -509,7 +533,9 @@ export function GamePage() {
         };
       case "auction-settled":
         return {
+          eyebrowLabel: "结果达成",
           title: `${actorName} 竞得 ${latestProjectionEvent.tileLabel ?? "拍品"}`,
+          metaLabel: "拍卖成交已落地",
           detail: "本轮拍卖已经成交，产权与资金结果都已写入房间。",
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -519,7 +545,9 @@ export function GamePage() {
         };
       case "property-mortgaged":
         return {
+          eyebrowLabel: "即时后果",
           title: `${actorName} 抵押 ${latestProjectionEvent.tileLabel ?? "地产"}`,
+          metaLabel: "恢复动作已生效",
           detail: "本次恢复动作已生效，房间会按新的缺口继续推进。",
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -529,7 +557,9 @@ export function GamePage() {
         };
       case "improvement-built":
         return {
+          eyebrowLabel: "结果达成",
           title: `${actorName} 开发 ${latestProjectionEvent.tileLabel ?? "地产"}`,
+          metaLabel: "地产状态已升级",
           detail: `建筑等级已提升到 ${latestProjectionEvent.improvementLevel ?? 0}，租金威胁同步上升。`,
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -539,7 +569,9 @@ export function GamePage() {
         };
       case "player-jailed":
         return {
+          eyebrowLabel: "危险结果",
           title: `${actorName} 进入监狱`,
+          metaLabel: "高压状态已成立",
           detail: "本回合落点结果已经成立，后续将等待监狱决策。",
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -550,7 +582,9 @@ export function GamePage() {
       default:
         return diceLabel
           ? {
+              eyebrowLabel: "最近结果",
               title: latestProjectionEvent.summary,
+              metaLabel: "结果已同步到当前棋盘",
               detail: `焦点地块 ${boardTileLabels.get(presentation.highlightedTileId ?? "") ?? latestProjectionEvent.tileLabel ?? "已更新"}，结果已同步到当前棋盘。`,
               nextLabel: projection.pendingActionLabel,
               diceLabel,
@@ -576,6 +610,9 @@ export function GamePage() {
         backdropFilter: "blur(18px)",
       }
     : undefined;
+  const overviewProgressLabel = projection.latestSettlementSummary
+    ? "当前正式结果见下方最近结果卡。"
+    : latestEventSummary;
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
@@ -1102,9 +1139,15 @@ export function GamePage() {
       >
         <p className="shell__eyebrow">当前主操作</p>
         <strong>{title}</strong>
+        {isMobileAnchorTray ? (
+          <div className="room-primary-anchor__impact-block">
+            <span className="room-primary-anchor__impact-label">执行后果</span>
+            <strong className="room-primary-anchor__impact-value">{consequence}</strong>
+          </div>
+        ) : null}
         <p className="action-surface__summary">{summary}</p>
         <p className="action-surface__hint">{hint}</p>
-        <p className="action-surface__meta">{consequence}</p>
+        {!isMobileAnchorTray ? <p className="action-surface__meta">{consequence}</p> : null}
         {actions}
       </section>
     );
@@ -1531,7 +1574,7 @@ export function GamePage() {
             </article>
             <article className="status-card">
               <strong>最新进展</strong>
-              <span>{latestEventSummary}</span>
+              <span>{overviewProgressLabel}</span>
             </article>
           </div>
           <div className="room-overview__roster">
@@ -1732,7 +1775,6 @@ export function GamePage() {
                   <span className="trade-side__detail">{`成交后现金: ${projection.latestSettlementSummary.tradeSettlement.counterpartyCashAfter ?? "未知"}`}</span>
                 </article>
               </div>
-              <span>{projection.latestSettlementSummary.nextStepLabel}</span>
             </section>
           ) : projection.latestSettlementSummary.kind === "trade-rejected" && projection.latestSettlementSummary.tradeRejection ? (
             <section className="stage-card stage-card--neutral trade-rejection-card">
@@ -1760,14 +1802,23 @@ export function GamePage() {
                   ))}
                 </article>
               </div>
-              <span>{projection.latestSettlementSummary.nextStepLabel}</span>
+            </section>
+          ) : projection.latestSettlementSummary.kind === "auction-unsold" ? (
+            <section className="stage-card stage-card--neutral trade-rejection-card">
+              <p className="shell__eyebrow">拍卖未成交</p>
+              <strong>{projection.latestSettlementSummary.title}</strong>
+              <span>{projection.latestSettlementSummary.detail}</span>
+              <div className="trade-response-stage__readonly trade-rejection-card__hero">
+                <strong>这轮拍卖已经结束</strong>
+                <span>没有玩家接手这块地产，产权仍保持未售出状态。</span>
+                <span>{projection.latestSettlementSummary.nextStepLabel}</span>
+              </div>
             </section>
           ) : (
             <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--neutral"}`}>
               <p className="shell__eyebrow">最近结果</p>
               <strong>{projection.latestSettlementSummary.title}</strong>
               <span>{projection.latestSettlementSummary.detail}</span>
-              <span>{projection.latestSettlementSummary.nextStepLabel}</span>
             </section>
           )
         ) : null}
@@ -1778,8 +1829,8 @@ export function GamePage() {
             <span>{projection.lastRoll.join(" + ")}</span>
           </article>
           <article className="status-card">
-            <strong>下一步</strong>
-            <span>{projection.pendingActionLabel}</span>
+            <strong>{projection.latestSettlementSummary ? "当前责任" : "下一步"}</strong>
+            <span>{projection.latestSettlementSummary?.nextStepLabel ?? projection.pendingActionLabel}</span>
           </article>
         </div>
 

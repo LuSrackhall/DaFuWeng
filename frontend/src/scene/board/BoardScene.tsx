@@ -9,7 +9,9 @@ type BoardSceneProps = {
   highlightedTileId: string | null;
   players: PlayerState[];
   resultFeedback: {
+    eyebrowLabel: string;
     title: string;
+    metaLabel: string;
     detail: string;
     nextLabel: string;
     diceLabel: string | null;
@@ -137,6 +139,19 @@ function getFeedbackAccent(tone: NonNullable<BoardSceneProps["resultFeedback"]>[
     return 0xa5b6ad;
   }
   return fallbackColor;
+}
+
+function getFeedbackBannerAlpha(tone: NonNullable<BoardSceneProps["resultFeedback"]>["tone"]) {
+  if (tone === "success") {
+    return 0.18;
+  }
+  if (tone === "neutral") {
+    return 0.08;
+  }
+  if (tone === "danger") {
+    return 0.16;
+  }
+  return 0.12;
 }
 
 function getHostSize(host: HTMLDivElement) {
@@ -343,12 +358,12 @@ function drawCenterHud(
   if (resultFeedback) {
     const resultBanner = new Graphics();
     resultBanner.roundRect(centerX + 22, centerY + 22, centerWidth - 44, 124, 24);
-    resultBanner.fill({ color: feedbackAccent, alpha: 0.12 });
+    resultBanner.fill({ color: feedbackAccent, alpha: getFeedbackBannerAlpha(resultFeedback.tone) });
     resultBanner.stroke({ color: feedbackAccent, width: 1.5, alpha: 0.38 });
     root.addChild(resultBanner);
   }
 
-  const eyebrow = new Text({ text: resultFeedback ? "最近结果" : "当前回合", style: centerEyebrowStyle });
+  const eyebrow = new Text({ text: resultFeedback ? resultFeedback.eyebrowLabel : "当前回合", style: centerEyebrowStyle });
   eyebrow.anchor.set(0.5, 0);
   eyebrow.x = centerX + centerWidth / 2;
   eyebrow.y = centerY + 24;
@@ -364,7 +379,7 @@ function drawCenterHud(
   root.addChild(title);
 
   if (resultFeedback) {
-    const resultMeta = new Text({ text: `当前行动 · ${currentPlayer?.name ?? "等待同步"}`, style: centerResultMetaStyle });
+    const resultMeta = new Text({ text: resultFeedback.metaLabel, style: centerResultMetaStyle });
     resultMeta.anchor.set(0.5, 0);
     resultMeta.x = centerX + centerWidth / 2;
     resultMeta.y = centerY + 86;

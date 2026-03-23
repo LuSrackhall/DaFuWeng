@@ -240,6 +240,7 @@ describe("toProjectionView", () => {
     expect(projection.latestSettlementSummary?.title).toContain("流拍");
     expect(projection.latestSettlementSummary?.detail).toContain("产权保持未售出状态");
     expect(projection.latestSettlementSummary?.tone).toBe("neutral");
+    expect(projection.latestSettlementSummary?.kind).toBe("auction-unsold");
   });
 
   test("prefers the latest formal result over an older unsold auction event", () => {
