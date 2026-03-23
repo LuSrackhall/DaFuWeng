@@ -15,7 +15,7 @@ type BoardSceneProps = {
     diceLabel: string | null;
     chipLabel: string;
     chipValue: string;
-    tone: "default" | "warning" | "danger" | "success";
+    tone: "default" | "warning" | "danger" | "success" | "neutral";
   } | null;
 };
 
@@ -132,6 +132,9 @@ function getFeedbackAccent(tone: NonNullable<BoardSceneProps["resultFeedback"]>[
   }
   if (tone === "warning") {
     return 0xe2b94a;
+  }
+  if (tone === "neutral") {
+    return 0xa5b6ad;
   }
   return fallbackColor;
 }

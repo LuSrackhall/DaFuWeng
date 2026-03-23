@@ -25,6 +25,7 @@ import { getActivePlayer } from "../state/projection/activePlayer";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
 const PLAYER_TOKEN_HEADER = "X-DaFuWeng-Player-Token";
+const REQUEST_TIMEOUT_MS = 5000;
 
 function resolveApiBaseUrl() {
   return import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL;
@@ -37,7 +38,7 @@ type StreamHandlers = {
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 1500);
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
     const response = await fetch(`${resolveApiBaseUrl()}${path}`, {

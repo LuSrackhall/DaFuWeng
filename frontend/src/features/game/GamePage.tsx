@@ -11,6 +11,8 @@ import { usePresentationState } from "../../state/presentation/gamePresentation"
 
 type TradeComposerStep = "counterparty" | "offered" | "requested" | "review";
 type PrimaryAnchorTone = "default" | "warning" | "danger" | "success";
+type BoardResultFeedbackTone = PrimaryAnchorTone | "neutral";
+
 type BoardResultFeedback = {
   title: string;
   detail: string;
@@ -18,7 +20,7 @@ type BoardResultFeedback = {
   diceLabel: string | null;
   chipLabel: string;
   chipValue: string;
-  tone: PrimaryAnchorTone;
+  tone: BoardResultFeedbackTone;
 };
 
 export function GamePage() {
@@ -450,7 +452,11 @@ export function GamePage() {
         diceLabel: projection.lastRoll[0] || projection.lastRoll[1] ? `${projection.lastRoll[0]} + ${projection.lastRoll[1]}` : null,
         chipLabel: "结果后果",
         chipValue,
-        tone: settlement.tone === "danger" ? "danger" : "success",
+        tone: settlement.kind === "trade-accepted"
+          ? "success"
+          : settlement.tone === "danger"
+            ? "danger"
+            : "neutral",
       };
     }
 
@@ -1729,7 +1735,7 @@ export function GamePage() {
               <span>{projection.latestSettlementSummary.nextStepLabel}</span>
             </section>
           ) : projection.latestSettlementSummary.kind === "trade-rejected" && projection.latestSettlementSummary.tradeRejection ? (
-            <section className="stage-card stage-card--result trade-rejection-card">
+            <section className="stage-card stage-card--neutral trade-rejection-card">
               <p className="shell__eyebrow">交易未成交</p>
               <strong>{projection.latestSettlementSummary.title}</strong>
               <span>{projection.latestSettlementSummary.detail}</span>
@@ -1757,7 +1763,7 @@ export function GamePage() {
               <span>{projection.latestSettlementSummary.nextStepLabel}</span>
             </section>
           ) : (
-            <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--result"}`}>
+            <section className={`stage-card ${projection.latestSettlementSummary.tone === "danger" ? "stage-card--danger" : "stage-card--neutral"}`}>
               <p className="shell__eyebrow">最近结果</p>
               <strong>{projection.latestSettlementSummary.title}</strong>
               <span>{projection.latestSettlementSummary.detail}</span>

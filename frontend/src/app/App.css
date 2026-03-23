@@ -349,6 +349,13 @@ body {
     rgba(24, 64, 52, 0.26);
 }
 
+.stage-card--neutral {
+  background:
+    radial-gradient(circle at top right, rgba(165, 182, 173, 0.16), transparent 38%),
+    rgba(28, 40, 38, 0.26);
+  border-color: rgba(181, 199, 191, 0.18);
+}
+
 .stage-card__seat-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

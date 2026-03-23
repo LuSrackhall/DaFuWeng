@@ -239,6 +239,7 @@ describe("toProjectionView", () => {
     expect(projection.auctionSummary).toBeNull();
     expect(projection.latestSettlementSummary?.title).toContain("流拍");
     expect(projection.latestSettlementSummary?.detail).toContain("产权保持未售出状态");
+    expect(projection.latestSettlementSummary?.tone).toBe("neutral");
   });
 
   test("prefers the latest formal result over an older unsold auction event", () => {
@@ -630,6 +631,7 @@ describe("toProjectionView", () => {
     const rejectedProjection = toProjectionView(rejected);
     expect(rejectedProjection.latestSettlementSummary?.title).toContain("拒绝了");
     expect(rejectedProjection.latestSettlementSummary?.kind).toBe("trade-rejected");
+    expect(rejectedProjection.latestSettlementSummary?.tone).toBe("neutral");
     expect(rejectedProjection.latestSettlementSummary?.tradeRejection?.nextActorName).toBe("房主");
     expect(rejectedProjection.latestSettlementSummary?.tradeRejection?.proposerOfferedSummary).toBe("原本想交出 1 项");
     expect(rejectedProjection.latestSettlementSummary?.tradeRejection?.proposerRequestedSummary).toBe("原本想获得 1 项");
