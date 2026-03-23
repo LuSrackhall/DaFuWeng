@@ -63,6 +63,60 @@ body {
   background: rgba(9, 18, 15, 0.3);
 }
 
+.route-loading-shell {
+  min-height: 100vh;
+  padding: 32px;
+  display: grid;
+  place-items: center;
+}
+
+.route-loading-shell__panel,
+.route-loading-shell__hero,
+.route-loading-shell__grid,
+.route-loading-shell__stages,
+.route-loading-shell__card,
+.route-loading-shell__stage {
+  display: grid;
+  gap: 12px;
+}
+
+.route-loading-shell__panel {
+  width: min(100%, 980px);
+}
+
+.route-loading-shell__hero {
+  gap: 8px;
+}
+
+.route-loading-shell__title {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 3.2rem);
+}
+
+.route-loading-shell__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.route-loading-shell__card,
+.route-loading-shell__stage {
+  border-radius: 20px;
+  padding: 16px 18px;
+  background: rgba(10, 21, 18, 0.4);
+  border: 1px solid rgba(232, 205, 143, 0.14);
+}
+
+.route-loading-shell__stage--active {
+  background:
+    radial-gradient(circle at top right, rgba(89, 168, 214, 0.18), transparent 42%),
+    rgba(16, 37, 31, 0.78);
+  border-color: rgba(149, 194, 225, 0.22);
+}
+
+.route-loading-shell__hint {
+  margin: 0;
+  color: rgba(246, 236, 212, 0.76);
+}
+
 .lobby,
 .game {
   display: grid;
@@ -988,6 +1042,14 @@ body {
     min-width: 0;
   }
 
+  .route-loading-shell {
+    padding: 18px;
+  }
+
+  .route-loading-shell__grid {
+    grid-template-columns: 1fr;
+  }
+
   .room-overview__roster,
   .stage-card__seat-list {
     grid-template-columns: 1fr;
@@ -1085,6 +1147,16 @@ body {
 
   .board {
     min-height: 420px;
+  }
+
+  .route-loading-shell {
+    padding: 14px;
+  }
+
+  .route-loading-shell__panel,
+  .route-loading-shell__card,
+  .route-loading-shell__stage {
+    padding: 14px;
   }
 
   .board__surface {

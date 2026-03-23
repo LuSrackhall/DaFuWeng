@@ -5,6 +5,159 @@ function extractRoomId(url: string) {
   return match?.[1] ?? "";
 }
 
+test("room route loading shell appears while the room chunk is delayed", async ({
+  page,
+}) => {
+  const roomId = "room-slow-route";
+  let chunkDelayed = false;
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route("**/assets/GamePage-*.js", async (route) => {
+    if (!chunkDelayed) {
+      chunkDelayed = true;
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    await route.continue();
+  });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route) => {
+    await route.fulfill({
+      json: {
+        roomId,
+        roomState: "lobby",
+        hostId: "p1",
+        snapshotVersion: 1,
+        eventSequence: 1,
+        turnState: "awaiting-roll",
+        currentTurnPlayerId: "p1",
+        pendingActionLabel: "等待房间准备完成",
+        pendingProperty: null,
+        pendingAuction: null,
+        pendingPayment: null,
+        pendingTrade: null,
+        chanceDeck: { drawPile: [], discardPile: [] },
+        communityDeck: { drawPile: [], discardPile: [] },
+        lastRoll: [0, 0],
+        players: [
+          {
+            id: "p1",
+            name: "房主甲",
+            cash: 1500,
+            position: 0,
+            properties: [],
+            mortgagedProperties: [],
+            propertyImprovements: {},
+            heldCardIds: [],
+            isBankrupt: false,
+            ready: false,
+          },
+        ],
+        recentEvents: [],
+      },
+    });
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const loadingShell = page.locator(".route-loading-shell");
+  await expect(loadingShell.getByText(`正在进入 ${roomId}`)).toBeVisible();
+  await expect(loadingShell.getByText("恢复玩家会话")).toBeVisible();
+  await expect(loadingShell.getByText("挂载房间页面代码块")).toBeVisible();
+  await expect(loadingShell.getByText("校验房间与会话身份")).toBeVisible();
+
+  await expect(page.getByRole("heading", { name: "等待开局" })).toBeVisible();
+  await expect(loadingShell).toHaveCount(0);
+});
+
+test("room page data loading state appears after the route shell is gone", async ({
+  page,
+}) => {
+  const roomId = "room-slow-data";
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.removeItem(`dafuweng-active-player:${currentRoomId}`);
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.fulfill({
+      json: {
+        roomId,
+        roomState: "lobby",
+        hostId: "p1",
+        snapshotVersion: 1,
+        eventSequence: 1,
+        turnState: "awaiting-roll",
+        currentTurnPlayerId: "p1",
+        pendingActionLabel: "等待房间准备完成",
+        pendingProperty: null,
+        pendingAuction: null,
+        pendingPayment: null,
+        pendingTrade: null,
+        chanceDeck: { drawPile: [], discardPile: [] },
+        communityDeck: { drawPile: [], discardPile: [] },
+        lastRoll: [0, 0],
+        players: [
+          {
+            id: "p1",
+            name: "房主甲",
+            cash: 1500,
+            position: 0,
+            properties: [],
+            mortgagedProperties: [],
+            propertyImprovements: {},
+            heldCardIds: [],
+            isBankrupt: false,
+            ready: false,
+          },
+        ],
+        recentEvents: [],
+      },
+    });
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  await expect(page.locator(".route-loading-shell")).toHaveCount(0);
+  await expect(page.getByText("正在同步房间状态...")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "等待开局" })).toBeVisible();
+  await expect(page.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
+});
+
 test("two real players can create, join, start, buy, pay rent, and refresh the same authoritative room", async ({
   browser,
   page,
@@ -346,7 +499,7 @@ test("rejected trade shows a recovery card and restores the proposer's turn", as
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText("交易未成交", { exact: true })).toBeVisible();
+  await expect(page.getByText("交易未成交", { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(/没有发生任何现金、地产或卡牌转移/)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
   await expect(page.getByText("双边交易待响应")).toHaveCount(0);
