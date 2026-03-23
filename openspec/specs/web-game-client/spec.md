@@ -245,6 +245,17 @@ The system SHALL present the core trade loop with player-facing guidance rather 
 - **WHEN** the acting player reviews a trade entry or pre-submit confirmation surface
 - **THEN** the copy SHALL describe the choice and consequence in direct player language rather than system-status language
 
+### Requirement: Mobile trade result cards remain readable without horizontal pressure
+The system SHALL keep accepted and rejected trade result cards readable on narrow mobile screens.
+
+#### Scenario: Accepted trade result is shown on mobile
+- **WHEN** the room page renders an accepted trade result on a narrow mobile viewport
+- **THEN** the result card SHALL present the settlement content in a single readable column without horizontal scrolling and SHALL keep the next-step guidance visible
+
+#### Scenario: Rejected trade result is shown on mobile
+- **WHEN** the room page renders a rejected trade result on a narrow mobile viewport
+- **THEN** the result card SHALL present the recovery content in a single readable column without horizontal scrolling and SHALL keep the next-step guidance visible
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
