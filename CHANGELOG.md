@@ -1,3 +1,12 @@
+## [1.13.2](https://github.com/LuSrackhall/DaFuWeng/compare/v1.13.1...v1.13.2) (2026-03-23)
+
+
+### Bug Fixes
+
+* **frontend:** 修正交易结果卡摘要噪音并补齐投影测试 ([bc1f79f](https://github.com/LuSrackhall/DaFuWeng/commit/bc1f79fdea65b1ea94e10963fa71b87a60891893))
+* 修正移动端交易结果卡单列换行与压力覆盖 ([5f6c34a](https://github.com/LuSrackhall/DaFuWeng/commit/5f6c34a7cd513b969db7b083c39f040087caca06))
+* 统一交易流程玩家文案口吻 ([5de5485](https://github.com/LuSrackhall/DaFuWeng/commit/5de548567d62e5b951406cc32a1ded2cde086912))
+
 ## [1.13.1](https://github.com/LuSrackhall/DaFuWeng/compare/v1.13.0...v1.13.1) (2026-03-23)
 
 
