@@ -234,6 +234,17 @@ The system SHALL present a rejected trade as a dedicated recovery result card af
 - **WHEN** a client reconstructs room state after a rejected trade through refresh, reconnect, or event catch-up
 - **THEN** the room page SHALL still render the rejected offer summary without depending on a separately retained proposal event
 
+### Requirement: Core trade-loop copy uses a player-facing tone
+The system SHALL present the core trade loop with player-facing guidance rather than backend-style status language.
+
+#### Scenario: Player reads a waiting or result trade state
+- **WHEN** the room page presents a trade waiting state or a trade result card
+- **THEN** the copy SHALL explain who acts, what changed or did not change, and what happens next without using backend-oriented terms such as authority, atomic, or process
+
+#### Scenario: Player reviews a trade before submission
+- **WHEN** the acting player reviews a trade entry or pre-submit confirmation surface
+- **THEN** the copy SHALL describe the choice and consequence in direct player language rather than system-status language
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
