@@ -19,6 +19,9 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(page.getByRole("heading", { name: "Da Fu Weng" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "等待开局" })).toBeVisible();
   await expect(page.locator("header").getByRole("link", { name: "返回大厅" })).toBeVisible();
+  await expect(page.locator(".board__pixi-host canvas")).toBeVisible();
+  await expect(page.locator(".board__tile")).toHaveCount(0);
+  await expect(page.locator(".board__pixi-host canvas")).toBeVisible();
 
   const guestPage = await browser.newPage();
   await guestPage.goto("/");
@@ -44,6 +47,7 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(guestPage.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
 
   await page.getByRole("button", { name: "购买地产" }).click();
+  await expect(page.locator(".board__pixi-host canvas")).toBeVisible();
   await expect(page.getByText(/已同步权威买地结果/)).toBeVisible();
   await expect(page.getByText(/现金: 1340/)).toBeVisible();
   await expect(page.getByText(/地产: 1/)).toBeVisible();
