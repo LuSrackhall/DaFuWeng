@@ -40,6 +40,14 @@
 - For Monopoly gameplay changes, prefer the sequence Product Manager -> UI UX Director -> Monopoly UI UX Pro Max -> Monopoly Rules Expert -> Tech Lead -> Senior Implementer -> QA Lead -> Simulated Player, with Monopoly Pixi Scene Engineer added when Pixi scene work is central.
 - UI and UX work must use `.github/prompts/ui-ux-pro-max/` as a formal workflow asset, either through Monopoly UI UX Pro Max or as a mandatory reference for Monopoly UI UX Director.
 - Before commit or release handoff, use Monopoly Versioning Manager to review semantic version impact, commit classification, and release facts.
+- Every final response must end with a dedicated Closing Guidance block as the absolute last section of the message; no content may appear after this block.
+- The Closing Guidance block must contain exactly two labeled lines in this fixed order: `Next best prompt:` followed by one concrete next prompt, then `New conversation:` followed by one absolute recommendation.
+- The `Next best prompt:` line must provide exactly one immediately executable next prompt tailored to the current task state. Do not provide multiple alternatives or generic brainstorming prompts.
+- The `New conversation:` line must use absolute wording only. Allowed outcomes are `必须另起新会话` or `不必另起新会话`.
+- Use `必须另起新会话` only when the next best prompt requires a new isolated workflow, a new active OpenSpec change, a materially different task scope, or a cleaner context boundary; otherwise use `不必另起新会话`.
+- Forbidden wording in `New conversation:` includes `可以`, `视情况`, `看需要`, `如果你愿意`, `maybe`, `optional`, and `depends`.
+- The Closing Guidance block is mandatory even when the task is blocked; in blocked cases the next-best prompt must focus on the single highest-value unblock action.
+- Any final response that omits the Closing Guidance block, changes the field order, emits more than one prompt, or uses hedged conversation guidance is non-compliant with repository policy.
 
 ## Engineering Rules
 
