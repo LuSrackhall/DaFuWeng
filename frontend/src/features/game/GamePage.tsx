@@ -349,13 +349,6 @@ export function GamePage() {
     || tradeRequestedCardIds.length > 0)
     ? `点下确认后，这笔报价就会送到 ${selectedCounterparty?.name ?? "对手"} 面前。房间会停下来等对方表态，这一步里你不能反悔。`
     : null;
-  const deficitViewerLabel = projection.resolutionSummary
-    ? canResolveDeficit
-      ? `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。选择一项可抵押资产，或直接宣告破产。`
-      : isSpectator
-        ? `当前仅观战，等待 ${projection.resolutionSummary.actorName} 处理欠款。`
-        : `当前由 ${projection.resolutionSummary.actorName} 处理欠款，其他人暂时只能等待。`
-    : null;
   const resolutionPropertyOptions = (resolutionActor?.properties ?? []).map((tileId) => {
     const tile = boardTileById.get(tileId);
     const price = tile?.price ?? 0;
@@ -384,6 +377,21 @@ export function GamePage() {
   const bestRecoveryOption = mortgageablePropertyOptions.find((option) => option.settlesDeficit)
     ?? [...mortgageablePropertyOptions].sort((left, right) => right.mortgageValue - left.mortgageValue)[0]
     ?? null;
+  const needsStepwiseRecovery = Boolean(bestRecoveryOption && !bestRecoveryOption.settlesDeficit);
+  const deficitAnchorActionLabel = bestRecoveryOption
+    ? needsStepwiseRecovery
+      ? `下一步先抵押 ${bestRecoveryOption.label}`
+      : `抵押 ${bestRecoveryOption.label}`
+    : null;
+  const deficitViewerLabel = projection.resolutionSummary
+    ? canResolveDeficit
+      ? needsStepwiseRecovery
+        ? `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。这次恢复需要连续几步，锚点会在每次权威抵押后继续刷新下一步。`
+        : `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。选择一项可抵押资产，或直接宣告破产。`
+      : isSpectator
+        ? `当前仅观战，等待 ${projection.resolutionSummary.actorName} 处理欠款。`
+        : `当前由 ${projection.resolutionSummary.actorName} 处理欠款，其他人暂时只能等待。`
+    : null;
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
@@ -803,20 +811,20 @@ export function GamePage() {
       hint = deficitViewerLabel ?? "请先查看下方恢复面板中的可执行动作。";
       consequence = bestRecoveryOption
         ? bestRecoveryOption.settlesDeficit
-          ? `优先动作建议：抵押 ${bestRecoveryOption.label} 后即可补足当前欠款。`
-          : `优先动作建议：先抵押 ${bestRecoveryOption.label}，可把缺口压到 ${bestRecoveryOption.nextShortfall}。`
+          ? `下一步建议：抵押 ${bestRecoveryOption.label} 后即可补足当前欠款。`
+          : `下一步建议：先抵押 ${bestRecoveryOption.label}，完成后仍差 ${bestRecoveryOption.nextShortfall}，锚点会继续刷新后续恢复动作。`
         : `当前仍差 ${projection.resolutionSummary.shortfall}，请在下方恢复面板完成抵押或破产决定。`;
       tone = "danger";
       actions = canResolveDeficit ? (
         <div className="lobby__actions room-primary-anchor__critical-actions">
-          {bestRecoveryOption ? (
+          {bestRecoveryOption && deficitAnchorActionLabel ? (
             <button
               className="button button--primary"
               type="button"
               onClick={() => handleMortgage(bestRecoveryOption.id)}
               disabled={!canResolveDeficit || mortgageBusyTileId === bestRecoveryOption.id}
             >
-              {mortgageBusyTileId === bestRecoveryOption.id ? `抵押 ${bestRecoveryOption.label}...` : `先抵押 ${bestRecoveryOption.label}`}
+              {mortgageBusyTileId === bestRecoveryOption.id ? `抵押 ${bestRecoveryOption.label}...` : deficitAnchorActionLabel}
             </button>
           ) : null}
           <button className="button button--secondary button--danger" type="button" onClick={handleBankruptcy} disabled={!canResolveDeficit}>
@@ -1422,6 +1430,7 @@ export function GamePage() {
             <span>可抵押资产: {projection.resolutionSummary.availableMortgageCount} 处</span>
             <span>{projection.resolutionSummary.consequenceLabel}</span>
             <span>{deficitViewerLabel}</span>
+            {needsStepwiseRecovery ? <span>这笔欠款无法一步补足；顶部锚点会在每次抵押后继续给出下一步建议。</span> : null}
             <div className="deficit-stage__grid">
               <article className="trade-side">
                 <strong>可立即恢复的资产</strong>
