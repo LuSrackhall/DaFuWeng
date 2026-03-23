@@ -212,6 +212,17 @@ The system SHALL present the pending trade stage with role-specific guidance whi
 - **WHEN** the room is waiting on a pending trade response and the current viewer is neither proposer nor counterparty
 - **THEN** the room page SHALL make clear that the room is paused on a trade response and that the current viewer can only observe
 
+### Requirement: Accepted trades render as a bilateral settlement card
+The system SHALL present an accepted trade as a dedicated bilateral settlement card after the trade resolves.
+
+#### Scenario: Accepted trade settles
+- **WHEN** a pending trade is accepted and the room returns to its next authoritative step
+- **THEN** the room page SHALL show who exchanged what, how the cash landed for both trade parties, and what room step comes next
+
+#### Scenario: Other players review the accepted result
+- **WHEN** a player or read-only viewer sees the accepted trade result after settlement
+- **THEN** the room page SHALL present the same bilateral settlement summary consistently across clients
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
