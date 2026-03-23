@@ -818,11 +818,13 @@ test("mobile room page prioritizes the current stage before overview without hor
   const roomStatePanel = page.locator(".panel--room-state");
   const boardPanel = page.locator(".panel--board");
   const tradePanels = page.locator(".stage-card--trade .trade-stage__grid > .trade-side");
+  const mobileAnchor = page.locator(".room-primary-anchor");
 
   await expect(tradeStage.getByText("双边交易待响应")).toBeVisible();
   await expect(overviewStage.getByText("房间总览")).toBeVisible();
   await expect(supportGrid.getByText("最近骰子")).toBeVisible();
   await expect(boardPanel.getByText("当前棋盘")).toBeVisible();
+  await expect(mobileAnchor.getByRole("button", { name: "接受交易" })).toBeVisible();
 
   const roomStateBox = await roomStatePanel.boundingBox();
   const boardBox = await boardPanel.boundingBox();
@@ -837,6 +839,12 @@ test("mobile room page prioritizes the current stage before overview without hor
   expect(tradeBox?.y).toBeLessThan(boardBox?.y ?? Number.POSITIVE_INFINITY);
   expect(tradeBox?.y).toBeLessThan(supportBox?.y ?? Number.POSITIVE_INFINITY);
   expect(secondTradePanel?.y).toBeGreaterThan(firstTradePanel?.y ?? 0);
+
+  await expect(mobileAnchor).toBeInViewport();
+
+  await page.evaluate(() => window.scrollTo({ top: 480, behavior: "auto" }));
+  await expect(mobileAnchor).toBeInViewport();
+  await mobileAnchor.getByRole("button", { name: "接受交易" }).click({ trial: true });
 
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(hasHorizontalOverflow).toBe(false);

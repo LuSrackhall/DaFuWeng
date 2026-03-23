@@ -16,6 +16,9 @@ export function GamePage() {
   const params = useParams();
   const roomId = params.roomId ?? "";
   const { projection, isFallback, isLoading, error, applySnapshot, refreshProjection } = useGameProjection(roomId);
+  const [isMobileAnchorTray, setIsMobileAnchorTray] = useState(() => typeof window !== "undefined"
+    ? window.matchMedia("(max-width: 960px)").matches
+    : false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [auctionBid, setAuctionBid] = useState("200");
   const [tradeCounterpartyId, setTradeCounterpartyId] = useState("");
@@ -103,6 +106,33 @@ export function GamePage() {
     && projection.turnState === "awaiting-trade-response"
     && projection.pendingTrade !== null
     && activePlayerId === projection.pendingTrade.counterpartyPlayerId;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 960px)");
+    const updateMobileAnchorTray = (event: MediaQueryList | MediaQueryListEvent) => {
+      setIsMobileAnchorTray(event.matches);
+    };
+
+    updateMobileAnchorTray(mediaQuery);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateMobileAnchorTray);
+
+      return () => {
+        mediaQuery.removeEventListener("change", updateMobileAnchorTray);
+      };
+    }
+
+    mediaQuery.addListener(updateMobileAnchorTray);
+
+    return () => {
+      mediaQuery.removeListener(updateMobileAnchorTray);
+    };
+  }, []);
 
   const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
   const boardTileById = new Map(sampleBoard.map((tile) => [tile.id, tile]));
@@ -392,6 +422,21 @@ export function GamePage() {
         ? `当前仅观战，等待 ${projection.resolutionSummary.actorName} 处理欠款。`
         : `当前由 ${projection.resolutionSummary.actorName} 处理欠款，其他人暂时只能等待。`
     : null;
+  const mobilePrimaryAnchorStyle = isMobileAnchorTray
+    ? {
+        position: "fixed" as const,
+        left: "18px",
+        right: "18px",
+        bottom: "12px",
+        zIndex: 12,
+        margin: 0,
+        maxHeight: "min(42vh, 320px)",
+        overflowY: "auto" as const,
+        overscrollBehavior: "contain" as const,
+        boxShadow: "0 26px 44px rgba(0, 0, 0, 0.32)",
+        backdropFilter: "blur(18px)",
+      }
+    : undefined;
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
@@ -912,7 +957,10 @@ export function GamePage() {
     }
 
     return (
-      <section className={`player-card room-primary-anchor room-primary-anchor--${tone}`}>
+      <section
+        className={`player-card room-primary-anchor room-primary-anchor--${tone}${isMobileAnchorTray ? " room-primary-anchor--mobile-tray" : ""}`}
+        style={mobilePrimaryAnchorStyle}
+      >
         <p className="shell__eyebrow">当前主操作</p>
         <strong>{title}</strong>
         <p className="action-surface__summary">{summary}</p>
@@ -1595,7 +1643,7 @@ export function GamePage() {
           </article>
         </div>
 
-        {renderPrimaryActionAnchor()}
+        {!isMobileAnchorTray ? renderPrimaryActionAnchor() : null}
         {renderTurnToolsShelf()}
 
         <h4 className="panel__title panel__title--assets">玩家资产</h4>
@@ -1655,6 +1703,7 @@ export function GamePage() {
         </section>
       </aside>
       </div>
+      {isMobileAnchorTray ? renderPrimaryActionAnchor() : null}
     </main>
   );
 }

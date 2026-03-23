@@ -822,7 +822,7 @@ body {
   }
 
   .room-shell {
-    padding: 18px;
+    padding: 18px 18px 264px;
   }
 
   .room-shell__topbar,
@@ -847,8 +847,13 @@ body {
     top: auto;
   }
 
+  .room-primary-anchor--mobile-tray {
+    width: calc(100vw - 36px);
+  }
+
   .room-shell__rail {
     order: 1;
+    padding-bottom: 24px;
   }
 
   .lobby,
@@ -943,7 +948,7 @@ body {
   }
 
   .room-shell {
-    padding: 14px;
+    padding: 14px 14px 264px;
   }
 
   .panel {
@@ -1019,7 +1024,7 @@ body {
   }
 
   .room-shell {
-    padding: 10px;
+    padding: 10px 10px 264px;
   }
 
   .panel {
