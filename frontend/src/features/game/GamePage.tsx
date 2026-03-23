@@ -10,6 +10,7 @@ import { useGameProjection } from "../../state/projection/gameProjection";
 import { usePresentationState } from "../../state/presentation/gamePresentation";
 
 type TradeComposerStep = "counterparty" | "offered" | "requested" | "review";
+type PrimaryAnchorTone = "default" | "warning" | "danger" | "success";
 
 export function GamePage() {
   const params = useParams();
@@ -700,103 +701,163 @@ export function GamePage() {
     }
   }, [hasTradeTool]);
 
-  function renderContextualActionSurface() {
-    if (projection.waitingRoomSummary || auctionSummary || projection.resolutionSummary || tradeSummary) {
-      return null;
-    }
-
-    const isAwaitingProperty = projection.turnState === "awaiting-property-decision" && projection.pendingProperty !== null;
-    const isAwaitingJail = projection.turnState === "awaiting-jail-decision";
-    const isAwaitingRoll = projection.turnState === "awaiting-roll";
-    const isActiveTurnPlayer = activePlayerId === projection.currentTurnPlayerId;
-
+  function renderPrimaryActionAnchor() {
     let title = "等待房间推进";
     let summary = projection.pendingActionLabel;
     let hint = isSpectator
       ? "当前仅观战，你可以查看房间推进状态，但不能替玩家操作。"
       : `当前由 ${projection.currentTurnPlayerName} 行动，你暂时只能等待。`;
-    let meta: string | null = null;
+    let consequence = "完成当前主动作后，房间会推进到下一步。";
+    let tone: PrimaryAnchorTone = "default";
     let actions: ReactNode = null;
 
-    if (isAwaitingProperty && projection.pendingProperty) {
-      title = "待决策地产";
-      summary = `${projection.pendingProperty.label} · 价格 ${projection.pendingProperty.price}`;
-      hint = canResolveProperty
-        ? "现在由你决定是否买下这块地产。"
-        : `当前由 ${projection.currentTurnPlayerName} 决定是否购买这块地产。`;
-      actions = canResolveProperty ? (
+    if (projection.waitingRoomSummary) {
+      title = canStartRoom ? "现在由房主推进开局" : "等待房间准备完成";
+      summary = projection.waitingRoomSummary.canStart
+        ? "玩家已就位，开始后会一起进入第一回合。"
+        : projection.waitingRoomSummary.blockerLabel;
+      hint = isSpectator
+        ? "当前仅观战，你可以查看席位和房间准备状态。"
+        : activePlayerId === projection.hostId
+          ? projection.waitingRoomSummary.canStart
+            ? "这是当前唯一需要推进房间的动作。"
+            : "先满足人数或席位条件，房间才能开始。"
+          : `等待 ${projection.waitingRoomSummary.hostName} 在条件满足后开始本局。`;
+      consequence = "开始后，房间会立即切入首个行动回合。";
+      tone = projection.waitingRoomSummary.canStart ? "success" : "warning";
+      actions = canStartRoom ? (
         <div className="lobby__actions">
-          <button
-            className="button button--primary"
-            type="button"
-            onClick={() => handleResolveProperty("purchase")}
-            disabled={!canResolveProperty}
-          >
-            购买地产
-          </button>
-          <button
-            className="button button--secondary"
-            type="button"
-            onClick={() => handleResolveProperty("decline")}
-            disabled={!canResolveProperty}
-          >
-            放弃购买
+          <button className="button button--primary" type="button" onClick={handleStartRoom} disabled={!canStartRoom}>
+            {isSubmittingCommand && canStartRoom ? "开始中..." : "房主开始游戏"}
           </button>
         </div>
       ) : null;
-    } else if (isAwaitingJail) {
-      title = "监狱决策";
-      summary = canResolveJail
-        ? "选择一种出狱方式后，当前回合才能继续推进。"
-        : `${projection.currentTurnPlayerName} 正在处理出狱决策。`;
-      hint = canResolveJail
-        ? "你可以支付罚金、尝试掷骰，或使用现有出狱卡。"
-        : isSpectator
-          ? `当前仅观战，等待 ${projection.currentTurnPlayerName} 处理出狱决策。`
-          : `当前由 ${projection.currentTurnPlayerName} 决定如何离开监狱。`;
-      meta = currentTurnJailCardCount > 0 ? `可用出狱卡: ${currentTurnJailCardCount}` : "当前没有可用出狱卡";
-      actions = canResolveJail ? (
+    } else if (tradeSummary) {
+      title = canResolveTrade
+        ? "现在由你拍板这笔交易"
+        : isTradeProposerView
+          ? "当前等待对手回应交易"
+          : "房间暂停在交易回应上";
+      summary = canResolveTrade
+        ? `报价来自 ${tradeSummary.proposerName}，现在需要你明确接受或拒绝。`
+        : isTradeProposerView
+          ? `你的报价已经送达 ${tradeSummary.counterpartyName}，当前主动作已转到对方。`
+          : `当前正在等待 ${tradeSummary.counterpartyName} 回复这笔报价。`;
+      hint = tradeWaitingCapabilityLabel ?? tradeStageViewerLabel ?? "当前先查看交易细节。";
+      consequence = tradeWaitingOutcomeSummary ?? tradeSummary.outcomePreviewLabel;
+      tone = canResolveTrade ? "warning" : "default";
+      actions = canResolveTrade ? (
         <div className="lobby__actions">
-          <button className="button button--primary" type="button" onClick={handleJailRoll} disabled={!canResolveJail}>
-            尝试掷骰出狱
+          <button className="button button--primary" type="button" onClick={() => handleResolveTrade("accept")} disabled={!canResolveTrade}>
+            接受交易
           </button>
-          <button className="button button--secondary" type="button" onClick={handleJailRelease} disabled={!canResolveJail}>
-            支付 50 罚金
+          <button className="button button--secondary button--danger" type="button" onClick={() => handleResolveTrade("reject")} disabled={!canResolveTrade}>
+            拒绝交易
           </button>
-          {activeJailCardCount > 0 ? (
-            <button className="button button--secondary" type="button" onClick={handleUseJailCard} disabled={!canResolveJail}>
-              使用出狱卡
+        </div>
+      ) : null;
+    } else if (auctionSummary) {
+      title = canAuction ? "当前轮到你完成竞拍动作" : `等待 ${auctionSummary.actingBidderName} 决定竞拍`;
+      summary = auctionSummary.statusLabel;
+      hint = canAuction
+        ? `主动作在下方拍卖面板完成，当前最低有效报价为 ${auctionSummary.nextMinimumBid}。`
+        : auctionViewerLabel ?? "请先查看下方拍卖面板。";
+      consequence = auctionSummary.highestBidderName
+        ? `当前最高报价为 ${auctionSummary.highestBid}，完成本轮后拍卖会继续推进。`
+        : `下一口至少 ${auctionSummary.nextMinimumBid}，完成本轮后拍卖会继续推进。`;
+      tone = canAuction ? "warning" : "default";
+    } else if (projection.resolutionSummary) {
+      title = canResolveDeficit ? "当前轮到你完成欠款恢复" : `等待 ${projection.resolutionSummary.actorName} 处理欠款`;
+      summary = projection.resolutionSummary.consequenceLabel;
+      hint = deficitViewerLabel ?? "请先查看下方恢复面板中的可执行动作。";
+      consequence = `当前仍差 ${projection.resolutionSummary.shortfall}，请在下方恢复面板完成抵押或破产决定。`;
+      tone = "danger";
+    } else {
+      const isAwaitingProperty = projection.turnState === "awaiting-property-decision" && projection.pendingProperty !== null;
+      const isAwaitingJail = projection.turnState === "awaiting-jail-decision";
+      const isAwaitingRoll = projection.turnState === "awaiting-roll";
+      const isActiveTurnPlayer = activePlayerId === projection.currentTurnPlayerId;
+
+      if (isAwaitingProperty && projection.pendingProperty) {
+        title = canResolveProperty ? "现在由你决定是否买下地产" : `等待 ${projection.currentTurnPlayerName} 决定是否买地`;
+        summary = `${projection.pendingProperty.label} · 价格 ${projection.pendingProperty.price}`;
+        hint = canResolveProperty
+          ? "这一步会直接决定这块地产是被你买下，还是进入后续公开处置。"
+          : `当前由 ${projection.currentTurnPlayerName} 决定是否购买这块地产。`;
+        consequence = canResolveProperty
+          ? "买下后所有权会立刻归你；放弃后房间会继续推进到下一处理。"
+          : "等待当前玩家拍板后，房间会进入下一步。";
+        tone = canResolveProperty ? "warning" : "default";
+        actions = canResolveProperty ? (
+          <div className="lobby__actions">
+            <button className="button button--primary" type="button" onClick={() => handleResolveProperty("purchase")} disabled={!canResolveProperty}>
+              购买地产
             </button>
-          ) : null}
-        </div>
-      ) : null;
-    } else if (isAwaitingRoll) {
-      title = isActiveTurnPlayer ? "轮到你行动" : "等待当前玩家掷骰";
-      summary = isActiveTurnPlayer
-        ? "先掷骰推进当前回合，再决定后续经营动作。"
-        : `${projection.currentTurnPlayerName} 仍未完成本回合的掷骰。`;
-      hint = isActiveTurnPlayer
-        ? canProposeTrade
-          ? "如需谈一笔交换，可在下方先整理好报价。"
-          : "掷骰是当前唯一必须先完成的主操作。"
-        : isSpectator
-          ? `当前仅观战，等待 ${projection.currentTurnPlayerName} 先完成掷骰。`
-          : `当前由 ${projection.currentTurnPlayerName} 行动，你暂时只能等待。`;
-      actions = canRoll ? (
-        <div className="lobby__actions">
-          <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
-            {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayerName} 身份掷骰`}
-          </button>
-        </div>
-      ) : null;
+            <button className="button button--secondary" type="button" onClick={() => handleResolveProperty("decline")} disabled={!canResolveProperty}>
+              放弃购买
+            </button>
+          </div>
+        ) : null;
+      } else if (isAwaitingJail) {
+        title = canResolveJail ? "现在由你决定如何离开监狱" : `等待 ${projection.currentTurnPlayerName} 处理监狱决策`;
+        summary = canResolveJail
+          ? "选择一种出狱方式后，当前回合才能继续推进。"
+          : `${projection.currentTurnPlayerName} 正在处理出狱决策。`;
+        hint = canResolveJail
+          ? "你可以支付罚金、尝试掷骰，或使用现有出狱卡。"
+          : isSpectator
+            ? `当前仅观战，等待 ${projection.currentTurnPlayerName} 处理出狱决策。`
+            : `当前由 ${projection.currentTurnPlayerName} 决定如何离开监狱。`;
+        consequence = currentTurnJailCardCount > 0 ? `当前可用出狱卡: ${currentTurnJailCardCount}` : "当前没有可用出狱卡。";
+        tone = canResolveJail ? "warning" : "default";
+        actions = canResolveJail ? (
+          <div className="lobby__actions">
+            <button className="button button--primary" type="button" onClick={handleJailRoll} disabled={!canResolveJail}>
+              尝试掷骰出狱
+            </button>
+            <button className="button button--secondary" type="button" onClick={handleJailRelease} disabled={!canResolveJail}>
+              支付 50 罚金
+            </button>
+            {activeJailCardCount > 0 ? (
+              <button className="button button--secondary" type="button" onClick={handleUseJailCard} disabled={!canResolveJail}>
+                使用出狱卡
+              </button>
+            ) : null}
+          </div>
+        ) : null;
+      } else if (isAwaitingRoll) {
+        title = isActiveTurnPlayer ? "现在先完成本回合掷骰" : `等待 ${projection.currentTurnPlayerName} 先掷骰`;
+        summary = isActiveTurnPlayer
+          ? "这是当前唯一必须先完成的主操作。"
+          : `${projection.currentTurnPlayerName} 仍未完成本回合的掷骰。`;
+        hint = isActiveTurnPlayer
+          ? canProposeTrade
+            ? "完成掷骰后，你再决定是否进入交易或经营动作。"
+            : "完成掷骰后，房间才会揭示下一步的正式决策。"
+          : isSpectator
+            ? `当前仅观战，等待 ${projection.currentTurnPlayerName} 先完成掷骰。`
+            : `当前由 ${projection.currentTurnPlayerName} 行动，你暂时只能等待。`;
+        consequence = isActiveTurnPlayer
+          ? "掷骰后，房间会继续进入买地、事件结算或其他下一步。"
+          : "等待当前玩家掷骰后，房间会继续推进。";
+        tone = isActiveTurnPlayer ? "success" : "default";
+        actions = canRoll ? (
+          <div className="lobby__actions">
+            <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
+              {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayerName} 身份掷骰`}
+            </button>
+          </div>
+        ) : null;
+      }
     }
 
     return (
-      <section className="player-card player-card--contextual section-card">
+      <section className={`player-card room-primary-anchor room-primary-anchor--${tone}`}>
+        <p className="shell__eyebrow">当前主操作</p>
         <strong>{title}</strong>
         <p className="action-surface__summary">{summary}</p>
         <p className="action-surface__hint">{hint}</p>
-        {meta ? <p className="action-surface__meta">{meta}</p> : null}
+        <p className="action-surface__meta">{consequence}</p>
         {actions}
       </section>
     );
@@ -1263,14 +1324,6 @@ export function GamePage() {
                 </article>
               ))}
             </div>
-            <div className="lobby__actions">
-              <button className="button button--primary" type="button" onClick={handleStartRoom} disabled={!canStartRoom}>
-                {isSubmittingCommand && canStartRoom ? "开始中..." : "房主开始游戏"}
-              </button>
-              <Link className="button button--secondary" to="/">
-                返回大厅
-              </Link>
-            </div>
           </section>
         ) : null}
 
@@ -1424,21 +1477,10 @@ export function GamePage() {
               </article>
             </div>
             <span>{tradeStageViewerLabel}</span>
-            {canResolveTrade ? (
-              <div className="lobby__actions">
-                <button className="button button--primary" type="button" onClick={() => handleResolveTrade("accept")} disabled={!canResolveTrade}>
-                  接受交易
-                </button>
-                <button className="button button--secondary button--danger" type="button" onClick={() => handleResolveTrade("reject")} disabled={!canResolveTrade}>
-                  拒绝交易
-                </button>
-              </div>
-            ) : (
-              <div className="trade-response-stage__readonly">
-                <strong>当前无可执行操作</strong>
-                <span>{tradeWaitingCapabilityLabel}</span>
-              </div>
-            )}
+            <div className="trade-response-stage__readonly">
+              <strong>当前处理内容</strong>
+              <span>{tradeWaitingCapabilityLabel}</span>
+            </div>
           </section>
         ) : null}
 
@@ -1523,7 +1565,7 @@ export function GamePage() {
           </article>
         </div>
 
-        {renderContextualActionSurface()}
+        {renderPrimaryActionAnchor()}
         {renderTurnToolsShelf()}
 
         <h4 className="panel__title panel__title--assets">玩家资产</h4>

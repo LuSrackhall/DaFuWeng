@@ -32,6 +32,8 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
 
   await expect(page.getByText("等待房间开始")).toBeVisible();
   await expect(guestPage.getByText("等待房间开始")).toBeVisible();
+  await expect(page.getByText("当前主操作", { exact: true })).toBeVisible();
+  await expect(page.locator(".room-primary-anchor").getByText("现在由房主推进开局")).toBeVisible();
   await expect(page.getByText("当前人数: 2")).toBeVisible();
   await expect(page.locator(".stage-card--overview").getByText("当前以 房主甲 身份加入此房间。").first()).toBeVisible();
   await expect(page.getByText(/这是服务端权威房间。刷新后会恢复同一房间快照/)).toBeVisible();
@@ -90,8 +92,8 @@ test("viewer without a joined room session stays read-only instead of inheriting
   ).toBeVisible();
   await expect(viewerPage.locator(".stage-card--overview").getByText("当前以只读观战身份查看此房间。").first()).toBeVisible();
   await expect(
-    viewerPage.getByRole("button", { name: "房主开始游戏" }),
-  ).toBeDisabled();
+    viewerPage.locator(".room-primary-anchor").getByText("等待房间准备完成"),
+  ).toBeVisible();
   await expect(viewerPage.getByText("等待房间开始")).toBeVisible();
 
   await viewerPage.close();
@@ -125,8 +127,8 @@ test("declined property enters a readable live auction stage across two pages", 
   await expect(page.getByText("公开拍卖进行中")).toBeVisible();
   await expect(guestPage.getByText("公开拍卖进行中")).toBeVisible();
   await expect(page.getByText(/房主甲 放弃购买后，东湖路 进入公开拍卖。/)).toBeVisible();
-  await expect(guestPage.getByText(/轮到你出价或放弃，下一口至少 1。/)).toBeVisible();
-  await expect(page.getByText(/当前轮到 玩家乙 决策/)).toBeVisible();
+  await expect(guestPage.locator(".room-primary-anchor").getByText(/主动作在下方拍卖面板完成，当前最低有效报价为 1。/)).toBeVisible();
+  await expect(page.locator(".stage-card--auction").getByText(/当前轮到 玩家乙 决策/)).toBeVisible();
 
   await guestPage.getByRole("button", { name: "出价 51" }).click();
   await guestPage.getByRole("button", { name: "提交出价" }).click();
@@ -205,17 +207,18 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await expect(page.getByText("双边交易待响应")).toBeVisible();
   await expect(page.getByText("报价已送达，等待对手回应", { exact: true })).toBeVisible();
   await expect(page.getByText(/现在先别操作: 等对方给答复/).first()).toBeVisible();
-  await expect(page.getByText(/你已经把这笔交换递给 玩家乙，现在等对方表态。/)).toBeVisible();
+  await expect(page.locator(".room-primary-anchor").getByText(/你的报价已经送达 玩家乙，当前主动作已转到对方。/)).toBeVisible();
   await expect(page.getByText(/房主甲 交出/)).toBeVisible();
   await expect(guestPage.getByText("双边交易待响应")).toBeVisible();
   await expect(guestPage.getByText("轮到你决定是否接受这笔报价", { exact: true })).toBeVisible();
-  await expect(guestPage.getByText(/现在由你拍板: 接受或拒绝这笔交易/)).toBeVisible();
+  await expect(guestPage.locator(".room-primary-anchor").getByText(/现在由你拍板: 接受或拒绝这笔交易/)).toBeVisible();
+  await expect(guestPage.locator(".room-primary-anchor").getByText("现在由你拍板这笔交易")).toBeVisible();
   await expect(guestPage.getByText(/轮到你决定是否接受 房主甲 的报价。/)).toBeVisible();
   await expect(guestPage.getByText(/接下来会怎样/)).toBeVisible();
   await expect(spectatorPage.getByText("双边交易待响应")).toBeVisible();
   await expect(spectatorPage.getByText("房间暂停在交易回应阶段", { exact: true })).toBeVisible();
   await expect(spectatorPage.getByText(/你当前不能操作: 此阶段仅可查看交易内容/).first()).toBeVisible();
-  await expect(spectatorPage.getByText(/当前无可执行操作/)).toBeVisible();
+  await expect(spectatorPage.locator(".room-primary-anchor").getByText("房间暂停在交易回应上")).toBeVisible();
 
   await expect(page.getByRole("button", { name: "展开诊断抽屉" })).toBeVisible();
   await page.getByRole("button", { name: "展开诊断抽屉" }).click();
@@ -991,7 +994,7 @@ test("contextual action surface only shows jail decisions without unrelated gene
 
   await page.goto(`/room/${roomId}`);
 
-  await expect(page.getByText("监狱决策", { exact: true })).toBeVisible();
+  await expect(page.locator(".room-primary-anchor").getByText("现在由你决定如何离开监狱")).toBeVisible();
   await expect(page.getByText(/选择一种出狱方式后，当前回合才能继续推进/)).toBeVisible();
   await expect(page.getByText(/可用出狱卡: 1/)).toBeVisible();
   await expect(page.getByRole("button", { name: "尝试掷骰出狱" })).toBeVisible();
