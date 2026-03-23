@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.13.2...v1.14.0) (2026-03-23)
+
+
+### Features
+
+* 完成房间页 scene-first 对局壳层重排 ([aa283d4](https://github.com/LuSrackhall/DaFuWeng/commit/aa283d4cc4f1b00df8db22aa402f1afe6c8f0997))
+
 ## [1.13.2](https://github.com/LuSrackhall/DaFuWeng/compare/v1.13.1...v1.13.2) (2026-03-23)
 
 
