@@ -43,10 +43,12 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await page.getByRole("button", { name: "房主开始游戏" }).click();
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
   await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /当前回合 房主甲，焦点 起点/);
 
   await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
   await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
   await expect(guestPage.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /当前回合 房主甲，焦点 东湖路/);
 
   await page.getByRole("button", { name: "购买地产" }).click();
   await expect(page.locator(".board__pixi-host canvas")).toBeVisible();
