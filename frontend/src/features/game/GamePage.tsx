@@ -381,6 +381,9 @@ export function GamePage() {
   });
   const mortgageablePropertyOptions = resolutionPropertyOptions.filter((option) => option.canMortgage);
   const blockedRecoveryPropertyOptions = resolutionPropertyOptions.filter((option) => !option.canMortgage);
+  const bestRecoveryOption = mortgageablePropertyOptions.find((option) => option.settlesDeficit)
+    ?? [...mortgageablePropertyOptions].sort((left, right) => right.mortgageValue - left.mortgageValue)[0]
+    ?? null;
 
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
@@ -760,18 +763,67 @@ export function GamePage() {
       title = canAuction ? "当前轮到你完成竞拍动作" : `等待 ${auctionSummary.actingBidderName} 决定竞拍`;
       summary = auctionSummary.statusLabel;
       hint = canAuction
-        ? `主动作在下方拍卖面板完成，当前最低有效报价为 ${auctionSummary.nextMinimumBid}。`
+        ? `你可以直接在这里提交出价或放弃竞拍，当前最低有效报价为 ${auctionSummary.nextMinimumBid}。`
         : auctionViewerLabel ?? "请先查看下方拍卖面板。";
       consequence = auctionSummary.highestBidderName
         ? `当前最高报价为 ${auctionSummary.highestBid}，完成本轮后拍卖会继续推进。`
         : `下一口至少 ${auctionSummary.nextMinimumBid}，完成本轮后拍卖会继续推进。`;
       tone = canAuction ? "warning" : "default";
+      actions = canAuction ? (
+        <>
+          <div className="auction-quick-bids room-primary-anchor__quick-bids">
+            {auctionQuickBidOptions.map((amount) => (
+              <button
+                className="button button--secondary"
+                key={`anchor-auction-${amount}`}
+                type="button"
+                onClick={() => setAuctionBid(String(amount))}
+              >
+                出价 {amount}
+              </button>
+            ))}
+          </div>
+          <label className="auction-stage__field room-primary-anchor__field">
+            <strong>当前出价</strong>
+            <input value={auctionBid} onChange={(event) => setAuctionBid(event.target.value)} />
+          </label>
+          <div className="lobby__actions">
+            <button className="button button--primary" type="button" onClick={() => handleAuction("bid")} disabled={!canAuction}>
+              提交出价
+            </button>
+            <button className="button button--secondary button--danger" type="button" onClick={() => handleAuction("pass")} disabled={!canAuction}>
+              放弃本轮竞拍
+            </button>
+          </div>
+        </>
+      ) : null;
     } else if (projection.resolutionSummary) {
       title = canResolveDeficit ? "当前轮到你完成欠款恢复" : `等待 ${projection.resolutionSummary.actorName} 处理欠款`;
       summary = projection.resolutionSummary.consequenceLabel;
       hint = deficitViewerLabel ?? "请先查看下方恢复面板中的可执行动作。";
-      consequence = `当前仍差 ${projection.resolutionSummary.shortfall}，请在下方恢复面板完成抵押或破产决定。`;
+      consequence = bestRecoveryOption
+        ? bestRecoveryOption.settlesDeficit
+          ? `优先动作建议：抵押 ${bestRecoveryOption.label} 后即可补足当前欠款。`
+          : `优先动作建议：先抵押 ${bestRecoveryOption.label}，可把缺口压到 ${bestRecoveryOption.nextShortfall}。`
+        : `当前仍差 ${projection.resolutionSummary.shortfall}，请在下方恢复面板完成抵押或破产决定。`;
       tone = "danger";
+      actions = canResolveDeficit ? (
+        <div className="lobby__actions room-primary-anchor__critical-actions">
+          {bestRecoveryOption ? (
+            <button
+              className="button button--primary"
+              type="button"
+              onClick={() => handleMortgage(bestRecoveryOption.id)}
+              disabled={!canResolveDeficit || mortgageBusyTileId === bestRecoveryOption.id}
+            >
+              {mortgageBusyTileId === bestRecoveryOption.id ? `抵押 ${bestRecoveryOption.label}...` : `先抵押 ${bestRecoveryOption.label}`}
+            </button>
+          ) : null}
+          <button className="button button--secondary button--danger" type="button" onClick={handleBankruptcy} disabled={!canResolveDeficit}>
+            宣告破产
+          </button>
+        </div>
+      ) : null;
     } else {
       const isAwaitingProperty = projection.turnState === "awaiting-property-decision" && projection.pendingProperty !== null;
       const isAwaitingJail = projection.turnState === "awaiting-jail-decision";
@@ -1354,34 +1406,7 @@ export function GamePage() {
             <span>{auctionViewerLabel}</span>
             <span>仍在竞拍: {auctionSummary.activeBidderNames.join(" / ")}</span>
             <span>已退出: {auctionSummary.passedPlayerNames.join(" / ") || "暂无"}</span>
-            {canAuction ? (
-              <>
-                <div className="auction-quick-bids">
-                  {auctionQuickBidOptions.map((amount) => (
-                    <button
-                      className="button button--secondary"
-                      key={amount}
-                      type="button"
-                      onClick={() => setAuctionBid(String(amount))}
-                    >
-                      出价 {amount}
-                    </button>
-                  ))}
-                </div>
-                <label className="auction-stage__field">
-                  <strong>自定义出价</strong>
-                  <input value={auctionBid} onChange={(event) => setAuctionBid(event.target.value)} />
-                </label>
-                <div className="lobby__actions">
-                  <button className="button button--primary" type="button" onClick={() => handleAuction("bid")} disabled={!canAuction}>
-                    提交出价
-                  </button>
-                  <button className="button button--secondary button--danger" type="button" onClick={() => handleAuction("pass")} disabled={!canAuction}>
-                    放弃本轮竞拍
-                  </button>
-                </div>
-              </>
-            ) : null}
+            {canAuction ? <span>主动作已提升到顶部锚点；这里保留拍卖上下文与结果阅读。</span> : null}
           </section>
         ) : null}
 
@@ -1439,11 +1464,7 @@ export function GamePage() {
                 )}
               </article>
             </div>
-            <div className="lobby__actions">
-              <button className="button button--primary" type="button" onClick={handleBankruptcy} disabled={!canResolveDeficit}>
-                宣告破产
-              </button>
-            </div>
+            {canResolveDeficit ? <span>主动作已提升到顶部锚点；下方继续保留所有可比较的恢复路径。</span> : null}
           </section>
         ) : null}
 

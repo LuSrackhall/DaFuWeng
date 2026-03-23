@@ -127,7 +127,9 @@ test("declined property enters a readable live auction stage across two pages", 
   await expect(page.getByText("公开拍卖进行中")).toBeVisible();
   await expect(guestPage.getByText("公开拍卖进行中")).toBeVisible();
   await expect(page.getByText(/房主甲 放弃购买后，东湖路 进入公开拍卖。/)).toBeVisible();
-  await expect(guestPage.locator(".room-primary-anchor").getByText(/主动作在下方拍卖面板完成，当前最低有效报价为 1。/)).toBeVisible();
+  await expect(guestPage.locator(".room-primary-anchor").getByText(/你可以直接在这里提交出价或放弃竞拍，当前最低有效报价为 1。/)).toBeVisible();
+  await expect(guestPage.locator(".room-primary-anchor").getByRole("button", { name: "提交出价" })).toBeVisible();
+  await expect(guestPage.locator(".stage-card--auction").getByRole("button", { name: "提交出价" })).toHaveCount(0);
   await expect(page.locator(".stage-card--auction").getByText(/当前轮到 玩家乙 决策/)).toBeVisible();
 
   await guestPage.getByRole("button", { name: "出价 51" }).click();
@@ -476,7 +478,11 @@ test("deficit recovery panel shows mortgage impact and resolves through the reco
 
   await page.goto(`/room/${roomId}`);
 
-  const recoveryButton = page.getByRole("button", { name: /终章大道/ });
+  await expect(page.locator(".room-primary-anchor").getByText("当前轮到你完成欠款恢复")).toBeVisible();
+  await expect(page.locator(".room-primary-anchor").getByRole("button", { name: /先抵押/ })).toBeVisible();
+  await expect(page.locator(".room-primary-anchor").getByRole("button", { name: "宣告破产" })).toBeVisible();
+  await expect(page.locator(".stage-card--danger").getByRole("button", { name: "宣告破产" })).toHaveCount(0);
+  const recoveryButton = page.locator(".room-primary-anchor").getByRole("button", { name: "先抵押 终章大道" });
   await expect(page.getByText("房主甲 正在处理 税费")).toBeVisible();
   await expect(page.getByText(/仍差: 100/)).toBeVisible();
   await expect(recoveryButton).toBeVisible();
