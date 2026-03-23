@@ -358,6 +358,17 @@ The system SHALL continue guiding deficit recovery through the primary action an
 - **WHEN** an authoritative mortgage action succeeds but the room remains in deficit recovery
 - **THEN** the primary action anchor SHALL refresh to show the next recommended recovery action from the new room snapshot
 
+### Requirement: Mobile room pages keep the primary action anchor visible
+The system SHALL keep the primary action anchor visible on narrow screens while the player scrolls through the room page.
+
+#### Scenario: Player scrolls a mobile room page
+- **WHEN** the room page is rendered on a narrow screen and the player scrolls through the board or support sections
+- **THEN** the primary action anchor SHALL remain visible as a persistent mobile decision tray
+
+#### Scenario: Player reaches the bottom of a mobile room page
+- **WHEN** the room page is rendered on a narrow screen with a persistent action tray
+- **THEN** the page layout SHALL reserve enough bottom space that the final interactive room content is not hidden behind the tray
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
