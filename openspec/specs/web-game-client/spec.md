@@ -322,6 +322,17 @@ The system SHALL present a fixed primary action anchor at the top of the room ra
 - **WHEN** the room page renders a state with a current actor and a room-advancing action
 - **THEN** the primary action anchor SHALL explain who acts, what the must-do action is, and what immediate outcome follows
 
+### Requirement: The primary action anchor carries high-pressure room controls
+The system SHALL expose decisive controls for auction and deficit-recovery states directly in the primary action anchor.
+
+#### Scenario: Player must act in an auction
+- **WHEN** the current player can bid or pass in an active auction
+- **THEN** the primary action anchor SHALL expose direct controls to submit a bid or pass without requiring the player to scan lower detail cards first
+
+#### Scenario: Player must resolve a deficit
+- **WHEN** the current player is resolving an active cash deficit
+- **THEN** the primary action anchor SHALL expose the shortest valid recovery action and the bankruptcy action before the detailed recovery card
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
