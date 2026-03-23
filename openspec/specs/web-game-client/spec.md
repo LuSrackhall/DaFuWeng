@@ -412,6 +412,20 @@ The system SHALL make the mobile primary action tray emphasize the result of the
 - **WHEN** the room page is rendered on a narrow screen while a player can act
 - **THEN** the primary action tray SHALL foreground the immediate consequence of that action and present a single dominant main action
 
+### Requirement: Room routes are delivered through lazy chunks
+The system SHALL lazy load room-facing route modules instead of bundling them into a single eager entry chunk.
+
+#### Scenario: User enters the room page from the lobby
+- **WHEN** the user navigates from the lobby to a room route
+- **THEN** the room page code SHALL be loaded through a route chunk rather than the main entry bundle
+
+### Requirement: Lazy route loads show a shell fallback
+The system SHALL show a lightweight fallback while lazy route chunks are being fetched.
+
+#### Scenario: User cold-loads a lazy route
+- **WHEN** the browser is still fetching a lazy route chunk
+- **THEN** the web client SHALL render a lightweight loading shell instead of a blank page
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
