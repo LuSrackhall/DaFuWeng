@@ -185,7 +185,7 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await expect(page.getByText("再看交换明细", { exact: true })).toBeVisible();
   await expect(page.getByText(/现金净流向: 你净支付 90 给 玩家乙/)).toBeVisible();
   await expect(page.getByText(/交易后现金: 你 \d+ · 玩家乙 \d+/)).toBeVisible();
-  await expect(page.getByText(/点击确认后将正式向 玩家乙 发出报价，房间会暂停等待回应/)).toBeVisible();
+  await expect(page.getByText(/点下确认后，这笔报价就会送到 玩家乙 面前。房间会停下来等对方表态/)).toBeVisible();
   await page.getByRole("button", { name: "返回继续编辑草案" }).click();
   await expect(page.getByLabel("我索要现金")).toHaveValue("30");
   await page.getByRole("button", { name: "返回选择我给出的内容" }).click();
@@ -197,12 +197,12 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
 
   await expect(page.getByText("双边交易待响应")).toBeVisible();
   await expect(page.getByText("报价已送达，等待对手回应", { exact: true })).toBeVisible();
-  await expect(page.getByText(/你当前不能操作: 报价已锁定，等待对方决定/).first()).toBeVisible();
-  await expect(page.getByText(/报价已发出，当前等待 玩家乙 回复。/)).toBeVisible();
+  await expect(page.getByText(/现在先别操作: 等对方给答复/).first()).toBeVisible();
+  await expect(page.getByText(/你已经把这笔交换递给 玩家乙，现在等对方表态。/)).toBeVisible();
   await expect(page.getByText(/房主甲 交出/)).toBeVisible();
   await expect(guestPage.getByText("双边交易待响应")).toBeVisible();
   await expect(guestPage.getByText("轮到你决定是否接受这笔报价", { exact: true })).toBeVisible();
-  await expect(guestPage.getByText(/你当前可以操作: 接受或拒绝这笔交易/)).toBeVisible();
+  await expect(guestPage.getByText(/现在由你拍板: 接受或拒绝这笔交易/)).toBeVisible();
   await expect(guestPage.getByText(/轮到你决定是否接受 房主甲 的报价。/)).toBeVisible();
   await expect(guestPage.getByText(/接下来会怎样/)).toBeVisible();
   await expect(spectatorPage.getByText("双边交易待响应")).toBeVisible();
@@ -270,7 +270,7 @@ test("rejected trade shows a recovery card and restores the proposer's turn", as
 
   await expect(page.getByText("交易未成交", { exact: true })).toBeVisible();
   await expect(page.getByText(/没有发生任何现金、地产或卡牌转移/)).toBeVisible();
-  await expect(page.getByText(/房主甲 已恢复当前回合推进/)).toBeVisible();
+  await expect(page.getByText(/房主甲 继续这一回合/)).toBeVisible();
   await expect(page.getByText(/房主甲 原本想交出/)).toBeVisible();
   await expect(guestPage.getByText("交易未成交", { exact: true })).toBeVisible();
   await expect(spectatorPage.getByText("交易未成交", { exact: true })).toBeVisible();

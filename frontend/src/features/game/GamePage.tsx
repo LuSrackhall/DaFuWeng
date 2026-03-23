@@ -171,22 +171,22 @@ export function GamePage() {
     : null;
   const tradeWaitingPrimarySummary = tradeSummary
     ? isTradeCounterpartyView
-      ? `${tradeSummary.proposerName} 已正式向你发出报价。你现在必须决定接受或拒绝。`
+      ? `${tradeSummary.proposerName} 向你递来一笔交换，现在请你决定要不要答应。`
       : isTradeProposerView
-        ? `你已经向 ${tradeSummary.counterpartyName} 发出正式报价，当前只能等待对方回复。`
+        ? `你已经把这笔交换递给 ${tradeSummary.counterpartyName}，现在等对方表态。`
         : `当前正在等待 ${tradeSummary.counterpartyName} 回应 ${tradeSummary.proposerName} 的报价。`
     : null;
   const tradeWaitingCapabilityLabel = tradeSummary
     ? isTradeCounterpartyView
-      ? "你当前可以操作: 接受或拒绝这笔交易"
+      ? "现在由你拍板: 接受或拒绝这笔交易"
       : isTradeProposerView
-        ? "你当前不能操作: 报价已锁定，等待对方决定"
+        ? "现在先别操作: 等对方给答复"
         : "你当前不能操作: 此阶段仅可查看交易内容"
     : null;
   const tradeWaitingOutcomeSummary = tradeSummary
     ? isTradeCounterpartyView
-      ? "如果接受，系统会按当前报价原子结算并继续推进房间；如果拒绝，交易等待会结束并回到后续正常流程。"
-      : "如果对方接受，系统会立即按当前报价结算；如果对方拒绝，等待阶段会结束，房间继续后续权威流程。"
+      ? "如果你点头，这笔交换会立刻生效；如果你摇头，对局会回到报价方继续行动。"
+      : "如果对方点头，这笔交换会立刻生效；如果对方摇头，就会轮到你继续这一回合。"
     : null;
   const diagnosticsEventLines = projection.recentEvents.slice(-5).reverse();
   const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
@@ -345,7 +345,7 @@ export function GamePage() {
     || tradeRequestedTileIds.length > 0
     || tradeOfferedCardIds.length > 0
     || tradeRequestedCardIds.length > 0)
-    ? `点击确认后将正式向 ${selectedCounterparty?.name ?? "对手"} 发出报价，房间会暂停等待回应，当前动作内无法撤回。`
+    ? `点下确认后，这笔报价就会送到 ${selectedCounterparty?.name ?? "对手"} 面前。房间会停下来等对方表态，这一步里你不能反悔。`
     : null;
   const deficitViewerLabel = projection.resolutionSummary
     ? canResolveDeficit
@@ -640,7 +640,7 @@ export function GamePage() {
       applySnapshot(snapshot);
       clearTradeDraft();
       setIsTurnToolsOpen(false);
-      setActionMessage("已同步权威交易报价。");
+      setActionMessage("报价已经送到对方面前。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "交易报价失败");
       await refreshProjection();
@@ -662,7 +662,7 @@ export function GamePage() {
         ? await acceptTrade(roomId, payload)
         : await rejectTrade(roomId, payload);
       applySnapshot(snapshot);
-      setActionMessage(action === "accept" ? "已同步权威交易结果。" : "已同步权威拒绝结果。");
+      setActionMessage(action === "accept" ? "这笔交换已经成交。" : "这笔交换没有谈成。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "交易处理失败");
       await refreshProjection();
@@ -776,7 +776,7 @@ export function GamePage() {
         : `${projection.currentTurnPlayerName} 仍未完成本回合的掷骰。`;
       hint = isActiveTurnPlayer
         ? canProposeTrade
-          ? "如需发起交易，可在下方的交易区准备正式报价。"
+          ? "如需谈一笔交换，可在下方先整理好报价。"
           : "掷骰是当前唯一必须先完成的主操作。"
         : isSpectator
           ? `当前仅观战，等待 ${projection.currentTurnPlayerName} 先完成掷骰。`
@@ -859,7 +859,7 @@ export function GamePage() {
                 <strong>发起双边交易报价</strong>
                 <span>
                   {selectedCounterparty
-                    ? `当前由你决定是否向 ${selectedCounterparty.name} 发起一笔正式报价。`
+                    ? `轮到你决定，要不要把这笔交换提给 ${selectedCounterparty.name}。`
                     : "请选择一名仍在局内的玩家作为交易对象。"}
                 </span>
                 <div className="trade-composer__steps" aria-label="交易报价步骤">
@@ -1437,7 +1437,7 @@ export function GamePage() {
               <div className="trade-response-stage__readonly trade-rejection-card__hero">
                 <strong>这笔报价已失效</strong>
                 <span>没有发生任何现金、地产或卡牌转移。</span>
-                <span>{`${projection.latestSettlementSummary.tradeRejection.nextActorName} 已恢复当前回合推进。`}</span>
+                <span>{`${projection.latestSettlementSummary.tradeRejection.nextActorName} 继续这一回合。`}</span>
               </div>
               <div className="trade-settlement-card__grid">
                 <article className="trade-side">

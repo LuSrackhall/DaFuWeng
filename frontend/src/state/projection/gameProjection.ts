@@ -331,7 +331,7 @@ function buildTradeSummaryFromPendingTrade(
     requestedCardLabels: pendingTrade.requestedCardIds.map(getCardLabel),
     proposerNetCash,
     counterpartyNetCash,
-    stageLabel: `${proposerName} 已向 ${counterpartyName} 发出正式交易报价，当前等待 ${counterpartyName} 决定。`,
+    stageLabel: `${proposerName} 把一笔交换递给了 ${counterpartyName}，现在等 ${counterpartyName} 表态。`,
     outcomePreviewLabel:
       `${proposerName} 现金净变动 ${proposerNetCash >= 0 ? "+" : ""}${proposerNetCash}，` +
       `${counterpartyName} 现金净变动 ${counterpartyNetCash >= 0 ? "+" : ""}${counterpartyNetCash}。`,
@@ -446,7 +446,7 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
       const counterpartyCashAfter = latestFormalEvent.cashAfterByPlayer?.[tradeSummary.counterpartyPlayerId] ?? null;
       return {
         title: `${tradeSummary.counterpartyName} 接受了 ${tradeSummary.proposerName} 的交易报价`,
-        detail: "成交已按当前报价完成结算，双方现金与资产已经同步交换。",
+        detail: "这笔交换已经成交，双方的钱和资产都已经换手。",
         nextStepLabel: snapshot.pendingActionLabel,
         tone: "neutral",
         kind: "trade-accepted",
@@ -481,7 +481,7 @@ function buildLatestSettlementSummary(snapshot: ProjectionSnapshot): SettlementS
 
     return {
       title: `${tradeSummary.counterpartyName} 拒绝了 ${tradeSummary.proposerName} 的交易报价`,
-      detail: "这笔报价没有成交，现金、地产和卡牌都保持原状，房间已退出等待交易回应阶段。",
+      detail: "这笔交换没有谈成，现金、地产和卡牌都没有变化，房间也回到了正常节奏。",
       nextStepLabel: snapshot.pendingActionLabel,
       tone: "neutral",
       kind: "trade-rejected",
