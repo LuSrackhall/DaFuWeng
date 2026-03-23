@@ -11,6 +11,15 @@ import { usePresentationState } from "../../state/presentation/gamePresentation"
 
 type TradeComposerStep = "counterparty" | "offered" | "requested" | "review";
 type PrimaryAnchorTone = "default" | "warning" | "danger" | "success";
+type BoardResultFeedback = {
+  title: string;
+  detail: string;
+  nextLabel: string;
+  diceLabel: string | null;
+  chipLabel: string;
+  chipValue: string;
+  tone: PrimaryAnchorTone;
+};
 
 export function GamePage() {
   const params = useParams();
@@ -154,6 +163,7 @@ export function GamePage() {
           : "对局进行中";
           const roomShellTitle = projection.waitingRoomSummary ? "等待开局" : roomPhaseLabel;
   const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
+          const latestProjectionEvent = projection.recentEvents.at(-1) ?? null;
   const auctionSummary = projection.auctionSummary;
   const tradeSummary = projection.tradeSummary;
   const auctionQuickBidOptions = auctionSummary
@@ -422,6 +432,129 @@ export function GamePage() {
         ? `当前仅观战，等待 ${projection.resolutionSummary.actorName} 处理欠款。`
         : `当前由 ${projection.resolutionSummary.actorName} 处理欠款，其他人暂时只能等待。`
     : null;
+  const boardResultFeedback: BoardResultFeedback | null = (() => {
+    if (projection.latestSettlementSummary) {
+      const settlement = projection.latestSettlementSummary;
+      const chipValue = settlement.kind === "trade-accepted"
+        ? "现金与资产已换手"
+        : settlement.kind === "trade-rejected"
+          ? "未发生资产转移"
+          : settlement.tone === "danger"
+            ? "高压结果已生效"
+            : "正式结果已落地";
+
+      return {
+        title: settlement.title,
+        detail: settlement.detail,
+        nextLabel: settlement.nextStepLabel,
+        diceLabel: projection.lastRoll[0] || projection.lastRoll[1] ? `${projection.lastRoll[0]} + ${projection.lastRoll[1]}` : null,
+        chipLabel: "结果后果",
+        chipValue,
+        tone: settlement.tone === "danger" ? "danger" : "success",
+      };
+    }
+
+    if (!latestProjectionEvent) {
+      return null;
+    }
+
+    const actorName = latestProjectionEvent.playerId
+      ? projection.players.find((player) => player.id === latestProjectionEvent.playerId)?.name ?? "当前玩家"
+      : projection.currentTurnPlayerName;
+    const ownerName = latestProjectionEvent.ownerPlayerId
+      ? projection.players.find((player) => player.id === latestProjectionEvent.ownerPlayerId)?.name ?? "对手"
+      : null;
+    const diceLabel = latestProjectionEvent.lastRoll
+      ? `${latestProjectionEvent.lastRoll[0]} + ${latestProjectionEvent.lastRoll[1]}`
+      : projection.lastRoll[0] || projection.lastRoll[1]
+        ? `${projection.lastRoll[0]} + ${projection.lastRoll[1]}`
+        : null;
+
+    switch (latestProjectionEvent.type) {
+      case "property-purchased":
+        return {
+          title: `${actorName} 买下 ${latestProjectionEvent.tileLabel ?? "地产"}`,
+          detail: `支付 ${latestProjectionEvent.amount ?? 0}，归属已经完成同步。`,
+          nextLabel: projection.pendingActionLabel,
+          diceLabel,
+          chipLabel: "地产成交",
+          chipValue: `现金 -${latestProjectionEvent.amount ?? 0}`,
+          tone: "success" as const,
+        };
+      case "rent-charged":
+        return {
+          title: `${actorName} 支付租金`,
+          detail: `${ownerName ?? "收租方"} 收到 ${latestProjectionEvent.amount ?? 0}，当前回合已继续推进。`,
+          nextLabel: projection.pendingActionLabel,
+          diceLabel,
+          chipLabel: "现金后果",
+          chipValue: `支出 ${latestProjectionEvent.amount ?? 0}`,
+          tone: "warning" as const,
+        };
+      case "tax-paid":
+        return {
+          title: `${actorName} 支付税费`,
+          detail: `向银行支付 ${latestProjectionEvent.amount ?? 0}，税费结算已完成。`,
+          nextLabel: projection.pendingActionLabel,
+          diceLabel,
+          chipLabel: "现金后果",
+          chipValue: `支出 ${latestProjectionEvent.amount ?? 0}`,
+          tone: "warning" as const,
+        };
+      case "auction-settled":
+        return {
+          title: `${actorName} 竞得 ${latestProjectionEvent.tileLabel ?? "拍品"}`,
+          detail: "本轮拍卖已经成交，产权与资金结果都已写入房间。",
+          nextLabel: projection.pendingActionLabel,
+          diceLabel,
+          chipLabel: "拍卖结果",
+          chipValue: `成交 ${latestProjectionEvent.amount ?? latestProjectionEvent.tilePrice ?? 0}`,
+          tone: "success" as const,
+        };
+      case "property-mortgaged":
+        return {
+          title: `${actorName} 抵押 ${latestProjectionEvent.tileLabel ?? "地产"}`,
+          detail: "本次恢复动作已生效，房间会按新的缺口继续推进。",
+          nextLabel: projection.pendingActionLabel,
+          diceLabel,
+          chipLabel: "现金回收",
+          chipValue: `+${latestProjectionEvent.amount ?? 0}`,
+          tone: "warning" as const,
+        };
+      case "improvement-built":
+        return {
+          title: `${actorName} 开发 ${latestProjectionEvent.tileLabel ?? "地产"}`,
+          detail: `建筑等级已提升到 ${latestProjectionEvent.improvementLevel ?? 0}，租金威胁同步上升。`,
+          nextLabel: projection.pendingActionLabel,
+          diceLabel,
+          chipLabel: "地产状态",
+          chipValue: `建筑 ${latestProjectionEvent.improvementLevel ?? 0}`,
+          tone: "success" as const,
+        };
+      case "player-jailed":
+        return {
+          title: `${actorName} 进入监狱`,
+          detail: "本回合落点结果已经成立，后续将等待监狱决策。",
+          nextLabel: projection.pendingActionLabel,
+          diceLabel,
+          chipLabel: "落点后果",
+          chipValue: "监狱状态",
+          tone: "danger" as const,
+        };
+      default:
+        return diceLabel
+          ? {
+              title: latestProjectionEvent.summary,
+              detail: `焦点地块 ${boardTileLabels.get(presentation.highlightedTileId ?? "") ?? latestProjectionEvent.tileLabel ?? "已更新"}，结果已同步到当前棋盘。`,
+              nextLabel: projection.pendingActionLabel,
+              diceLabel,
+              chipLabel: "最近骰子",
+              chipValue: diceLabel,
+              tone: "default" as const,
+            }
+          : null;
+    }
+  })();
   const mobilePrimaryAnchorStyle = isMobileAnchorTray
     ? {
         position: "fixed" as const,
@@ -1363,6 +1496,7 @@ export function GamePage() {
           currentTurnPlayerId={projection.currentTurnPlayerId}
           players={projection.players}
           highlightedTileId={presentation.highlightedTileId}
+          resultFeedback={boardResultFeedback}
         />
       </section>
       <aside className="panel panel--room-state room-shell__rail">

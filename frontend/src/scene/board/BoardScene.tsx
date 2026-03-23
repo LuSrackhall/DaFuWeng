@@ -8,6 +8,15 @@ type BoardSceneProps = {
   currentTurnPlayerId: string;
   highlightedTileId: string | null;
   players: PlayerState[];
+  resultFeedback: {
+    title: string;
+    detail: string;
+    nextLabel: string;
+    diceLabel: string | null;
+    chipLabel: string;
+    chipValue: string;
+    tone: "default" | "warning" | "danger" | "success";
+  } | null;
 };
 
 type TileTrackSide = "top" | "bottom" | "left" | "right" | "corner";
@@ -95,6 +104,37 @@ const centerChipValueStyle = new TextStyle({
   fill: 0xf8f0dd,
   fontWeight: "700",
 });
+
+const centerResultTitleStyle = new TextStyle({
+  fontFamily: "Noto Serif SC, Source Han Serif SC, serif",
+  fontSize: 28,
+  fill: 0xf8f0dd,
+  fontWeight: "700",
+  align: "center",
+  wordWrap: true,
+  wordWrapWidth: 300,
+});
+
+const centerResultMetaStyle = new TextStyle({
+  fontFamily: "Inter, Noto Sans SC, sans-serif",
+  fontSize: 11,
+  fill: 0xe6c37d,
+  letterSpacing: 1,
+  fontWeight: "700",
+});
+
+function getFeedbackAccent(tone: NonNullable<BoardSceneProps["resultFeedback"]>["tone"], fallbackColor: number) {
+  if (tone === "danger") {
+    return 0xdd7464;
+  }
+  if (tone === "success") {
+    return 0x70ba94;
+  }
+  if (tone === "warning") {
+    return 0xe2b94a;
+  }
+  return fallbackColor;
+}
 
 function getHostSize(host: HTMLDivElement) {
   const rect = host.getBoundingClientRect();
@@ -273,6 +313,8 @@ function drawCenterHud(
     : null;
   const ownedPropertyCount = props.players.reduce((total, player) => total + player.properties.length, 0);
   const availablePropertyCount = props.board.filter((tile) => tile.type === "property").length - ownedPropertyCount;
+  const resultFeedback = props.resultFeedback;
+  const feedbackAccent = getFeedbackAccent(resultFeedback?.tone ?? "default", currentPlayerColor);
 
   const centerX = boardX + tileSize * 2.05;
   const centerY = boardY + tileSize * 2.05;
@@ -287,46 +329,67 @@ function drawCenterHud(
   const centerPanel = new Graphics();
   centerPanel.roundRect(centerX, centerY, centerWidth, centerHeight, 32);
   centerPanel.fill({ color: 0x10261f, alpha: 0.96 });
-  centerPanel.stroke({ color: currentPlayerColor, width: 2, alpha: 0.58 });
+  centerPanel.stroke({ color: feedbackAccent, width: 2, alpha: 0.58 });
   root.addChild(centerPanel);
 
   const currentGlow = new Graphics();
   currentGlow.roundRect(centerX + 18, centerY + 18, centerWidth - 36, 92, 24);
-  currentGlow.fill({ color: currentPlayerColor, alpha: 0.1 });
+  currentGlow.fill({ color: feedbackAccent, alpha: 0.1 });
   root.addChild(currentGlow);
 
-  const eyebrow = new Text({ text: "当前回合", style: centerEyebrowStyle });
+  if (resultFeedback) {
+    const resultBanner = new Graphics();
+    resultBanner.roundRect(centerX + 22, centerY + 22, centerWidth - 44, 124, 24);
+    resultBanner.fill({ color: feedbackAccent, alpha: 0.12 });
+    resultBanner.stroke({ color: feedbackAccent, width: 1.5, alpha: 0.38 });
+    root.addChild(resultBanner);
+  }
+
+  const eyebrow = new Text({ text: resultFeedback ? "最近结果" : "当前回合", style: centerEyebrowStyle });
   eyebrow.anchor.set(0.5, 0);
   eyebrow.x = centerX + centerWidth / 2;
   eyebrow.y = centerY + 24;
   root.addChild(eyebrow);
 
-  const title = new Text({ text: currentPlayer?.name ?? "等待同步", style: centerTitleStyle });
+  const title = new Text({
+    text: resultFeedback ? resultFeedback.title : currentPlayer?.name ?? "等待同步",
+    style: resultFeedback ? centerResultTitleStyle : centerTitleStyle,
+  });
   title.anchor.set(0.5, 0);
   title.x = centerX + centerWidth / 2;
   title.y = centerY + 48;
   root.addChild(title);
 
+  if (resultFeedback) {
+    const resultMeta = new Text({ text: `当前行动 · ${currentPlayer?.name ?? "等待同步"}`, style: centerResultMetaStyle });
+    resultMeta.anchor.set(0.5, 0);
+    resultMeta.x = centerX + centerWidth / 2;
+    resultMeta.y = centerY + 86;
+    root.addChild(resultMeta);
+  }
+
   const focusLabel = highlightedTile?.label ?? "当前没有焦点地块";
-  const focusMeta = highlightedTile
-    ? focusOwner
-      ? `归属 ${focusOwner.name}`
-      : highlightedTile.type === "property"
-        ? `待决策 · ${highlightedTile.price ?? "-"}`
-        : `事件地块 · ${highlightedTile.type}`
-    : "等待权威状态推进到下一格";
+  const focusMeta = resultFeedback
+    ? `${resultFeedback.detail}\n${resultFeedback.nextLabel}`
+    : highlightedTile
+      ? focusOwner
+        ? `归属 ${focusOwner.name}`
+        : highlightedTile.type === "property"
+          ? `待决策 · ${highlightedTile.price ?? "-"}`
+          : `事件地块 · ${highlightedTile.type}`
+      : "等待权威状态推进到下一格";
   const body = new Text({
-    text: `焦点地块：${focusLabel}\n${focusMeta}`,
+    text: resultFeedback ? focusMeta : `焦点地块：${focusLabel}\n${focusMeta}`,
     style: centerBodyStyle,
   });
   body.anchor.set(0.5, 0);
   body.x = centerX + centerWidth / 2;
-  body.y = centerY + 108;
+  body.y = resultFeedback ? centerY + 118 : centerY + 108;
   root.addChild(body);
 
-  drawCenterChip(root, centerX + 28, centerY + centerHeight - 114, 128, "已占领地产", `${ownedPropertyCount}`, currentPlayerColor);
-  drawCenterChip(root, centerX + centerWidth / 2 - 64, centerY + centerHeight - 114, 128, "待售地产", `${Math.max(0, availablePropertyCount)}`, 0xe6c37d);
-  drawCenterChip(root, centerX + centerWidth - 156, centerY + centerHeight - 114, 128, "焦点状态", highlightedTile ? "处理中" : "等待中", highlightedTile ? getTileAccentColor(highlightedTile, null) : 0xa6c7b7);
+  drawCenterChip(root, centerX + 24, centerY + centerHeight - 114, 132, "当前行动", currentPlayer?.name ?? "等待同步", feedbackAccent);
+  drawCenterChip(root, centerX + centerWidth / 2 - 66, centerY + centerHeight - 114, 132, resultFeedback?.chipLabel ?? "待售地产", resultFeedback?.chipValue ?? `${Math.max(0, availablePropertyCount)}`, resultFeedback ? feedbackAccent : 0xe6c37d);
+  drawCenterChip(root, centerX + centerWidth - 156, centerY + centerHeight - 114, 132, "最近骰子", resultFeedback?.diceLabel ?? (props.players.length > 0 ? "未掷出" : "--"), 0xa6c7b7);
 }
 
 function drawPlayerTokens(
@@ -493,18 +556,21 @@ function BoardSceneInner(props: BoardSceneProps) {
     if (appRef.current) {
       renderBoardStage(appRef.current, props);
     }
-  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players]);
+  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback]);
 
   const currentPlayerName = props.players.find((player) => player.id === props.currentTurnPlayerId)?.name ?? "未知玩家";
   const highlightedTileLabel = props.highlightedTileId
     ? props.board.find((tile) => tile.id === props.highlightedTileId)?.label ?? props.highlightedTileId
     : "无";
   const occupiedPropertyCount = props.players.reduce((total, player) => total + player.properties.length, 0);
+  const feedbackSummary = props.resultFeedback
+    ? `，最近结果 ${props.resultFeedback.title}，${props.resultFeedback.detail}，${props.resultFeedback.nextLabel}`
+    : "";
 
   return (
     <div className="board__surface">
       <div
-        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处`}
+        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}`}
         className="board__pixi-host"
         ref={hostRef}
       />

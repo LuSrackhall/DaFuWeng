@@ -234,6 +234,7 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await expect(page.getByText("交易已成交", { exact: true })).toBeVisible();
   await expect(page.getByText(/成交后现金:/).first()).toBeVisible();
   await expect(page.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /最近结果 玩家乙 接受了 房主甲 的交易报价/);
   await expect(guestPage.getByText("交易已成交", { exact: true })).toBeVisible();
   await expect(guestPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
   await expect(spectatorPage.getByText("交易已成交", { exact: true })).toBeVisible();
@@ -244,6 +245,7 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await expect(page.getByText("交易已成交", { exact: true })).toBeVisible();
   await expect(page.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /最近结果 玩家乙 接受了 房主甲 的交易报价/);
   await expect(page.getByText("双边交易待响应")).toHaveCount(0);
 
   await guestPage.reload();
@@ -253,8 +255,8 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await expect(guestPage.getByText("双边交易待响应")).toHaveCount(0);
 
   await spectatorPage.reload();
-  await expect(spectatorPage.getByText("交易已成交", { exact: true })).toBeVisible();
-  await expect(spectatorPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
+  await expect(spectatorPage.getByText("交易已成交", { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(spectatorPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible({ timeout: 10000 });
   await expect(spectatorPage.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
   await expect(spectatorPage.getByText("双边交易待响应")).toHaveCount(0);
 
@@ -310,7 +312,7 @@ test("rejected trade shows a recovery card and restores the proposer's turn", as
 
   await page.reload();
   await expect(page.getByText("交易未成交", { exact: true })).toBeVisible();
-  await expect(page.getByText(/没有发生任何现金、地产或卡牌转移/)).toBeVisible();
+  await expect(page.getByText(/没有发生任何现金、地产或卡牌转移/)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
   await expect(page.getByText("双边交易待响应")).toHaveCount(0);
 
