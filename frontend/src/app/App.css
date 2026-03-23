@@ -444,6 +444,13 @@ body {
   gap: 12px;
 }
 
+.trade-settlement-card,
+.trade-rejection-card,
+.trade-side,
+.trade-rejection-card__hero {
+  overflow-wrap: anywhere;
+}
+
 .action-surface__summary,
 .action-surface__hint,
 .action-surface__meta {
@@ -805,6 +812,15 @@ body {
 
   .stage-card {
     gap: 8px;
+  }
+
+  .trade-settlement-card__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-settlement-card,
+  .trade-rejection-card {
+    gap: 10px;
   }
 
   .asset-picker {

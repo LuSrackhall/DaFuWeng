@@ -585,6 +585,274 @@ test("mobile room page prioritizes the current stage before overview without hor
   expect(hasHorizontalOverflow).toBe(false);
 });
 
+test("mobile accepted trade result stays readable without horizontal overflow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  const roomId = "room-mobile-trade-accepted";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 34,
+    eventSequence: 34,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [4, 2],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲甲甲甲甲甲",
+        cash: 1710,
+        position: 6,
+        properties: ["tile-6", "tile-39"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: ["chance-jail-card"],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙乙乙乙乙乙",
+        cash: 1290,
+        position: 0,
+        properties: ["tile-24"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: ["community-jail-card"],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-33",
+        type: "trade-proposed",
+        sequence: 33,
+        snapshotVersion: 33,
+        summary: "房主甲甲甲甲甲甲 向 玩家乙乙乙乙乙乙 发起了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p2",
+        offeredCash: 250,
+        requestedCash: 40,
+        offeredTileIds: ["tile-6", "tile-39"],
+        requestedTileIds: ["tile-24"],
+        offeredCardIds: ["chance-jail-card"],
+        requestedCardIds: ["community-jail-card"],
+        tradeSnapshotVersion: 33,
+      },
+      {
+        id: "evt-34",
+        type: "trade-accepted",
+        sequence: 34,
+        snapshotVersion: 34,
+        summary: "玩家乙乙乙乙乙乙 接受了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p1",
+        offeredCash: 250,
+        requestedCash: 40,
+        offeredTileIds: ["tile-6", "tile-39"],
+        requestedTileIds: ["tile-24"],
+        offeredCardIds: ["chance-jail-card"],
+        requestedCardIds: ["community-jail-card"],
+        cashAfterByPlayer: { p1: 1710, p2: 1290 },
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲甲甲甲甲甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: snapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const settlementCard = page.locator(".trade-settlement-card");
+  const settlementSides = settlementCard.locator(".trade-side");
+
+  await expect(settlementCard.getByText("交易已成交", { exact: true })).toBeVisible();
+  await expect(settlementCard.getByText("玩家乙乙乙乙乙乙 接受了 房主甲甲甲甲甲甲 的交易报价")).toBeVisible();
+  await expect(settlementCard.getByText(/成交后现金/).first()).toBeVisible();
+  await expect(settlementCard.getByText("等待当前玩家掷骰")).toBeVisible();
+
+  const firstSide = await settlementSides.nth(0).boundingBox();
+  const secondSide = await settlementSides.nth(1).boundingBox();
+  expect(secondSide?.y).toBeGreaterThan(firstSide?.y ?? 0);
+
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
+test("mobile rejected trade result stays readable without horizontal overflow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  const roomId = "room-mobile-trade-rejected";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 41,
+    eventSequence: 41,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [2, 2],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲甲甲甲甲甲",
+        cash: 1460,
+        position: 6,
+        properties: ["tile-6", "tile-39"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: ["chance-jail-card"],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙乙乙乙乙乙",
+        cash: 1540,
+        position: 0,
+        properties: ["tile-24"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: ["community-jail-card"],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-40",
+        type: "trade-proposed",
+        sequence: 40,
+        snapshotVersion: 40,
+        summary: "房主甲甲甲甲甲甲 向 玩家乙乙乙乙乙乙 发起了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p2",
+        offeredCash: 250,
+        requestedCash: 40,
+        offeredTileIds: ["tile-6", "tile-39"],
+        requestedTileIds: ["tile-24"],
+        offeredCardIds: ["chance-jail-card"],
+        requestedCardIds: ["community-jail-card"],
+        tradeSnapshotVersion: 40,
+      },
+      {
+        id: "evt-41",
+        type: "trade-rejected",
+        sequence: 41,
+        snapshotVersion: 41,
+        summary: "玩家乙乙乙乙乙乙 拒绝了交易报价。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        nextPlayerId: "p1",
+        offeredCash: 250,
+        requestedCash: 40,
+        offeredTileIds: ["tile-6", "tile-39"],
+        requestedTileIds: ["tile-24"],
+        offeredCardIds: ["chance-jail-card"],
+        requestedCardIds: ["community-jail-card"],
+        tradeSnapshotVersion: 40,
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲甲甲甲甲甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: snapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const rejectionCard = page.locator(".trade-rejection-card");
+  const rejectionSides = rejectionCard.locator(".trade-side");
+
+  await expect(rejectionCard.getByText("交易未成交", { exact: true })).toBeVisible();
+  await expect(rejectionCard.getByText(/没有发生任何现金、地产或卡牌转移/)).toBeVisible();
+  await expect(rejectionCard.getByText(/房主甲甲甲甲甲甲 继续这一回合/)).toBeVisible();
+  await expect(rejectionCard.getByText("等待当前玩家掷骰")).toBeVisible();
+
+  const firstSide = await rejectionSides.nth(0).boundingBox();
+  const secondSide = await rejectionSides.nth(1).boundingBox();
+  expect(secondSide?.y).toBeGreaterThan(firstSide?.y ?? 0);
+
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
 test("contextual action surface only shows jail decisions without unrelated generic actions", async ({
   page,
 }) => {
