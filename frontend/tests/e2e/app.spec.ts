@@ -399,7 +399,7 @@ test("room sync shell shows reconnect guidance after realtime error and clears a
   await expect(syncShell).toHaveCount(0, { timeout: 10000 });
   const playerRecoveryBar = page.locator(".room-reconnect-success");
   await expect(playerRecoveryBar.getByText("已重新连入牌局，当前进度已同步")).toBeVisible();
-  await expect(playerRecoveryBar.getByText("刚刚补回：玩家乙 接过了当前回合。")).toBeVisible();
+  await expect(playerRecoveryBar.getByText("刚刚补回：玩家乙 接过了当前回合。 当前轮到 玩家乙 掷骰。")).toBeVisible();
   await expect(page.getByText("玩家乙 接过了当前回合。").last()).toBeVisible({ timeout: 10000 });
   await expect(page.locator(".room-shell__pill").getByText("玩家乙")).toBeVisible();
 });
@@ -477,6 +477,7 @@ test("spectator reconnect stays read-only after realtime error and catch-up reco
   const spectatorRecoveryBar = spectatorPage.locator(".room-reconnect-success");
   await expect(spectatorRecoveryBar.getByText("已重新连入牌局，可以继续旁观当前进展")).toBeVisible();
   await expect(spectatorRecoveryBar.locator(".room-reconnect-success__hint")).toContainText("刚刚补回：");
+  await expect(spectatorRecoveryBar.locator(".room-reconnect-success__hint")).toContainText("现在轮到 房主甲决定是否以 160 买下 东湖路。");
   await expect(spectatorPage.getByText(/可购买 东湖路，价格 160。/)).toBeVisible({ timeout: 10000 });
   await expect(spectatorPage.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
   await expect(spectatorPage.getByRole("button", { name: "购买地产" })).toHaveCount(0);
@@ -550,6 +551,7 @@ test("mobile spectator reconnect shows recovery feedback and stays read-only wit
   const recoveryBar = spectatorPage.locator(".room-reconnect-success");
   await expect(recoveryBar.getByText("已重新连入牌局，可以继续旁观当前进展")).toBeVisible();
   await expect(recoveryBar.locator(".room-reconnect-success__hint")).toContainText("刚刚补回：");
+  await expect(recoveryBar.locator(".room-reconnect-success__hint")).toContainText("现在轮到 房主甲决定是否以 160 买下 东湖路。");
   await expect(recoveryBar).toBeInViewport();
   await expect(spectatorPage.getByText(/可购买 东湖路，价格 160。/)).toBeVisible({ timeout: 10000 });
   await expect(spectatorPage.getByRole("button", { name: "购买地产" })).toHaveCount(0);
@@ -705,7 +707,7 @@ test("mobile player reconnect keeps success feedback contextual and dismisses af
   await expect(syncShell).toHaveCount(0, { timeout: 10000 });
   const recoveryBar = page.locator(".room-reconnect-success");
   await expect(recoveryBar.getByText("已重新连入牌局，当前进度已同步")).toBeVisible();
-  await expect(recoveryBar.getByText("刚刚补回：房主甲 接过了当前回合。")).toBeVisible();
+  await expect(recoveryBar.getByText("刚刚补回：房主甲 接过了当前回合。 现在轮到你继续掷骰。")).toBeVisible();
   await expect(recoveryBar).toBeInViewport();
   await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeInViewport();
@@ -713,6 +715,389 @@ test("mobile player reconnect keeps success feedback contextual and dismisses af
   await expect(recoveryBar).toBeVisible();
   await expect(recoveryBar).toHaveCount(0, { timeout: 4000 });
   await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeVisible();
+
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
+test("reconnect success falls back to current turn context when no latest event summary exists", async ({
+  page,
+}) => {
+  const roomId = "room-reconnect-no-summary";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 1,
+    eventSequence: 0,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p2",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 1500,
+        position: 0,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1500,
+        position: 0,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 2,
+    eventSequence: 0,
+    currentTurnPlayerId: "p1",
+    recentEvents: [],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        const instances = (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources ?? [];
+        instances.push(this);
+        (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = instances;
+      }
+
+      addEventListener() {}
+      close() {}
+      emitError() {
+        this.onerror?.();
+      }
+    }
+
+    (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = [];
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  let shouldRecover = false;
+  let didRecover = false;
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: initialSnapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    if (shouldRecover && !didRecover) {
+      didRecover = true;
+      await route.fulfill({ json: { snapshot: recoveredSnapshot, events: [] } });
+      return;
+    }
+
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  shouldRecover = true;
+  await page.evaluate(() => {
+    const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
+    instances[0]?.emitError();
+  });
+
+  const recoveryBar = page.locator(".room-reconnect-success");
+  await expect(recoveryBar.getByText("已重新连入牌局，当前进度已同步")).toBeVisible({ timeout: 10000 });
+  await expect(recoveryBar.getByText("系统已把这局追到最新进度。 现在轮到你继续掷骰。")).toBeVisible();
+  await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeVisible();
+});
+
+test("mobile player reconnect narrates property decision recovery", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  const roomId = "room-mobile-property-reconnect";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 1,
+    eventSequence: 1,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p2",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      { id: "p1", name: "房主甲", cash: 1500, position: 1, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: [
+      { id: "evt-1", type: "room-started", sequence: 1, snapshotVersion: 1, summary: "房主甲 开始了本局。", playerId: "p1" },
+    ],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 2,
+    eventSequence: 2,
+    turnState: "awaiting-property-decision",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家决定是否买地",
+    pendingProperty: {
+      tileId: "tile-1",
+      tileIndex: 1,
+      label: "东湖路",
+      price: 160,
+    },
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      {
+        id: "evt-2",
+        type: "property-offered",
+        sequence: 2,
+        snapshotVersion: 2,
+        summary: "房主甲 来到了 东湖路。",
+        playerId: "p1",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "东湖路",
+        tilePrice: 160,
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        const instances = (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources ?? [];
+        instances.push(this);
+        (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = instances;
+      }
+
+      addEventListener() {}
+      close() {}
+      emitError() {
+        this.onerror?.();
+      }
+    }
+
+    (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = [];
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  let shouldRecover = false;
+  let didRecover = false;
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: initialSnapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    if (shouldRecover && !didRecover) {
+      didRecover = true;
+      await route.fulfill({ json: { snapshot: recoveredSnapshot, events: [] } });
+      return;
+    }
+
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  shouldRecover = true;
+  await page.evaluate(() => {
+    const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
+    instances[0]?.emitError();
+  });
+
+  const recoveryBar = page.locator(".room-reconnect-success");
+  await expect(recoveryBar.getByText("已重新连入牌局，当前进度已同步")).toBeVisible({ timeout: 10000 });
+  await expect(recoveryBar.getByText("刚刚补回：房主甲 来到了 东湖路。 现在轮到你决定是否以 160 买下 东湖路。")).toBeVisible();
+  await expect(recoveryBar).toBeInViewport();
+  await expect(page.getByRole("button", { name: "购买地产" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "放弃购买" })).toBeVisible();
+
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
+test("mobile player reconnect narrates deficit recovery", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  const roomId = "room-mobile-deficit-reconnect";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 1,
+    eventSequence: 1,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p2",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      { id: "p1", name: "房主甲", cash: 20, position: 1, properties: ["tile-1"], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 3, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: [
+      { id: "evt-1", type: "room-started", sequence: 1, snapshotVersion: 1, summary: "房主甲 开始了本局。", playerId: "p1" },
+    ],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 2,
+    eventSequence: 2,
+    turnState: "awaiting-deficit-resolution",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家处理欠款",
+    pendingPayment: {
+      amount: 120,
+      reason: "rent",
+      creditorKind: "player",
+      creditorPlayerId: "p2",
+      sourceTileId: "tile-1",
+      sourceTileLabel: "东湖路",
+    },
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      {
+        id: "evt-2",
+        type: "deficit-started",
+        sequence: 2,
+        snapshotVersion: 2,
+        summary: "房主甲 需向 玩家乙 支付 120 租金。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "东湖路",
+        amount: 120,
+        cashAfter: 20,
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        const instances = (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources ?? [];
+        instances.push(this);
+        (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = instances;
+      }
+
+      addEventListener() {}
+      close() {}
+      emitError() {
+        this.onerror?.();
+      }
+    }
+
+    (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = [];
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  let shouldRecover = false;
+  let didRecover = false;
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: initialSnapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    if (shouldRecover && !didRecover) {
+      didRecover = true;
+      await route.fulfill({ json: { snapshot: recoveredSnapshot, events: [] } });
+      return;
+    }
+
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  shouldRecover = true;
+  await page.evaluate(() => {
+    const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
+    instances[0]?.emitError();
+  });
+
+  const recoveryBar = page.locator(".room-reconnect-success");
+  await expect(recoveryBar.getByText("已重新连入牌局，当前进度已同步")).toBeVisible({ timeout: 10000 });
+  await expect(recoveryBar.getByText("刚刚补回：房主甲 需向 玩家乙 支付 120 租金。 现在轮到你处理租金欠款，还差 100。")).toBeVisible();
+  await expect(recoveryBar).toBeInViewport();
+  await expect(page.getByRole("button", { name: "下一步先抵押 南城路" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "宣告破产" })).toBeVisible();
 
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(hasHorizontalOverflow).toBe(false);

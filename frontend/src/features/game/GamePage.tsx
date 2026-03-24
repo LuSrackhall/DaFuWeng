@@ -25,6 +25,49 @@ type BoardResultFeedback = {
   tone: BoardResultFeedbackTone;
 };
 
+function buildReconnectRecoveryNarrative(options: {
+  activePlayerId: string;
+  currentTurnPlayerId: string;
+  currentTurnPlayerName: string;
+  isSpectator: boolean;
+  latestSummary: string | null;
+  pendingActionLabel: string;
+  pendingProperty: { label: string; price: number } | null;
+  resolutionSummary: { actorPlayerId: string; actorName: string; reasonLabel: string; shortfall: number } | null;
+  turnState: string;
+}) {
+  const intro = options.latestSummary
+    ? `刚刚补回：${options.latestSummary}`
+    : "系统已把这局追到最新进度。";
+
+  if (options.resolutionSummary) {
+    const deficitActorLabel = !options.isSpectator && options.resolutionSummary.actorPlayerId === options.activePlayerId
+      ? "现在轮到你"
+      : `现在由 ${options.resolutionSummary.actorName}`;
+    return `${intro} ${deficitActorLabel}处理${options.resolutionSummary.reasonLabel}欠款，还差 ${options.resolutionSummary.shortfall}。`;
+  }
+
+  if (options.pendingProperty) {
+    const propertyActorLabel = !options.isSpectator && options.currentTurnPlayerId === options.activePlayerId
+      ? "现在轮到你"
+      : `现在轮到 ${options.currentTurnPlayerName}`;
+    return `${intro} ${propertyActorLabel}决定是否以 ${options.pendingProperty.price} 买下 ${options.pendingProperty.label}。`;
+  }
+
+  if (options.turnState === "awaiting-roll") {
+    const rollActorLabel = !options.isSpectator && options.currentTurnPlayerId === options.activePlayerId
+      ? "现在轮到你继续掷骰。"
+      : `当前轮到 ${options.currentTurnPlayerName} 掷骰。`;
+    return `${intro} ${rollActorLabel}`;
+  }
+
+  if (!options.latestSummary) {
+    return `${intro} ${options.pendingActionLabel}`;
+  }
+
+  return `${intro} 当前轮到 ${options.currentTurnPlayerName}。`;
+}
+
 export function GamePage() {
   const params = useParams();
   const roomId = params.roomId ?? "";
@@ -229,9 +272,24 @@ export function GamePage() {
       ? "已重新连入牌局，可以继续旁观当前进展"
       : "已重新连入牌局，当前进度已同步"
     : null;
-  const reconnectSuccessContext = latestProjectionEvent?.summary
-    ? `刚刚补回：${latestProjectionEvent.summary}`
-    : `当前轮到 ${projection.currentTurnPlayerName}`;
+  const reconnectSuccessContext = buildReconnectRecoveryNarrative({
+    activePlayerId,
+    currentTurnPlayerId: projection.currentTurnPlayerId,
+    currentTurnPlayerName: projection.currentTurnPlayerName,
+    isSpectator,
+    latestSummary: latestProjectionEvent?.summary ?? null,
+    pendingActionLabel: projection.pendingActionLabel,
+    pendingProperty: projection.pendingProperty,
+    resolutionSummary: projection.resolutionSummary
+      ? {
+        actorPlayerId: projection.resolutionSummary.actorPlayerId,
+        actorName: projection.resolutionSummary.actorName,
+        reasonLabel: projection.resolutionSummary.reasonLabel,
+        shortfall: projection.resolutionSummary.shortfall,
+      }
+      : null,
+    turnState: projection.turnState,
+  });
   const auctionSummary = projection.auctionSummary;
   const tradeSummary = projection.tradeSummary;
   const auctionQuickBidOptions = auctionSummary
