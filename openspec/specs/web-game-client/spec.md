@@ -486,6 +486,20 @@ The system SHALL prefer player-readable game language over internal system wordi
 - **WHEN** the UI presents room anchors, turn tools, reconnect guidance, or board waiting text
 - **THEN** those surfaces SHALL use player-facing game language rather than internal engineering phrasing
 
+### Requirement: Reconnect recovery shows lightweight success feedback
+The system SHALL provide a lightweight success acknowledgment after room catch-up recovery completes.
+
+#### Scenario: Room reconnect finishes catching up
+- **WHEN** the room page has recovered from reconnect and caught up to the latest room state
+- **THEN** the page SHALL briefly acknowledge that the room has been reconnected successfully
+
+### Requirement: Mobile spectator reconnect stays readable and read-only
+The system SHALL preserve spectator read-only recovery behavior on narrow screens.
+
+#### Scenario: Spectator reconnects on mobile
+- **WHEN** a spectator page on a narrow screen loses realtime updates and later catches up through polling
+- **THEN** the spectator SHALL see reconnect recovery complete, remain read-only, and avoid horizontal overflow
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
