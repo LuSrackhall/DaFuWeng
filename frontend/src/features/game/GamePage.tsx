@@ -229,6 +229,9 @@ export function GamePage() {
       ? "已重新连入牌局，可以继续旁观当前进展"
       : "已重新连入牌局，当前进度已同步"
     : null;
+  const reconnectSuccessContext = latestProjectionEvent?.summary
+    ? `刚刚补回：${latestProjectionEvent.summary}`
+    : `当前轮到 ${projection.currentTurnPlayerName}`;
   const auctionSummary = projection.auctionSummary;
   const tradeSummary = projection.tradeSummary;
   const auctionQuickBidOptions = auctionSummary
@@ -1586,7 +1589,7 @@ export function GamePage() {
         <section className="panel room-reconnect-success" role="status" aria-live="polite">
           <p className="shell__eyebrow">恢复完成</p>
           <strong>{reconnectSuccessMessage}</strong>
-          <span className="room-reconnect-success__hint">你现在看到的已经是这局最新接回的进展。</span>
+          <span className="room-reconnect-success__hint">{reconnectSuccessContext}</span>
         </section>
       ) : null}
 
