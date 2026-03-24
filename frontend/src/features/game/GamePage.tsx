@@ -29,6 +29,8 @@ type RecoveryRecapSnapshot = {
   token: number;
   title: string;
   detail: string;
+  phaseLabel: string;
+  eventSequence: number;
   meta: string;
 };
 
@@ -39,6 +41,33 @@ function buildRecoveryRecapDetail(context: string) {
   }
 
   return context.trim();
+}
+
+function buildRecoveryAnchorPhaseLabel(roomState: string, turnState: string, hasWaitingRoomSummary: boolean) {
+  if (hasWaitingRoomSummary || roomState === "lobby") {
+    return "等待房间";
+  }
+
+  if (roomState === "finished") {
+    return "对局结束";
+  }
+
+  switch (turnState) {
+    case "awaiting-auction":
+      return "公开拍卖";
+    case "awaiting-trade-response":
+      return "等待交易答复";
+    case "awaiting-deficit-resolution":
+      return "补齐欠款";
+    case "awaiting-property-decision":
+      return "地产决策";
+    case "awaiting-jail-decision":
+      return "监狱决策";
+    case "awaiting-roll":
+      return "等待掷骰";
+    default:
+      return "对局进行中";
+  }
 }
 
 function buildReconnectRecoveryNarrative(options: {
@@ -274,6 +303,11 @@ export function GamePage() {
         : projection.turnState === "awaiting-deficit-resolution"
           ? "补齐欠款"
           : "对局进行中";
+  const recoveryAnchorPhaseLabel = buildRecoveryAnchorPhaseLabel(
+    projection.roomState,
+    projection.turnState,
+    Boolean(projection.waitingRoomSummary),
+  );
           const roomShellTitle = projection.waitingRoomSummary ? "等待开局" : roomPhaseLabel;
   const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
   const latestProjectionEvent = projection.recentEvents.at(-1) ?? null;
@@ -458,15 +492,28 @@ export function GamePage() {
       token: recoveryNotice.token,
       title: latestProjectionEvent?.summary ?? "系统已把这局追到最新进度。",
       detail: buildRecoveryRecapDetail(reconnectSuccessContext),
+      phaseLabel: recoveryAnchorPhaseLabel,
+      eventSequence: projection.eventSequence,
       meta: isSpectator ? "当前仍为只读观战" : projection.pendingActionLabel,
     });
   }, [
     recoveryNotice?.token,
     latestProjectionEvent?.summary,
     reconnectSuccessContext,
+    recoveryAnchorPhaseLabel,
+    projection.eventSequence,
     isSpectator,
     projection.pendingActionLabel,
   ]);
+  useEffect(() => {
+    if (!lastRecoveryRecap || recoveryNotice) {
+      return;
+    }
+
+    if (projection.eventSequence > lastRecoveryRecap.eventSequence) {
+      setLastRecoveryRecap(null);
+    }
+  }, [projection.eventSequence, lastRecoveryRecap, recoveryNotice]);
   const tradeNetCash = Number(tradeOfferedCash) - Number(tradeRequestedCash);
   const tradeNetCashLabel = tradeNetCash === 0
     ? "现金净流向: 无净变化"
@@ -1876,6 +1923,7 @@ export function GamePage() {
               <p className="shell__eyebrow">最近恢复</p>
               <strong>{lastRecoveryRecap.title}</strong>
               <span>{lastRecoveryRecap.detail}</span>
+              <span className="room-recovery-recap__anchor">恢复锚点: {lastRecoveryRecap.phaseLabel} · 第 {lastRecoveryRecap.eventSequence} 条进展</span>
               <span className="room-recovery-recap__meta">{lastRecoveryRecap.meta}</span>
             </article>
           ) : null}

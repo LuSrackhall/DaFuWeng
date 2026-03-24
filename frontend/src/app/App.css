@@ -633,6 +633,11 @@ body {
   color: rgba(246, 236, 212, 0.64);
 }
 
+.room-recovery-recap__anchor {
+  color: rgba(124, 201, 149, 0.84);
+  font-size: 0.9rem;
+}
+
 .room-chip {
   display: grid;
   gap: 4px;
@@ -1347,6 +1352,15 @@ body {
     font-size: 0.9rem;
   }
 
+  .room-recovery-recap {
+    padding: 12px 14px;
+  }
+
+  .room-recovery-recap__anchor,
+  .room-recovery-recap__meta {
+    font-size: 0.84rem;
+  }
+
   .route-loading-shell__panel,
   .route-loading-shell__card,
   .route-loading-shell__stage {
@@ -1378,6 +1392,10 @@ body {
 
   .room-reconnect-success__status {
     gap: 8px;
+  }
+
+  .room-recovery-recap {
+    gap: 7px;
   }
 
   .shell__status {
