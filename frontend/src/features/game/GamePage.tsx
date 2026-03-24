@@ -1,6 +1,6 @@
 import { sampleBoard } from "@dafuweng/board-config";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useParams } from "react-router-dom";
 import { acceptTrade, attemptJailRoll, buildImprovement, declareBankruptcy, declineProperty, mortgageProperty, passAuction, payJailFine, proposeTrade, purchaseProperty, rejectTrade, rollDice, sellImprovement, startRoom, submitAuctionBid, useJailCard } from "../../network/roomApi";
@@ -29,7 +29,7 @@ type RecoveryRecapSnapshot = {
   token: number;
   title: string;
   detail: string;
-  phaseLabel: string;
+  anchorLabel: string;
   eventSequence: number;
   meta: string;
 };
@@ -68,6 +68,14 @@ function buildRecoveryAnchorPhaseLabel(roomState: string, turnState: string, has
     default:
       return "对局进行中";
   }
+}
+
+function buildRecoveryAnchorCopy(phaseLabel: string, eventSequence: number, isSpectator: boolean) {
+  const phasePrefix = isSpectator ? "你继续看到的是" : "你回来的位置是";
+  const progressLabel = eventSequence > 0
+    ? `刚接到第 ${eventSequence} 条关键进展`
+    : "系统刚把这一局追到眼前";
+  return `${phasePrefix}${phaseLabel}，${progressLabel}`;
 }
 
 function buildReconnectRecoveryNarrative(options: {
@@ -184,6 +192,8 @@ export function GamePage() {
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const [lastRecoveryRecap, setLastRecoveryRecap] = useState<RecoveryRecapSnapshot | null>(null);
+  const [dismissingRecoveryRecapToken, setDismissingRecoveryRecapToken] = useState<number | null>(null);
+  const recoveryRecapDismissTimerRef = useRef<number | null>(null);
   const presentation = usePresentationState(
     projection.currentTurnPlayerId,
     projection.players,
@@ -484,6 +494,13 @@ export function GamePage() {
     turnState: projection.turnState,
   });
   useEffect(() => {
+    if (recoveryRecapDismissTimerRef.current !== null) {
+      window.clearTimeout(recoveryRecapDismissTimerRef.current);
+      recoveryRecapDismissTimerRef.current = null;
+    }
+
+    setDismissingRecoveryRecapToken(null);
+
     if (!recoveryNotice) {
       return;
     }
@@ -492,7 +509,7 @@ export function GamePage() {
       token: recoveryNotice.token,
       title: latestProjectionEvent?.summary ?? "系统已把这局追到最新进度。",
       detail: buildRecoveryRecapDetail(reconnectSuccessContext),
-      phaseLabel: recoveryAnchorPhaseLabel,
+      anchorLabel: buildRecoveryAnchorCopy(recoveryAnchorPhaseLabel, projection.eventSequence, isSpectator),
       eventSequence: projection.eventSequence,
       meta: isSpectator ? "当前仍为只读观战" : projection.pendingActionLabel,
     });
@@ -510,10 +527,23 @@ export function GamePage() {
       return;
     }
 
-    if (projection.eventSequence > lastRecoveryRecap.eventSequence) {
-      setLastRecoveryRecap(null);
+    if (
+      projection.eventSequence > lastRecoveryRecap.eventSequence
+      && dismissingRecoveryRecapToken !== lastRecoveryRecap.token
+    ) {
+      setDismissingRecoveryRecapToken(lastRecoveryRecap.token);
+      recoveryRecapDismissTimerRef.current = window.setTimeout(() => {
+        setLastRecoveryRecap((current) => current?.token === lastRecoveryRecap.token ? null : current);
+        setDismissingRecoveryRecapToken((current) => current === lastRecoveryRecap.token ? null : current);
+        recoveryRecapDismissTimerRef.current = null;
+      }, 220);
     }
-  }, [projection.eventSequence, lastRecoveryRecap, recoveryNotice]);
+  }, [projection.eventSequence, lastRecoveryRecap, recoveryNotice, dismissingRecoveryRecapToken]);
+  useEffect(() => () => {
+    if (recoveryRecapDismissTimerRef.current !== null) {
+      window.clearTimeout(recoveryRecapDismissTimerRef.current);
+    }
+  }, []);
   const tradeNetCash = Number(tradeOfferedCash) - Number(tradeRequestedCash);
   const tradeNetCashLabel = tradeNetCash === 0
     ? "现金净流向: 无净变化"
@@ -1919,11 +1949,14 @@ export function GamePage() {
             </article>
           </div>
           {!reconnectSuccessMessage && lastRecoveryRecap ? (
-            <article className="room-recovery-recap" key={lastRecoveryRecap.token}>
+            <article
+              className={`room-recovery-recap${dismissingRecoveryRecapToken === lastRecoveryRecap.token ? " room-recovery-recap--dismissing" : ""}`}
+              key={lastRecoveryRecap.token}
+            >
               <p className="shell__eyebrow">最近恢复</p>
               <strong>{lastRecoveryRecap.title}</strong>
               <span>{lastRecoveryRecap.detail}</span>
-              <span className="room-recovery-recap__anchor">恢复锚点: {lastRecoveryRecap.phaseLabel} · 第 {lastRecoveryRecap.eventSequence} 条进展</span>
+              <span className="room-recovery-recap__anchor">{lastRecoveryRecap.anchorLabel}</span>
               <span className="room-recovery-recap__meta">{lastRecoveryRecap.meta}</span>
             </article>
           ) : null}
