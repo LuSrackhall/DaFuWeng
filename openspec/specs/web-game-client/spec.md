@@ -672,6 +672,24 @@ The system SHALL provide a formal package script for isolated local clean e2e va
 - **WHEN** a developer uses the formal clean local e2e script
 - **THEN** the run SHALL disable existing server reuse and isolate its PocketBase data path from the default local lane
 
+### Requirement: Clean spectator reconnect coverage remains deterministic on mobile
+The system SHALL keep the mobile spectator reconnect coverage stable under the clean e2e lane.
+
+#### Scenario: Mobile spectator reconnect coverage validates read-only recovery
+- **WHEN** the clean e2e suite validates mobile spectator reconnect recovery
+- **THEN** the test SHALL use a deterministic recovery baseline that still proves read-only recovery feedback and overflow safety
+
+### Requirement: Clean live trade coverage respects the current authoritative turn model
+The system SHALL validate live trade response and rejection flows only after the proposer regains an authoritative turn that can open turn tools.
+
+#### Scenario: The clean suite validates a live trade response flow
+- **WHEN** the proposer reaches the next authoritative turn after the opponent acts
+- **THEN** the suite SHALL validate the live trade response flow from that turn
+
+#### Scenario: The clean suite validates a rejected trade flow
+- **WHEN** the proposer reaches the next authoritative turn after the opponent acts
+- **THEN** the suite SHALL validate the rejected trade flow from that turn
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
