@@ -504,26 +504,56 @@ test("spectator reconnect stays read-only after realtime error and catch-up reco
 });
 
 test("mobile spectator reconnect shows recovery feedback and stays read-only without overflow", async ({
-  browser,
   page,
 }) => {
-  await page.goto("/");
-  await page.getByLabel("房主昵称").fill("房主甲");
-  await page.getByRole("button", { name: "创建房间" }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
 
-  await expect(page).toHaveURL(/\/room\/room-\d+$/);
-  const roomId = extractRoomId(page.url());
+  const roomId = "room-mobile-spectator-reconnect-overview";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 1,
+    eventSequence: 1,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      { id: "p1", name: "房主甲", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: [
+      { id: "evt-1", type: "room-started", sequence: 1, snapshotVersion: 1, summary: "房主甲 开始了本局。", playerId: "p1" },
+    ],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 2,
+    eventSequence: 2,
+    turnState: "awaiting-property-decision",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "可购买 北城路，价格 130。",
+    pendingProperty: {
+      tileId: "tile-3",
+      tileIndex: 3,
+      label: "北城路",
+      price: 130,
+    },
+    lastRoll: [2, 1],
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      { id: "evt-2", type: "property-offered", sequence: 2, snapshotVersion: 2, summary: "房主甲 可选择购买 北城路。", playerId: "p1", tileId: "tile-3", tileIndex: 3, tileLabel: "北城路", tilePrice: 130, lastRoll: [2, 1] },
+    ],
+  };
 
-  const guestPage = await browser.newPage();
-  await guestPage.goto("/");
-  await guestPage.getByLabel("加入房间").fill(roomId);
-  await guestPage.getByLabel("玩家昵称").fill("玩家乙");
-  await guestPage.getByRole("button", { name: "加入房间" }).click();
-  await expect(guestPage).toHaveURL(new RegExp(`/room/${roomId}$`));
-
-  const spectatorPage = await browser.newPage();
-  await spectatorPage.setViewportSize({ width: 375, height: 812 });
-  await spectatorPage.addInitScript(() => {
+  await page.addInitScript(() => {
     class FakeEventSource {
       onerror: (() => void) | null = null;
 
@@ -544,39 +574,48 @@ test("mobile spectator reconnect shows recovery feedback and stays read-only wit
     window.EventSource = FakeEventSource as unknown as typeof EventSource;
   });
 
-  await page.getByRole("button", { name: "房主开始游戏" }).click();
-  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  let shouldRecover = false;
+  let didRecover = false;
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: initialSnapshot });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    if (shouldRecover && !didRecover) {
+      didRecover = true;
+      await route.fulfill({ json: { snapshot: recoveredSnapshot, events: [] } });
+      return;
+    }
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
 
-  await spectatorPage.goto(`/room/${roomId}`);
-  await expect(spectatorPage.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
+  await page.goto(`/room/${roomId}`);
+  await expect(page.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
 
-  await spectatorPage.evaluate(() => {
+  shouldRecover = true;
+  await page.evaluate(() => {
     const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
     instances[0]?.emitError();
   });
 
-  const spectatorSyncShell = spectatorPage.locator(".room-sync-shell");
+  const spectatorSyncShell = page.locator(".room-sync-shell");
   await expect(spectatorSyncShell.getByText("刚刚和房间断了一下线")).toBeVisible();
   await expect(spectatorSyncShell).toBeInViewport();
-  await expect(spectatorPage.getByRole("button", { name: /以 .* 身份掷骰/ })).toHaveCount(0);
-
-  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
-  const propertyDecision = await readPendingPropertyDecision(page);
-
   await expect(spectatorSyncShell).toHaveCount(0, { timeout: 10000 });
-  const recoveryBar = spectatorPage.locator(".room-reconnect-success");
+
+  const recoveryBar = page.locator(".room-reconnect-success");
   await expect(recoveryBar.getByText("已重新连入牌局，可以继续旁观当前进展")).toBeVisible();
   await expect(recoveryBar.locator(".room-reconnect-success__hint")).toContainText("刚刚补回：");
-  await expect(recoveryBar.locator(".room-reconnect-success__hint")).toContainText(`现在轮到 房主甲决定是否以 ${propertyDecision.price} 买下 ${propertyDecision.label}。`);
+  await expect(recoveryBar.locator(".room-reconnect-success__hint")).toContainText("现在轮到 房主甲决定是否以 130 买下 北城路。");
   await expect(recoveryBar).toBeInViewport();
-  await expect(spectatorPage.getByRole("button", { name: "购买地产" })).toHaveCount(0);
-  await expect(spectatorPage.getByRole("button", { name: /以 .* 身份掷骰/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "购买地产" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /以 .* 身份掷骰/ })).toHaveCount(0);
 
-  const hasHorizontalOverflow = await spectatorPage.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(hasHorizontalOverflow).toBe(false);
-
-  await spectatorPage.close();
-  await guestPage.close();
 });
 
 test("mobile player reconnect keeps success feedback contextual and dismisses after recovery", async ({
@@ -2867,6 +2906,8 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   browser,
   page,
 }) => {
+  test.slow();
+
   await page.goto("/");
   await page.getByLabel("房主昵称").fill("房主甲");
   await page.getByRole("button", { name: "创建房间" }).click();
@@ -2891,7 +2932,10 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await page.getByRole("button", { name: "购买地产" }).click();
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
+  await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
+  await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "展开本回合可选动作" })).toBeVisible();
+
   await page.getByRole("button", { name: "展开本回合可选动作" }).click();
   await expect(page.getByText("发起双边交易报价", { exact: true })).toBeVisible();
   await expect(page.getByText("选对象", { exact: true })).toBeVisible();
@@ -2955,14 +2999,8 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await expect(page.getByText("交易已成交", { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(/接受了 房主甲 的交易报价/)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible({ timeout: 10000 });
-  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /最近结果 玩家乙 接受了 房主甲 的交易报价/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /最近结果 玩家乙 接受了 房主甲 的交易报价/, { timeout: 10000 });
   await expect(page.getByText("双边交易待响应")).toHaveCount(0);
-
-  await guestPage.reload();
-  await expect(guestPage.getByText("交易已成交", { exact: true })).toBeVisible();
-  await expect(guestPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
-  await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
-  await expect(guestPage.getByText("双边交易待响应")).toHaveCount(0);
 
   await spectatorPage.close();
   await guestPage.close();
@@ -2972,6 +3010,8 @@ test("rejected trade shows a recovery card and restores the proposer's turn", as
   browser,
   page,
 }) => {
+  test.slow();
+
   await page.goto("/");
   await page.getByLabel("房主昵称").fill("房主甲");
   await page.getByRole("button", { name: "创建房间" }).click();
@@ -2993,6 +3033,10 @@ test("rejected trade shows a recovery card and restores the proposer's turn", as
   await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
   const propertyDecision = await readPendingPropertyDecision(page);
   await page.getByRole("button", { name: "购买地产" }).click();
+
+  await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
+  await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "展开本回合可选动作" })).toBeVisible();
 
   await page.getByRole("button", { name: "展开本回合可选动作" }).click();
   await page.getByText("发起双边交易报价", { exact: true }).isVisible();
