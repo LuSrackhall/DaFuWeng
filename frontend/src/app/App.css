@@ -117,6 +117,87 @@ body {
   color: rgba(246, 236, 212, 0.76);
 }
 
+.room-sync-shell,
+.room-sync-shell__hero,
+.room-sync-shell__copy,
+.room-sync-shell__grid,
+.room-sync-shell__card,
+.room-sync-shell__stages,
+.room-sync-shell__stage,
+.room-sync-shell__actions {
+  display: grid;
+  gap: 12px;
+}
+
+.room-sync-shell {
+  border-radius: 28px;
+  background: rgba(11, 25, 20, 0.76);
+}
+
+.room-sync-shell__hero {
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
+  align-items: start;
+}
+
+.room-sync-shell__status-pill {
+  display: grid;
+  gap: 6px;
+  border-radius: 20px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.room-sync-shell__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.room-sync-shell__card,
+.room-sync-shell__stage {
+  border-radius: 20px;
+  padding: 16px 18px;
+  background: rgba(8, 19, 16, 0.42);
+  border: 1px solid rgba(232, 205, 143, 0.12);
+}
+
+.room-sync-shell__stages {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.room-sync-shell__stage--active {
+  background:
+    radial-gradient(circle at top right, rgba(89, 168, 214, 0.16), transparent 40%),
+    rgba(16, 37, 31, 0.74);
+  border-color: rgba(149, 194, 225, 0.22);
+}
+
+.room-sync-shell__actions {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.room-sync-shell__actions-copy {
+  color: rgba(246, 236, 212, 0.72);
+}
+
+.room-sync-shell--warning {
+  background:
+    radial-gradient(circle at top right, rgba(229, 191, 105, 0.18), transparent 36%),
+    rgba(53, 42, 16, 0.72);
+}
+
+.room-sync-shell--danger {
+  background:
+    radial-gradient(circle at top right, rgba(201, 78, 78, 0.2), transparent 36%),
+    rgba(70, 24, 24, 0.72);
+}
+
+.room-sync-shell--default {
+  background:
+    radial-gradient(circle at top right, rgba(89, 168, 214, 0.16), transparent 36%),
+    rgba(15, 33, 37, 0.72);
+}
+
 .lobby,
 .game {
   display: grid;
@@ -940,6 +1021,13 @@ body {
     order: 2;
   }
 
+  .room-sync-shell__hero,
+  .room-sync-shell__grid,
+  .room-sync-shell__stages,
+  .room-sync-shell__actions {
+    grid-template-columns: 1fr;
+  }
+
   .room-primary-anchor {
     position: relative;
     top: auto;
@@ -1150,6 +1238,12 @@ body {
   }
 
   .route-loading-shell {
+    padding: 14px;
+  }
+
+  .room-sync-shell__card,
+  .room-sync-shell__stage,
+  .room-sync-shell__status-pill {
     padding: 14px;
   }
 

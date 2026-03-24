@@ -168,6 +168,62 @@ export function GamePage() {
           const roomShellTitle = projection.waitingRoomSummary ? "等待开局" : roomPhaseLabel;
   const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
   const latestProjectionEvent = projection.recentEvents.at(-1) ?? null;
+    const syncShellState = (() => {
+      if (!isLoading && !isFallback && !error) {
+        return null;
+      }
+
+      const tone = isFallback ? "danger" : isLoading ? "warning" : "default";
+      const statusLabel = isFallback
+        ? isLoading
+          ? "仍在拉取首个权威快照"
+          : "尚未成功接入权威房间"
+        : isLoading
+          ? "正在补齐较新的快照与事件"
+          : "正在恢复实时连接";
+      const title = isFallback
+        ? isLoading
+          ? `正在把你带回 ${projection.roomId}`
+          : "房间同步暂时未完成"
+        : isLoading
+          ? "正在补齐最新房间状态"
+          : "实时同步暂时波动";
+      const summary = isFallback
+        ? isLoading
+          ? "房间页面已经进入，但首个权威房间快照仍在路上。拿到快照后会继续恢复身份与实时更新。"
+          : "当前还没有拿到有效的权威房间快照，页面只保留最基础的房间外壳。"
+        : isLoading
+          ? "你已经进入房间页面，但系统仍在补齐更近的快照或增量事件。"
+          : "最近一次成功同步仍可查看，系统正在恢复实时连接并重新追平房间状态。";
+      const identityStatus = isSpectator
+        ? "只读观战身份已确认"
+        : `已识别为 ${activePlayerName}`;
+      const actionStatus = isFallback
+        ? "关键操作暂时锁定，等权威快照恢复后再继续。"
+        : isLoading
+          ? "同步补齐期间主操作保持谨慎锁定，恢复后会自动回到当前阶段。"
+          : isSpectator
+            ? "当前仍是只读观战，只能等待实时同步恢复。"
+            : "当前显示最近一次成功同步内容，建议等待实时恢复后再确认关键操作。";
+      const stageCards = [
+        { label: "步骤 1", value: "房间页面已进入", active: !isFallback || isLoading },
+        { label: "步骤 2", value: isFallback ? "重新校验权威快照" : "对齐当前权威快照", active: isLoading || isFallback },
+        { label: "步骤 3", value: "恢复实时事件更新", active: !isLoading && !!error },
+      ];
+
+      return {
+        tone,
+        statusLabel,
+        title,
+        summary,
+        identityStatus,
+        actionStatus,
+        stageCards,
+        freshnessLabel: `快照 ${projection.snapshotVersion} · 序列 ${projection.eventSequence}`,
+        latestLabel: isFallback ? "等待成功读取房间快照" : latestEventSummary,
+        connectionLabel: error ?? statusLabel,
+      };
+    })();
   const auctionSummary = projection.auctionSummary;
   const tradeSummary = projection.tradeSummary;
   const auctionQuickBidOptions = auctionSummary
@@ -1521,6 +1577,58 @@ export function GamePage() {
         </div>
       </header>
 
+      {syncShellState ? (
+        <section className={`panel room-sync-shell room-sync-shell--${syncShellState.tone}`}>
+          <div className="room-sync-shell__hero">
+            <div className="room-sync-shell__copy">
+              <p className="shell__eyebrow">房间同步</p>
+              <strong>{syncShellState.title}</strong>
+              <p className="panel__subtitle">{syncShellState.summary}</p>
+            </div>
+            <div className="room-sync-shell__status-pill">
+              <strong>{syncShellState.statusLabel}</strong>
+              <span>{syncShellState.freshnessLabel}</span>
+            </div>
+          </div>
+          <div className="room-sync-shell__grid">
+            <article className="room-sync-shell__card">
+              <strong>当前身份</strong>
+              <span>{syncShellState.identityStatus}</span>
+              <span>{activeIdentityLabel}</span>
+            </article>
+            <article className="room-sync-shell__card">
+              <strong>当前阶段</strong>
+              <span>{roomPhaseLabel}</span>
+              <span>{projection.currentTurnPlayerName}</span>
+            </article>
+            <article className="room-sync-shell__card">
+              <strong>实时连接</strong>
+              <span>{syncShellState.connectionLabel}</span>
+              <span>{syncShellState.latestLabel}</span>
+            </article>
+            <article className="room-sync-shell__card">
+              <strong>操作状态</strong>
+              <span>{syncShellState.actionStatus}</span>
+              <span>{projection.pendingActionLabel}</span>
+            </article>
+          </div>
+          <div className="room-sync-shell__stages">
+            {syncShellState.stageCards.map((stage) => (
+              <article className={`room-sync-shell__stage${stage.active ? " room-sync-shell__stage--active" : ""}`} key={stage.label}>
+                <strong>{stage.label}</strong>
+                <span>{stage.value}</span>
+              </article>
+            ))}
+          </div>
+          <div className="room-sync-shell__actions">
+            <button className="button button--secondary" type="button" onClick={() => void refreshProjection()} disabled={isLoading}>
+              {isLoading ? "同步中..." : "立即重试同步"}
+            </button>
+            <span className="room-sync-shell__actions-copy">同步完成后，页面会自动回到当前房间阶段与操作锚点。</span>
+          </div>
+        </section>
+      ) : null}
+
       <div className="room-shell__layout">
       <section className="panel panel--board board room-shell__board">
         <div className="board__hero">
@@ -1538,8 +1646,6 @@ export function GamePage() {
             <span>{isSpectator ? "当前只读观战" : `当前身份：${activePlayerName}`}</span>
           </div>
         </div>
-        {isLoading ? <p className="panel__subtitle">正在同步房间状态...</p> : null}
-        {isFallback ? <p className="panel__subtitle">尚未成功同步到权威后端，请稍后重试。</p> : null}
         <BoardScene
           board={sampleBoard}
           currentTurnPlayerId={projection.currentTurnPlayerId}

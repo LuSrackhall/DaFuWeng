@@ -153,9 +153,104 @@ test("room page data loading state appears after the route shell is gone", async
   await page.goto(`/room/${roomId}`);
 
   await expect(page.locator(".route-loading-shell")).toHaveCount(0);
-  await expect(page.getByText("正在同步房间状态...")).toBeVisible();
+  const syncShell = page.locator(".room-sync-shell");
+  await expect(syncShell.getByText("正在把你带回 room-slow-data")).toBeVisible();
+  await expect(syncShell.getByText("只读观战身份已确认")).toBeVisible();
+  await expect(syncShell.getByText("关键操作暂时锁定，等权威快照恢复后再继续。")).toBeVisible();
   await expect(page.getByRole("heading", { name: "等待开局" })).toBeVisible();
   await expect(page.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
+});
+
+test("mobile room sync shell stays prioritized during slow data recovery without horizontal overflow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  const roomId = "room-mobile-slow-data";
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.fulfill({
+      json: {
+        roomId,
+        roomState: "lobby",
+        hostId: "p1",
+        snapshotVersion: 1,
+        eventSequence: 1,
+        turnState: "awaiting-roll",
+        currentTurnPlayerId: "p1",
+        pendingActionLabel: "等待房间准备完成",
+        pendingProperty: null,
+        pendingAuction: null,
+        pendingPayment: null,
+        pendingTrade: null,
+        chanceDeck: { drawPile: [], discardPile: [] },
+        communityDeck: { drawPile: [], discardPile: [] },
+        lastRoll: [0, 0],
+        players: [
+          {
+            id: "p1",
+            name: "房主甲",
+            cash: 1500,
+            position: 0,
+            properties: [],
+            mortgagedProperties: [],
+            propertyImprovements: {},
+            heldCardIds: [],
+            isBankrupt: false,
+            ready: false,
+          },
+        ],
+        recentEvents: [],
+      },
+    });
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const syncShell = page.locator(".room-sync-shell");
+  const boardPanel = page.locator(".panel--board");
+  const roomStatePanel = page.locator(".panel--room-state");
+
+  await expect(page.locator(".route-loading-shell")).toHaveCount(0);
+  await expect(syncShell.getByText("正在把你带回 room-mobile-slow-data")).toBeVisible();
+  await expect(syncShell.getByText("已识别为 房主甲")).toBeVisible();
+  await expect(syncShell.getByText("同步中暂不建议执行关键操作")).toHaveCount(0);
+  await expect(syncShell.getByText("关键操作暂时锁定，等权威快照恢复后再继续。")).toBeVisible();
+  await expect(syncShell).toBeInViewport();
+
+  const syncBox = await syncShell.boundingBox();
+  const boardBox = await boardPanel.boundingBox();
+  const roomStateBox = await roomStatePanel.boundingBox();
+
+  expect(syncBox?.y).toBeLessThan(boardBox?.y ?? Number.POSITIVE_INFINITY);
+  expect(syncBox?.y).toBeLessThan(roomStateBox?.y ?? Number.POSITIVE_INFINITY);
+
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(hasHorizontalOverflow).toBe(false);
 });
 
 test("two real players can create, join, start, buy, pay rent, and refresh the same authoritative room", async ({
