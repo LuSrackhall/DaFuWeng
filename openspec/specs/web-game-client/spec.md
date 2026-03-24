@@ -514,6 +514,28 @@ The system SHALL keep reconnect success feedback lightweight on narrow screens w
 - **WHEN** a player page on a narrow screen recovers from reconnect
 - **THEN** the success strip SHALL appear briefly, remain visible long enough to notice, dismiss automatically, and preserve the recovered current primary action without horizontal overflow
 
+### Requirement: Reconnect success provides a recovery narrative
+The system SHALL explain both the recovered change and the current action context when reconnect success feedback appears.
+
+#### Scenario: Ordinary reconnect succeeds
+- **WHEN** reconnect success feedback appears after catch-up recovery
+- **THEN** the feedback SHALL explain the recovered update and the current ordinary turn context
+
+#### Scenario: Property decision reconnect succeeds
+- **WHEN** reconnect success feedback appears while the room has recovered into property decision
+- **THEN** the feedback SHALL explain the recovered property decision context
+
+#### Scenario: Deficit recovery reconnect succeeds
+- **WHEN** reconnect success feedback appears while the room has recovered into deficit resolution
+- **THEN** the feedback SHALL explain the recovered deficit context
+
+### Requirement: Reconnect success falls back gracefully without event summary
+The system SHALL still provide actionable reconnect success context when no latest event summary exists.
+
+#### Scenario: No recent event summary is available
+- **WHEN** reconnect success feedback appears but the recovered room has no latest event summary
+- **THEN** the feedback SHALL fall back to the current acting player or decision context instead of showing an empty or placeholder summary
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
