@@ -536,6 +536,34 @@ The system SHALL still provide actionable reconnect success context when no late
 - **WHEN** reconnect success feedback appears but the recovered room has no latest event summary
 - **THEN** the feedback SHALL fall back to the current acting player or decision context instead of showing an empty or placeholder summary
 
+### Requirement: Reconnect success narrates auction recovery
+The system SHALL explain auction context when reconnect success occurs during a live auction.
+
+#### Scenario: Auction reconnect succeeds
+- **WHEN** reconnect success feedback appears while the room has recovered into a live auction
+- **THEN** the feedback SHALL explain the current auction stakes and who decides next
+
+### Requirement: Reconnect success narrates trade response recovery
+The system SHALL explain trade response context when reconnect success occurs during a pending trade response.
+
+#### Scenario: Trade response reconnect succeeds
+- **WHEN** reconnect success feedback appears while the room has recovered into trade response
+- **THEN** the feedback SHALL explain the current trade responder and decision state
+
+### Requirement: Reconnect success narrates jail decision recovery
+The system SHALL explain jail decision context when reconnect success occurs during a jail decision.
+
+#### Scenario: Jail decision reconnect succeeds
+- **WHEN** reconnect success feedback appears while the room has recovered into jail decision
+- **THEN** the feedback SHALL explain the current jail decision options and who decides next
+
+### Requirement: Later reconnects replace earlier reconnect context
+The system SHALL replace stale reconnect narration with the newest recovered context after repeated reconnects.
+
+#### Scenario: A second reconnect reaches a new phase
+- **WHEN** the client reconnects, recovers, disconnects again, and later recovers into a newer room phase
+- **THEN** the next reconnect success feedback SHALL describe only the newest recovered phase and SHALL NOT reuse stale text from the earlier recovery
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
