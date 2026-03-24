@@ -21,6 +21,17 @@ type BoardSceneTransitionHint = {
   diceTotal: number | null;
 };
 
+type BoardConsequenceCue = {
+  key: string;
+  eventType: "property-purchased" | "rent-charged" | "tax-paid" | "player-jailed";
+  tone: "default" | "warning" | "danger" | "success" | "neutral";
+  headline: string;
+  amountLabel: string | null;
+  spectatorLabel: string;
+  anchorTileId: string | null;
+  ariaSummary: string;
+};
+
 type BoardSceneProps = {
   board: BoardTile[];
   currentTurnPlayerId: string;
@@ -39,6 +50,7 @@ type BoardSceneProps = {
   } | null;
   stageCue: BoardStageCue | null;
   transitionHint: BoardSceneTransitionHint | null;
+  consequenceHint: BoardConsequenceCue | null;
 };
 
 type SceneAnimationCue = {
@@ -544,6 +556,7 @@ function drawCenterHud(
   const availablePropertyCount = props.board.filter((tile) => tile.type === "property").length - ownedPropertyCount;
   const resultFeedback = props.resultFeedback;
   const stageCue = props.stageCue;
+  const consequenceHint = props.consequenceHint;
   const feedbackAccent = getFeedbackAccent(resultFeedback?.tone ?? "default", currentPlayerColor);
   const stageSize = tileSize * 11;
   const compactHud = stageSize < 620;
@@ -710,6 +723,65 @@ function drawCenterHud(
   footer.x = centerX + centerWidth / 2;
   footer.y = centerY + cardHeight - (compactHud ? 22 : 26);
   root.addChild(footer);
+
+  if (consequenceHint) {
+    const consequenceAccent = getFeedbackAccent(consequenceHint.tone, feedbackAccent);
+    const ribbonWidth = centerWidth - 20;
+    const ribbonHeight = compactHud ? 58 : 66;
+    const ribbonX = centerX + 10;
+    const ribbonY = centerY + cardHeight + 12;
+    const ribbonAlpha = 0.92 + (animationState?.landingProgress ?? 0) * 0.04;
+
+    const ribbon = new Graphics();
+    ribbon.roundRect(ribbonX, ribbonY, ribbonWidth, ribbonHeight, 20);
+    ribbon.fill({ color: 0x0f221d, alpha: ribbonAlpha });
+    ribbon.stroke({ color: consequenceAccent, width: 1.6, alpha: 0.44 });
+    root.addChild(ribbon);
+
+    const toneBand = new Graphics();
+    toneBand.roundRect(ribbonX + 10, ribbonY + 11, 6, ribbonHeight - 22, 6);
+    toneBand.fill({ color: consequenceAccent, alpha: 0.9 });
+    root.addChild(toneBand);
+
+    const headline = new Text({
+      text: consequenceHint.headline,
+      style: createAdaptiveTextStyle(centerChipValueStyle, {
+        fontSize: compactHud ? 13 : 15,
+        fill: 0xf8f0dd,
+      }),
+    });
+    headline.x = ribbonX + 28;
+    headline.y = ribbonY + 10;
+    root.addChild(headline);
+
+    if (consequenceHint.amountLabel) {
+      const amount = new Text({
+        text: consequenceHint.amountLabel,
+        style: createAdaptiveTextStyle(centerChipLabelStyle, {
+          fontSize: compactHud ? 10 : 11,
+          fill: 0xe6c37d,
+          letterSpacing: 0.4,
+        }),
+      });
+      amount.x = ribbonX + ribbonWidth - amount.width - 16;
+      amount.y = ribbonY + 13;
+      root.addChild(amount);
+    }
+
+    const spectator = new Text({
+      text: consequenceHint.spectatorLabel,
+      style: createAdaptiveTextStyle(centerBodyStyle, {
+        fontSize: compactHud ? 10 : 11,
+        lineHeight: compactHud ? 13 : 15,
+        wordWrapWidth: ribbonWidth - 44,
+        fill: 0xf2e5c3,
+        align: "left",
+      }),
+    });
+    spectator.x = ribbonX + 28;
+    spectator.y = ribbonY + 30;
+    root.addChild(spectator);
+  }
 }
 
 function drawPlayerTokens(
@@ -953,11 +1025,14 @@ function BoardSceneInner(props: BoardSceneProps) {
   const feedbackSummary = props.resultFeedback
     ? `，最近结果 ${props.resultFeedback.title}，${props.resultFeedback.detail}，${props.resultFeedback.nextLabel}`
     : "";
+  const consequenceSummary = props.consequenceHint
+    ? `，棋盘后果 ${props.consequenceHint.ariaSummary}`
+    : "";
 
   return (
     <div className="board__surface">
       <div
-        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}`}
+        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}${consequenceSummary}`}
         className="board__pixi-host"
         ref={hostRef}
       />

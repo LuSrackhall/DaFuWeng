@@ -2766,6 +2766,7 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await page.getByRole("button", { name: "购买地产" }).click();
   await expect(page.locator(".board__pixi-host canvas")).toBeVisible();
   await expect(page.getByText(/这次买地结果已经记下/)).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", new RegExp(`棋盘后果 房主甲 买下 ${propertyDecision.label}，支付 ${propertyDecision.price}，归属已确认`));
   await expect(page.getByText(/现金: 1340/)).toBeVisible();
   await expect(page.getByText(/地产: 1/)).toBeVisible();
 
@@ -2776,6 +2777,7 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
   await expect(guestPage.getByText(/现金: 1478/)).toBeVisible();
   await expect(page.getByText(/现金: 1362/)).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /棋盘后果 玩家乙 向 房主甲 支付租金 22/);
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
   await page.reload();
@@ -3239,6 +3241,7 @@ test("deficit recovery panel shows mortgage impact and resolves through the reco
   await recoveryButton.click();
 
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /棋盘后果 房主甲 向银行支付税费 200/);
   await expect(page.getByText(/现金: 145/)).toBeVisible();
   await expect(page.getByText(/抵押: 1/)).toBeVisible();
 });
@@ -3961,6 +3964,7 @@ test("contextual action surface only shows jail decisions without unrelated gene
   await page.goto(`/room/${roomId}`);
 
   await expect(page.locator(".room-primary-anchor").getByText("现在由你决定如何离开监狱")).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /棋盘后果 房主甲 已进入监狱，后续等待监狱决策/);
   await expect(page.getByText(/选择一种出狱方式后，当前回合才能继续推进/)).toBeVisible();
   await expect(page.getByText(/可用出狱卡: 1/)).toBeVisible();
   await expect(page.getByRole("button", { name: "尝试掷骰出狱" })).toBeVisible();

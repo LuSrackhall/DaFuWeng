@@ -43,6 +43,17 @@ type BoardSceneTransitionHint = {
   diceTotal: number | null;
 };
 
+type BoardConsequenceCue = {
+  key: string;
+  eventType: "property-purchased" | "rent-charged" | "tax-paid" | "player-jailed";
+  tone: BoardResultFeedbackTone;
+  headline: string;
+  amountLabel: string | null;
+  spectatorLabel: string;
+  anchorTileId: string | null;
+  ariaSummary: string;
+};
+
 type RecoveryRecapSnapshot = {
   token: number;
   title: string;
@@ -339,6 +350,12 @@ export function GamePage() {
           const roomShellTitle = projection.waitingRoomSummary ? "等待开局" : roomPhaseLabel;
   const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
   const latestProjectionEvent = projection.recentEvents.at(-1) ?? null;
+  const latestBoardConsequenceEvent = [...projection.recentEvents].reverse().find((event) =>
+    event.type === "property-purchased"
+    || event.type === "rent-charged"
+    || event.type === "tax-paid"
+    || event.type === "player-jailed",
+  ) ?? null;
     const syncShellState = (() => {
       if (!isLoading && !isFallback && !error) {
         return null;
@@ -973,6 +990,77 @@ export function GamePage() {
             : null,
       }
     : null;
+  const boardConsequenceCue: BoardConsequenceCue | null = (() => {
+    if (!latestBoardConsequenceEvent) {
+      return null;
+    }
+
+    const actorName = latestBoardConsequenceEvent.playerId
+      ? projection.players.find((player) => player.id === latestBoardConsequenceEvent.playerId)?.name ?? "当前玩家"
+      : projection.currentTurnPlayerName;
+    const ownerName = latestBoardConsequenceEvent.ownerPlayerId
+      ? projection.players.find((player) => player.id === latestBoardConsequenceEvent.ownerPlayerId)?.name ?? "对手"
+      : null;
+    const anchorTileId = latestBoardConsequenceEvent.tileId ?? presentation.highlightedTileId ?? null;
+
+    switch (latestBoardConsequenceEvent.type) {
+      case "property-purchased": {
+        const tileLabel = latestBoardConsequenceEvent.tileLabel ?? "地产";
+        const amount = latestBoardConsequenceEvent.amount
+          ?? (anchorTileId ? boardTileById.get(anchorTileId)?.price ?? 0 : 0);
+        return {
+          key: `${latestBoardConsequenceEvent.sequence}:${latestBoardConsequenceEvent.type}`,
+          eventType: "property-purchased",
+          tone: "success",
+          headline: `买下 ${tileLabel}`,
+          amountLabel: `支出 ${amount}`,
+          spectatorLabel: `${actorName} 已取得 ${tileLabel}`,
+          anchorTileId,
+          ariaSummary: `${actorName} 买下 ${tileLabel}，支付 ${amount}，归属已确认`,
+        };
+      }
+      case "rent-charged": {
+        const amount = latestBoardConsequenceEvent.amount ?? 0;
+        return {
+          key: `${latestBoardConsequenceEvent.sequence}:${latestBoardConsequenceEvent.type}`,
+          eventType: "rent-charged",
+          tone: "warning",
+          headline: "支付租金",
+          amountLabel: `${ownerName ?? "收租方"} +${amount}`,
+          spectatorLabel: `${actorName} 向 ${ownerName ?? "收租方"} 支付租金 ${amount}`,
+          anchorTileId,
+          ariaSummary: `${actorName} 向 ${ownerName ?? "收租方"} 支付租金 ${amount}`,
+        };
+      }
+      case "tax-paid": {
+        const amount = latestBoardConsequenceEvent.amount ?? 0;
+        return {
+          key: `${latestBoardConsequenceEvent.sequence}:${latestBoardConsequenceEvent.type}`,
+          eventType: "tax-paid",
+          tone: "warning",
+          headline: "支付税费",
+          amountLabel: `银行 +${amount}`,
+          spectatorLabel: `${actorName} 已向银行支付税费 ${amount}`,
+          anchorTileId,
+          ariaSummary: `${actorName} 向银行支付税费 ${amount}`,
+        };
+      }
+      case "player-jailed": {
+        return {
+          key: `${latestBoardConsequenceEvent.sequence}:${latestBoardConsequenceEvent.type}`,
+          eventType: "player-jailed",
+          tone: "danger",
+          headline: "进入监狱",
+          amountLabel: "行动受限",
+          spectatorLabel: `${actorName} 已进入监狱，等待后续监狱决策`,
+          anchorTileId,
+          ariaSummary: `${actorName} 已进入监狱，后续等待监狱决策`,
+        };
+      }
+      default:
+        return null;
+    }
+  })();
   const mobilePrimaryAnchorStyle = isMobileAnchorTray
     ? {
         position: "fixed" as const,
@@ -2008,6 +2096,7 @@ export function GamePage() {
           resultFeedback={boardResultFeedback}
           stageCue={boardStageCue}
           transitionHint={boardSceneTransitionHint}
+          consequenceHint={boardConsequenceCue}
         />
       </section>
       <aside className="panel panel--room-state room-shell__rail">
