@@ -28,7 +28,7 @@ type BoardResultFeedback = {
 export function GamePage() {
   const params = useParams();
   const roomId = params.roomId ?? "";
-  const { projection, isFallback, isLoading, error, applySnapshot, refreshProjection } = useGameProjection(roomId);
+  const { projection, isFallback, isLoading, error, recoveryNotice, applySnapshot, refreshProjection } = useGameProjection(roomId);
   const [isMobileAnchorTray, setIsMobileAnchorTray] = useState(() => typeof window !== "undefined"
     ? window.matchMedia("(max-width: 960px)").matches
     : false);
@@ -193,7 +193,7 @@ export function GamePage() {
           ? "房间页面已经打开，系统还在把你刚才那一局接回来。等会儿会继续补上你的身份和最新进展。"
           : "这一局的最新进度还没拿到，所以页面先只保留最基础的房间外壳。"
         : isLoading
-          ? "你已经回到房间，系统正在把这局补到最新进度。"
+          ? "你已经回到房间，牌局正在把最新进展接到眼前。"
           : "你眼前这份局面还是刚才最后一次成功接到的进度，系统正在继续把最新变化接回来。";
       const identityStatus = isSpectator
         ? "当前以观战视角查看"
@@ -201,7 +201,7 @@ export function GamePage() {
       const actionStatus = isFallback
         ? "先别急着操作，等这一局重新接上再继续。"
         : isLoading
-          ? "这会儿先帮你把进度补齐，等一下就会回到当前轮次。"
+          ? "先等牌局补齐，马上就会回到当前轮次。"
           : isSpectator
             ? "先看住这局眼前的进度，等连接恢复后会继续刷新。"
             : "先看住眼前这一步，等连接恢复后再确认关键操作。";
@@ -219,11 +219,16 @@ export function GamePage() {
         identityStatus,
         actionStatus,
         stageCards,
-        freshnessLabel: `你现在看到的是这局目前接到的最新进度`,
+        freshnessLabel: "眼前这份就是目前接到的最新局面",
         latestLabel: isFallback ? "还在等这局的最新进度" : latestEventSummary,
         connectionLabel: error ?? statusLabel,
       };
     })();
+  const reconnectSuccessMessage = recoveryNotice
+    ? isSpectator
+      ? "已重新连入牌局，可以继续旁观当前进展"
+      : "已重新连入牌局，当前进度已同步"
+    : null;
   const auctionSummary = projection.auctionSummary;
   const tradeSummary = projection.tradeSummary;
   const auctionQuickBidOptions = auctionSummary
@@ -1576,6 +1581,14 @@ export function GamePage() {
           </article>
         </div>
       </header>
+
+      {reconnectSuccessMessage ? (
+        <section className="panel room-reconnect-success" role="status" aria-live="polite">
+          <p className="shell__eyebrow">恢复完成</p>
+          <strong>{reconnectSuccessMessage}</strong>
+          <span className="room-reconnect-success__hint">你现在看到的已经是这局最新接回的进展。</span>
+        </section>
+      ) : null}
 
       {syncShellState ? (
         <section className={`panel room-sync-shell room-sync-shell--${syncShellState.tone}`}>

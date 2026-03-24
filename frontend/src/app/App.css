@@ -124,9 +124,24 @@ body {
 .room-sync-shell__card,
 .room-sync-shell__stages,
 .room-sync-shell__stage,
-.room-sync-shell__actions {
+.room-sync-shell__actions,
+.room-reconnect-success {
   display: grid;
   gap: 12px;
+}
+
+.room-reconnect-success {
+  border-radius: 24px;
+  padding: 16px 18px;
+  background:
+    radial-gradient(circle at top right, rgba(100, 186, 131, 0.18), transparent 38%),
+    rgba(17, 47, 31, 0.82);
+  border: 1px solid rgba(124, 201, 149, 0.18);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
+}
+
+.room-reconnect-success__hint {
+  color: rgba(246, 236, 212, 0.74);
 }
 
 .room-sync-shell {

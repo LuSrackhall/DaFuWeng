@@ -1,5 +1,5 @@
 import { sampleBoard } from "@dafuweng/board-config";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   PendingAuction,
   PendingTrade,
@@ -142,6 +142,7 @@ export type GameProjectionState = {
   isFallback: boolean;
   isLoading: boolean;
   error: string | null;
+  recoveryNotice: "reconnected" | null;
   applySnapshot: (snapshot: ProjectionSnapshot) => void;
   refreshProjection: () => Promise<void>;
 };
@@ -1396,21 +1397,50 @@ export function useGameProjection(roomId: string): GameProjectionState {
   const [isFallback, setIsFallback] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recoveryNotice, setRecoveryNotice] = useState<"reconnected" | null>(null);
+  const errorRef = useRef<string | null>(null);
+
+  function updateError(nextError: string | null) {
+    errorRef.current = nextError;
+    setError(nextError);
+  }
+
+  function clearErrorWithRecoveryNotice() {
+    const hadError = errorRef.current !== null;
+    updateError(null);
+    if (hadError) {
+      setRecoveryNotice("reconnected");
+    }
+  }
+
+  useEffect(() => {
+    if (!recoveryNotice) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setRecoveryNotice(null);
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [recoveryNotice]);
 
   async function refreshProjection() {
     setIsLoading(true);
-    setError(null);
 
     try {
       const snapshot = await getRoom(roomId);
       setProjection(toProjectionView(snapshot));
       setIsFallback(false);
       setIsLoading(false);
+      clearErrorWithRecoveryNotice();
     } catch (requestError: unknown) {
       setProjection(toProjectionView(createEmptyProjection(roomId)));
       setIsFallback(true);
       setIsLoading(false);
-      setError(requestError instanceof Error ? requestError.message : "无法读取房间状态");
+      updateError(requestError instanceof Error ? requestError.message : "无法读取房间状态");
     }
   }
 
@@ -1431,7 +1461,7 @@ export function useGameProjection(roomId: string): GameProjectionState {
       }
 
       setProjection((current) => toProjectionView(applyCatchUpResponse(current, response)));
-      setError(null);
+      clearErrorWithRecoveryNotice();
     } catch {
       // Polling failures should not replace the current authoritative view.
     }
@@ -1455,10 +1485,10 @@ export function useGameProjection(roomId: string): GameProjectionState {
         setProjection((current) => toProjectionView(applyStreamEnvelope(current, envelope)));
         setIsFallback(false);
         setIsLoading(false);
-        setError(null);
+        clearErrorWithRecoveryNotice();
       },
       onError() {
-        setError((current) => current ?? "连接刚刚晃了一下，正在继续接回这一局");
+        updateError(errorRef.current ?? "连接刚刚晃了一下，正在继续接回这一局");
       }
     });
 
@@ -1482,11 +1512,12 @@ export function useGameProjection(roomId: string): GameProjectionState {
     isFallback,
     isLoading,
     error,
+    recoveryNotice,
     applySnapshot(snapshot) {
       setProjection(toProjectionView(snapshot));
       setIsFallback(false);
       setIsLoading(false);
-      setError(null);
+      clearErrorWithRecoveryNotice();
     },
     refreshProjection
   };
