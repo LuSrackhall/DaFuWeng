@@ -458,6 +458,20 @@ The system SHALL keep the in-page room sync shell visually prioritized on mobile
 - **WHEN** the room page is rendered on a narrow screen and room data is still synchronizing
 - **THEN** the in-page room sync shell SHALL appear before deeper room content and remain readable without horizontal overflow
 
+### Requirement: Realtime reconnect uses a distinct room sync state
+The system SHALL present realtime reconnect as a distinct in-page sync state instead of reusing first-load or fallback language.
+
+#### Scenario: Realtime updates fail after a room has already loaded
+- **WHEN** the room page has already loaded and the realtime event connection fails
+- **THEN** the room page SHALL show reconnect-focused guidance while preserving the last successful room state
+
+### Requirement: Realtime reconnect recovers through room catch-up
+The system SHALL clear the reconnect sync shell after room catch-up succeeds.
+
+#### Scenario: Polling catches up after realtime failure
+- **WHEN** realtime updates fail and a later room catch-up response succeeds
+- **THEN** the reconnect sync shell SHALL disappear and the room page SHALL show the recovered latest state
+
 ### Requirement: The board and rule presentation are configuration driven
 The system SHALL load board layout, tile presentation, labels, and rule-linked content from shared configuration rather than hardcoding them into view components.
 
