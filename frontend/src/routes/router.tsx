@@ -19,11 +19,11 @@ function RouteLoadingShell() {
   const roomId = roomMatch?.[1] ?? "未知房间";
   const activePlayer = roomMatch?.[1] ? getActivePlayer(roomMatch[1]) : null;
   const identityLabel = activePlayer
-    ? `即将以 ${activePlayer.playerName} 身份恢复房间会话`
-    : "即将以只读观战方式进入房间";
+    ? `即将以 ${activePlayer.playerName} 身份回到房间`
+    : "即将以只读方式进入房间";
   const permissionLabel = activePlayer
-    ? "加载完成后会恢复你的玩家权限与当前回合上下文。"
-    : "加载完成后你将看到房间快照，但不能替玩家操作。";
+    ? "进房后会把你的席位和当前轮次一起接回来。"
+    : "进房后你可以继续旁观这一局，但不能替玩家操作。";
 
   return (
     <main className="route-loading-shell">
@@ -44,7 +44,7 @@ function RouteLoadingShell() {
           </article>
           <article className="route-loading-shell__card">
             <strong>房间阶段</strong>
-            <span>正在读取权威房间快照</span>
+            <span>正在把这一局接回来</span>
           </article>
           <article className="route-loading-shell__card">
             <strong>进入后权限</strong>
@@ -54,15 +54,15 @@ function RouteLoadingShell() {
         <div className="route-loading-shell__stages">
           <article className="route-loading-shell__stage route-loading-shell__stage--active">
             <strong>步骤 1</strong>
-            <span>挂载房间页面代码块</span>
+            <span>打开房间页面</span>
           </article>
           <article className="route-loading-shell__stage">
             <strong>步骤 2</strong>
-            <span>校验房间与会话身份</span>
+            <span>确认你当前的席位</span>
           </article>
           <article className="route-loading-shell__stage">
             <strong>步骤 3</strong>
-            <span>同步最新快照并恢复实时流</span>
+            <span>接回这局最新进展</span>
           </article>
         </div>
         <p className="route-loading-shell__hint">{permissionLabel}</p>

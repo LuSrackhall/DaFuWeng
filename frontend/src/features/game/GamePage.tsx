@@ -176,39 +176,39 @@ export function GamePage() {
       const tone = isFallback ? "danger" : isLoading ? "warning" : "default";
       const statusLabel = isFallback
         ? isLoading
-          ? "仍在拉取首个权威快照"
-          : "尚未成功接入权威房间"
+          ? "还在接回这一局"
+          : "这局暂时还没接上"
         : isLoading
-          ? "正在补齐较新的快照与事件"
-          : "正在恢复实时连接";
+          ? "正在把进度补到最新"
+          : "连接刚刚晃了一下";
       const title = isFallback
         ? isLoading
-          ? `正在把你带回 ${projection.roomId}`
-          : "房间同步暂时未完成"
+          ? `正在接回 ${projection.roomId}`
+          : "这局暂时还没恢复好"
         : isLoading
-          ? "正在补齐最新房间状态"
-          : "实时同步暂时波动";
+          ? "正在把这一局补到最新"
+          : "刚刚和房间断了一下线";
       const summary = isFallback
         ? isLoading
-          ? "房间页面已经进入，但首个权威房间快照仍在路上。拿到快照后会继续恢复身份与实时更新。"
-          : "当前还没有拿到有效的权威房间快照，页面只保留最基础的房间外壳。"
+          ? "房间页面已经打开，系统还在把你刚才那一局接回来。等会儿会继续补上你的身份和最新进展。"
+          : "这一局的最新进度还没拿到，所以页面先只保留最基础的房间外壳。"
         : isLoading
-          ? "你已经进入房间页面，但系统仍在补齐更近的快照或增量事件。"
-          : "最近一次成功同步仍可查看，系统正在恢复实时连接并重新追平房间状态。";
+          ? "你已经回到房间，系统正在把这局补到最新进度。"
+          : "你眼前这份局面还是刚才最后一次成功接到的进度，系统正在继续把最新变化接回来。";
       const identityStatus = isSpectator
-        ? "只读观战身份已确认"
-        : `已识别为 ${activePlayerName}`;
+        ? "当前以观战视角查看"
+        : `当前使用 ${activePlayerName} 的席位`;
       const actionStatus = isFallback
-        ? "关键操作暂时锁定，等权威快照恢复后再继续。"
+        ? "先别急着操作，等这一局重新接上再继续。"
         : isLoading
-          ? "同步补齐期间主操作保持谨慎锁定，恢复后会自动回到当前阶段。"
+          ? "这会儿先帮你把进度补齐，等一下就会回到当前轮次。"
           : isSpectator
-            ? "当前仍是只读观战，只能等待实时同步恢复。"
-            : "当前显示最近一次成功同步内容，建议等待实时恢复后再确认关键操作。";
+            ? "先看住这局眼前的进度，等连接恢复后会继续刷新。"
+            : "先看住眼前这一步，等连接恢复后再确认关键操作。";
       const stageCards = [
-        { label: "步骤 1", value: "房间页面已进入", active: !isFallback || isLoading },
-        { label: "步骤 2", value: isFallback ? "重新校验权威快照" : "对齐当前权威快照", active: isLoading || isFallback },
-        { label: "步骤 3", value: "恢复实时事件更新", active: !isLoading && !!error },
+        { label: "步骤 1", value: "已经回到房间页面", active: !isFallback || isLoading },
+        { label: "步骤 2", value: isFallback ? "继续找回这局最新进度" : "把这局补到最新", active: isLoading || isFallback },
+        { label: "步骤 3", value: "继续接收最新变化", active: !isLoading && !!error },
       ];
 
       return {
@@ -219,8 +219,8 @@ export function GamePage() {
         identityStatus,
         actionStatus,
         stageCards,
-        freshnessLabel: `快照 ${projection.snapshotVersion} · 序列 ${projection.eventSequence}`,
-        latestLabel: isFallback ? "等待成功读取房间快照" : latestEventSummary,
+        freshnessLabel: `已看到第 ${projection.snapshotVersion} 次房间更新 · 第 ${projection.eventSequence} 条进展`,
+        latestLabel: isFallback ? "还在等这局的最新进度" : latestEventSummary,
         connectionLabel: error ?? statusLabel,
       };
     })();
@@ -486,7 +486,7 @@ export function GamePage() {
   const deficitViewerLabel = projection.resolutionSummary
     ? canResolveDeficit
       ? needsStepwiseRecovery
-        ? `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。这次恢复需要连续几步，锚点会在每次权威抵押后继续刷新下一步。`
+        ? `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。这次恢复需要连续几步，锚点会在每次抵押后继续刷新下一步。`
         : `轮到你处理这笔${projection.resolutionSummary.reasonLabel}欠款。选择一项可抵押资产，或直接宣告破产。`
       : isSpectator
         ? `当前仅观战，等待 ${projection.resolutionSummary.actorName} 处理欠款。`
@@ -718,7 +718,7 @@ export function GamePage() {
     try {
       const snapshot = await startRoom(roomId, { hostId: projection.hostId });
       applySnapshot(snapshot);
-      setActionMessage("房主已开始本局。所有玩家现在会看到同一权威对局。");
+      setActionMessage("房主已开始本局。所有玩家现在都会看到同一局面。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "开始房间失败");
       await refreshProjection();
@@ -737,7 +737,7 @@ export function GamePage() {
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
-      setActionMessage(`${activePlayerName} 的权威掷骰结果已同步。`);
+      setActionMessage(`${activePlayerName} 的掷骰结果已经记下。`);
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "掷骰失败");
       await refreshProjection();
@@ -759,7 +759,7 @@ export function GamePage() {
         ? await purchaseProperty(roomId, request)
         : await declineProperty(roomId, request);
       applySnapshot(snapshot);
-      setActionMessage(decision === "purchase" ? "已同步权威买地结果。" : "已同步权威放弃结果。");
+      setActionMessage(decision === "purchase" ? "这次买地结果已经记下。" : "这次放弃买地已经记下。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "地产决策失败");
       await refreshProjection();
@@ -781,7 +781,7 @@ export function GamePage() {
         ? await submitAuctionBid(roomId, { ...request, amount: Number(auctionBid) })
         : await passAuction(roomId, request);
       applySnapshot(snapshot);
-      setActionMessage(action === "bid" ? "已同步权威拍卖出价。" : "已同步权威拍卖放弃。");
+      setActionMessage(action === "bid" ? "这次出价已经送到房间里。" : "你已放弃这一轮竞拍。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "拍卖操作失败");
       await refreshProjection();
@@ -800,7 +800,7 @@ export function GamePage() {
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
-      setActionMessage("已同步权威出狱结果。");
+      setActionMessage("这次出狱结果已经记下。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "出狱失败");
       await refreshProjection();
@@ -819,7 +819,7 @@ export function GamePage() {
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
-      setActionMessage("已同步权威出狱掷骰结果。");
+      setActionMessage("这次出狱掷骰结果已经记下。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "出狱掷骰失败");
       await refreshProjection();
@@ -838,7 +838,7 @@ export function GamePage() {
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
-      setActionMessage("已同步权威出狱卡结果。");
+      setActionMessage("这次出狱卡结果已经记下。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "使用出狱卡失败");
       await refreshProjection();
@@ -859,7 +859,7 @@ export function GamePage() {
         tileId
       });
       applySnapshot(snapshot);
-      setActionMessage("已同步权威抵押结果。");
+      setActionMessage("这次抵押结果已经记下。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "抵押失败");
       await refreshProjection();
@@ -879,7 +879,7 @@ export function GamePage() {
         idempotencyKey: crypto.randomUUID()
       });
       applySnapshot(snapshot);
-      setActionMessage("已同步权威破产结果。");
+      setActionMessage("这次破产结果已经记下。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : "宣告破产失败");
       await refreshProjection();
@@ -902,7 +902,7 @@ export function GamePage() {
         ? await buildImprovement(roomId, request)
         : await sellImprovement(roomId, request);
       applySnapshot(snapshot);
-      setActionMessage(action === "build" ? "已同步权威建房结果。" : "已同步权威卖房结果。");
+      setActionMessage(action === "build" ? "这次建房结果已经记下。" : "这次卖房结果已经记下。");
     } catch (requestError) {
       setActionMessage(requestError instanceof Error ? requestError.message : action === "build" ? "建房失败" : "卖房失败");
       await refreshProjection();
@@ -1622,9 +1622,9 @@ export function GamePage() {
           </div>
           <div className="room-sync-shell__actions">
             <button className="button button--secondary" type="button" onClick={() => void refreshProjection()} disabled={isLoading}>
-              {isLoading ? "同步中..." : "立即重试同步"}
+              {isLoading ? "还在更新..." : "马上再试一次"}
             </button>
-            <span className="room-sync-shell__actions-copy">同步完成后，页面会自动回到当前房间阶段与操作锚点。</span>
+            <span className="room-sync-shell__actions-copy">接回完成后，页面会自动回到当前阶段和主操作。</span>
           </div>
         </section>
       ) : null}
@@ -1660,7 +1660,7 @@ export function GamePage() {
         {error ? <p className="panel__subtitle">{error}</p> : null}
         {actionMessage ? <p className="panel__subtitle">{actionMessage}</p> : null}
         {isSpectator ? <p className="panel__subtitle">当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。</p> : null}
-        {isFallback ? <p className="panel__subtitle">房间尚未成功连接到权威后端，当前仅显示加载或失败状态。</p> : null}
+        {isFallback ? <p className="panel__subtitle">这局还没重新接上，当前只保留加载或失败状态。</p> : null}
 
         <section className="stage-card stage-card--overview">
           <p className="shell__eyebrow">房间总览</p>
@@ -1771,7 +1771,7 @@ export function GamePage() {
             <div className="deficit-stage__grid">
               <article className="trade-side">
                 <strong>可立即恢复的资产</strong>
-                <span>{mortgageablePropertyOptions.length > 0 ? "选择一处地产执行权威抵押。" : "当前没有可立即抵押的地产。"}</span>
+                <span>{mortgageablePropertyOptions.length > 0 ? "选择一处地产执行抵押。" : "当前没有可立即抵押的地产。"}</span>
                 {mortgageablePropertyOptions.length > 0 ? (
                   <div className="asset-picker deficit-picker">
                     {mortgageablePropertyOptions.map((option) => (
@@ -1789,7 +1789,7 @@ export function GamePage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="asset-picker__empty">当前只剩破产退出这一条权威路径。</p>
+                  <p className="asset-picker__empty">当前只剩破产退出这一条路。</p>
                 )}
               </article>
               <article className="trade-side">
@@ -1976,8 +1976,8 @@ export function GamePage() {
                   <span>{projection.roomState} / {projection.turnState}</span>
                 </article>
                 <article className="status-card">
-                  <strong>房间同步</strong>
-                  <span>快照 {projection.snapshotVersion} · 序列 {projection.eventSequence}</span>
+                  <strong>房间进度</strong>
+                  <span>第 {projection.snapshotVersion} 次更新 · 第 {projection.eventSequence} 条进展</span>
                 </article>
                 <article className="status-card">
                   <strong>牌堆状态</strong>
@@ -1988,7 +1988,7 @@ export function GamePage() {
                   <span>{projection.pendingTrade?.snapshotVersion ?? "当前无挂起交易"}</span>
                 </article>
               </div>
-              <p className="panel__subtitle">当前权威说明: {projection.pendingActionLabel}</p>
+              <p className="panel__subtitle">当前说明: {projection.pendingActionLabel}</p>
               <h4 className="panel__title">最近事件</h4>
               <ol className="event-log">
                 {diagnosticsEventLines.map((event) => (

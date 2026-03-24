@@ -1458,7 +1458,7 @@ export function useGameProjection(roomId: string): GameProjectionState {
         setError(null);
       },
       onError() {
-        setError((current) => current ?? "实时同步中断，正在尝试恢复房间状态");
+        setError((current) => current ?? "连接刚刚晃了一下，正在继续接回这一局");
       }
     });
 

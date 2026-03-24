@@ -84,8 +84,8 @@ test("room route loading shell appears while the room chunk is delayed", async (
   const loadingShell = page.locator(".route-loading-shell");
   await expect(loadingShell.getByText(`正在进入 ${roomId}`)).toBeVisible();
   await expect(loadingShell.getByText("恢复玩家会话")).toBeVisible();
-  await expect(loadingShell.getByText("挂载房间页面代码块")).toBeVisible();
-  await expect(loadingShell.getByText("校验房间与会话身份")).toBeVisible();
+  await expect(loadingShell.getByText("打开房间页面")).toBeVisible();
+  await expect(loadingShell.getByText("确认你当前的席位")).toBeVisible();
 
   await expect(page.getByRole("heading", { name: "等待开局" })).toBeVisible();
   await expect(loadingShell).toHaveCount(0);
@@ -154,9 +154,9 @@ test("room page data loading state appears after the route shell is gone", async
 
   await expect(page.locator(".route-loading-shell")).toHaveCount(0);
   const syncShell = page.locator(".room-sync-shell");
-  await expect(syncShell.getByText("正在把你带回 room-slow-data")).toBeVisible();
-  await expect(syncShell.getByText("只读观战身份已确认")).toBeVisible();
-  await expect(syncShell.getByText("关键操作暂时锁定，等权威快照恢复后再继续。")).toBeVisible();
+  await expect(syncShell.getByText("正在接回 room-slow-data")).toBeVisible();
+  await expect(syncShell.getByText("当前以观战视角查看")).toBeVisible();
+  await expect(syncShell.getByText("先别急着操作，等这一局重新接上再继续。")).toBeVisible();
   await expect(page.getByRole("heading", { name: "等待开局" })).toBeVisible();
   await expect(page.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
 });
@@ -236,10 +236,9 @@ test("mobile room sync shell stays prioritized during slow data recovery without
   const roomStatePanel = page.locator(".panel--room-state");
 
   await expect(page.locator(".route-loading-shell")).toHaveCount(0);
-  await expect(syncShell.getByText("正在把你带回 room-mobile-slow-data")).toBeVisible();
-  await expect(syncShell.getByText("已识别为 房主甲")).toBeVisible();
-  await expect(syncShell.getByText("同步中暂不建议执行关键操作")).toHaveCount(0);
-  await expect(syncShell.getByText("关键操作暂时锁定，等权威快照恢复后再继续。")).toBeVisible();
+  await expect(syncShell.getByText("正在接回 room-mobile-slow-data")).toBeVisible();
+  await expect(syncShell.getByText("当前使用 房主甲 的席位")).toBeVisible();
+  await expect(syncShell.getByText("先别急着操作，等这一局重新接上再继续。")).toBeVisible();
   await expect(syncShell).toBeInViewport();
 
   const syncBox = await syncShell.boundingBox();
@@ -251,6 +250,155 @@ test("mobile room sync shell stays prioritized during slow data recovery without
 
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(hasHorizontalOverflow).toBe(false);
+});
+
+test("room sync shell shows reconnect guidance after realtime error and clears after catch-up recovery", async ({
+  page,
+}) => {
+  const roomId = "room-reconnect-recovery";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 1,
+    eventSequence: 1,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [3, 3],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 1500,
+        position: 0,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1500,
+        position: 0,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-1",
+        type: "room-started",
+        sequence: 1,
+        snapshotVersion: 1,
+        summary: "房主甲 开始了本局。",
+        playerId: "p1",
+      },
+    ],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 2,
+    eventSequence: 2,
+    currentTurnPlayerId: "p2",
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      {
+        id: "evt-2",
+        type: "turn-advanced",
+        sequence: 2,
+        snapshotVersion: 2,
+        summary: "玩家乙 接过了当前回合。",
+        playerId: "p1",
+        nextPlayerId: "p2",
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        const instances = (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources ?? [];
+        instances.push(this);
+        (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = instances;
+      }
+
+      addEventListener() {}
+      close() {}
+      emitError() {
+        this.onerror?.();
+      }
+    }
+
+    (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = [];
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  let shouldRecover = false;
+  let didRecover = false;
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: initialSnapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    if (shouldRecover && !didRecover) {
+      didRecover = true;
+      await route.fulfill({ json: { snapshot: recoveredSnapshot, events: [] } });
+      return;
+    }
+
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  await expect(page.locator(".room-sync-shell")).toHaveCount(0);
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
+  shouldRecover = true;
+  await page.evaluate(() => {
+    const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
+    instances[0]?.emitError();
+  });
+
+  const syncShell = page.locator(".room-sync-shell");
+  await expect(syncShell.getByText("刚刚和房间断了一下线")).toBeVisible();
+  await expect(syncShell.getByText("当前使用 房主甲 的席位")).toBeVisible();
+  await expect(syncShell.getByText("先看住眼前这一步，等连接恢复后再确认关键操作。")).toBeVisible();
+  await expect(syncShell.getByText("连接刚刚晃了一下，正在继续接回这一局")).toBeVisible();
+  await expect(page.getByText("房主甲 开始了本局。").first()).toBeVisible();
+  await expect(page.getByText("当前以 房主甲 身份加入此房间。").first()).toBeVisible();
+
+  await expect(syncShell).toHaveCount(0, { timeout: 10000 });
+  await expect(page.getByText("玩家乙 接过了当前回合。")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".room-shell__pill").getByText("玩家乙")).toBeVisible();
 });
 
 test("two real players can create, join, start, buy, pay rent, and refresh the same authoritative room", async ({
@@ -300,7 +448,7 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
 
   await page.getByRole("button", { name: "购买地产" }).click();
   await expect(page.locator(".board__pixi-host canvas")).toBeVisible();
-  await expect(page.getByText(/已同步权威买地结果/)).toBeVisible();
+  await expect(page.getByText(/这次买地结果已经记下/)).toBeVisible();
   await expect(page.getByText(/现金: 1340/)).toBeVisible();
   await expect(page.getByText(/地产: 1/)).toBeVisible();
 
@@ -513,7 +661,7 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
 
   await expect(page.getByRole("button", { name: "展开诊断抽屉" })).toBeVisible();
   await page.getByRole("button", { name: "展开诊断抽屉" }).click();
-  await expect(page.getByText(/快照 \d+ · 序列 \d+/)).toBeVisible();
+  await expect(page.getByText(/第 \d+ 次更新 · 第 \d+ 条进展/)).toBeVisible();
   await expect(page.getByText(/awaiting-trade-response/)).toBeVisible();
 
   await guestPage.getByRole("button", { name: "接受交易" }).click();
