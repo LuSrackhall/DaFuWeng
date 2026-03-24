@@ -1,3 +1,44 @@
+# [1.15.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.14.0...v1.15.0) (2026-03-24)
+
+
+### Bug Fixes
+
+* **frontend:** 强化复杂欠款恢复主操作锚点连续引导 ([2d183ee](https://github.com/LuSrackhall/DaFuWeng/commit/2d183eec65456b443a4d529d3f835c85c76c5ce5))
+* 产品化房间页内部同步态并修正移动端慢数据回归 ([a39af5e](https://github.com/LuSrackhall/DaFuWeng/commit/a39af5ebca6a2fe80f27214e071a1ab165ce7059))
+* 优化慢网络下房间入口加载壳与状态分层 ([8befc6e](https://github.com/LuSrackhall/DaFuWeng/commit/8befc6ee1e5d5b89d8008a4ce961b771603823e5))
+* 优化重连恢复摘要文案并补齐移动端高压阶段回归 ([769d524](https://github.com/LuSrackhall/DaFuWeng/commit/769d524ecea51427e849f8fee69c6e7e6eaa1003))
+* 保持移动端房间主操作锚点持续可见 ([0660b02](https://github.com/LuSrackhall/DaFuWeng/commit/0660b0201696608315a294297039abacc956687d))
+* 修正 clean e2e 剩余流程回归 ([f125797](https://github.com/LuSrackhall/DaFuWeng/commit/f1257972da4e1757549fcd876a8bb6608ca25f86))
+* 修正房间中性结果语义并放宽 reload 请求超时 ([34cd977](https://github.com/LuSrackhall/DaFuWeng/commit/34cd97717e7451c536d368d3755b1ab6bda7b650))
+* 修正重连恢复摘要新鲜度与移动端观战重连回归 ([f4ab158](https://github.com/LuSrackhall/DaFuWeng/commit/f4ab158d36f9fd45cb52054ca7a5c703323bd1c5))
+* 修正重连成功提示可感知性与连续恢复反馈 ([0784633](https://github.com/LuSrackhall/DaFuWeng/commit/078463386e2de80b206e3eb20291d76112f2b04c))
+* 修正重连时拍卖交易监狱叙事并覆盖双重断线旧上下文替换回归 ([129ad7b](https://github.com/LuSrackhall/DaFuWeng/commit/129ad7b323f8eed6c6f1ddec1003a358e6f18745))
+* 提升房间关键推进动作到主操作锚点 ([e2ec2c5](https://github.com/LuSrackhall/DaFuWeng/commit/e2ec2c5148134d394f39910eb52ba987bad69e56))
+* 润色房间重连指引并补齐回归覆盖 ([9e64821](https://github.com/LuSrackhall/DaFuWeng/commit/9e64821104c4e5fbe41a5c1ba7e67ffd38d3aadd))
+* 补全重连恢复叙事并覆盖 fallback 与移动端回归 ([89f073b](https://github.com/LuSrackhall/DaFuWeng/commit/89f073b6cd8528dabeacc63864643f9ee18428bb))
+* 补全重连成功条上下文并覆盖移动端玩家回归时机 ([9bb6ddc](https://github.com/LuSrackhall/DaFuWeng/commit/9bb6ddc346b2d358413f2d709e18408c0c71576b))
+* 补强观战者重连回归并清理观战恢复残余工程文案 ([3142be5](https://github.com/LuSrackhall/DaFuWeng/commit/3142be51baa630b3cca70e27d630dcd503001df3))
+* 补齐前端 e2e clean 验证入口 ([8d725b6](https://github.com/LuSrackhall/DaFuWeng/commit/8d725b6f7b11bb971b25390eb22c20c03c651768))
+* 补齐断线恢复轻量回看与观战高压阶段回归 ([713b0cc](https://github.com/LuSrackhall/DaFuWeng/commit/713b0cc930d08e09077e07df3617b77c5dca5b14))
+* 补齐重连成功提示与移动端观战重连回归 ([483a4f2](https://github.com/LuSrackhall/DaFuWeng/commit/483a4f2261c0ebf8a409bfcfda24d6036e02a093))
+
+
+### Features
+
+* 升级房间 Pixi 棋盘舞台中心 HUD 与可读性 ([653f315](https://github.com/LuSrackhall/DaFuWeng/commit/653f315e32b12e63926b9c2357f950f9f663d66f))
+* 增强棋盘后果提示与语义摘要 ([eb96cd4](https://github.com/LuSrackhall/DaFuWeng/commit/eb96cd40aea15e68db2e855425f1b950fea7fa24))
+* 完成房间棋盘 Pixi 首切渲染 ([8095c2d](https://github.com/LuSrackhall/DaFuWeng/commit/8095c2ddb0e576ef7633361d9ece6f1e79d28d33))
+* 完成棋盘权威结果揭晓与步进移动表现 ([4d5adc7](https://github.com/LuSrackhall/DaFuWeng/commit/4d5adc7c7369174973064318cece48ec4a3d5f8e))
+* 强化房间 Pixi 棋盘中心 HUD 结果反馈 ([5beb7e7](https://github.com/LuSrackhall/DaFuWeng/commit/5beb7e7365240ee5cc4f170431b0eb518137f522))
+* 强化房间结果层级与移动端主操作托盘 ([d94a66d](https://github.com/LuSrackhall/DaFuWeng/commit/d94a66d6464eee12a6f84713e0b6eaade40244af))
+* 提升掷骰开场仪式感并重构棋盘与中心 HUD 表现层 ([6bbc947](https://github.com/LuSrackhall/DaFuWeng/commit/6bbc94795c0f42e857ac0875284e51eb252516a4))
+* 新增房间主操作锚点卡 ([3317255](https://github.com/LuSrackhall/DaFuWeng/commit/3317255d4867b255fd58ab505a1085b08ffd6129))
+
+
+### Performance Improvements
+
+* **frontend:** 优化房间路由拆包与加载壳 ([6d56748](https://github.com/LuSrackhall/DaFuWeng/commit/6d5674837b5322f28dcfedd12cc86ac84ec86237))
+
 # [1.14.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.13.2...v1.14.0) (2026-03-23)
 
 
