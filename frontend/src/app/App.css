@@ -138,10 +138,67 @@ body {
     rgba(17, 47, 31, 0.82);
   border: 1px solid rgba(124, 201, 149, 0.18);
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
+  position: sticky;
+  top: 10px;
+  z-index: 4;
+}
+
+.room-reconnect-success--active {
+  animation: reconnect-success-enter 220ms ease-out;
+}
+
+.room-reconnect-success__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.room-reconnect-success__pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #7cc995;
+  box-shadow: 0 0 0 0 rgba(124, 201, 149, 0.45);
+  animation: reconnect-success-pulse 1.6s ease-out 2;
+}
+
+.room-reconnect-success__title {
+  font-size: 1.04rem;
+  letter-spacing: 0.01em;
 }
 
 .room-reconnect-success__hint {
   color: rgba(246, 236, 212, 0.74);
+  line-height: 1.5;
+}
+
+@keyframes reconnect-success-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes reconnect-success-pulse {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(124, 201, 149, 0.42);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(124, 201, 149, 0);
+  }
+
+  100% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(124, 201, 149, 0);
+  }
 }
 
 .room-sync-shell {
@@ -1262,6 +1319,19 @@ body {
     padding: 14px;
   }
 
+  .room-reconnect-success {
+    gap: 10px;
+    top: 8px;
+  }
+
+  .room-reconnect-success__title {
+    font-size: 1rem;
+  }
+
+  .room-reconnect-success__hint {
+    font-size: 0.9rem;
+  }
+
   .route-loading-shell__panel,
   .route-loading-shell__card,
   .route-loading-shell__stage {
@@ -1284,6 +1354,15 @@ body {
 
   .panel {
     padding: 14px;
+  }
+
+  .room-reconnect-success {
+    border-radius: 20px;
+    padding: 14px;
+  }
+
+  .room-reconnect-success__status {
+    gap: 8px;
   }
 
   .shell__status {

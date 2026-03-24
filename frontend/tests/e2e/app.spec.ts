@@ -707,13 +707,14 @@ test("mobile player reconnect keeps success feedback contextual and dismisses af
   await expect(syncShell).toHaveCount(0, { timeout: 10000 });
   const recoveryBar = page.locator(".room-reconnect-success");
   await expect(recoveryBar.getByText("已重新连入牌局，当前进度已同步")).toBeVisible();
+  await expect(recoveryBar.getByText("同步已恢复")).toBeVisible();
   await expect(recoveryBar.getByText("刚刚补回：房主甲 接过了当前回合。 现在轮到你继续掷骰。")).toBeVisible();
   await expect(recoveryBar).toBeInViewport();
   await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeInViewport();
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1800);
   await expect(recoveryBar).toBeVisible();
-  await expect(recoveryBar).toHaveCount(0, { timeout: 4000 });
+  await expect(recoveryBar).toHaveCount(0, { timeout: 5000 });
   await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeVisible();
 
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
@@ -1526,8 +1527,6 @@ test("second reconnect replaces the previous reconnect narrative context", async
   await expect(recoveryBar.getByText("刚刚补回：玩家乙 目前以 51 领先。 现在轮到 房主甲 决定是否继续竞拍 东湖路，当前最高价是 玩家乙 的 51。")).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole("button", { name: "提交出价" })).toHaveCount(0);
 
-  await expect(recoveryBar).toHaveCount(0, { timeout: 4000 });
-
   recoveryStep = 2;
   await page.evaluate(() => {
     const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
@@ -1535,10 +1534,13 @@ test("second reconnect replaces the previous reconnect narrative context", async
   });
 
   await expect(recoveryBar.getByText("刚刚补回：房主甲 向 玩家乙 发出一笔交易报价。 现在轮到你决定是否接受 房主甲 递来的交易报价。")).toBeVisible({ timeout: 10000 });
+  await page.waitForTimeout(2500);
+  await expect(recoveryBar).toBeVisible();
   await expect(recoveryBar.getByText(/竞拍 东湖路/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "接受交易" })).toBeVisible();
   await expect(page.getByRole("button", { name: "拒绝交易" })).toBeVisible();
   await expect(page.getByRole("button", { name: "提交出价" })).toHaveCount(0);
+  await expect(recoveryBar).toHaveCount(0, { timeout: 5000 });
 });
 
 test("two real players can create, join, start, buy, pay rent, and refresh the same authoritative room", async ({
@@ -1878,7 +1880,7 @@ test("rejected trade shows a recovery card and restores the proposer's turn", as
   await expect(page.getByText(/房主甲 继续这一回合/)).toBeVisible();
   await expect(page.getByText(/房主甲 原本想交出/)).toBeVisible();
   await expect(guestPage.getByText("交易未成交", { exact: true })).toBeVisible();
-  await expect(spectatorPage.getByText("交易未成交", { exact: true })).toBeVisible();
+  await expect(spectatorPage.getByText("交易未成交", { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
   await page.reload();

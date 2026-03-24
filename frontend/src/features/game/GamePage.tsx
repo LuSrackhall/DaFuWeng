@@ -1714,9 +1714,18 @@ export function GamePage() {
       </header>
 
       {reconnectSuccessMessage ? (
-        <section className="panel room-reconnect-success" role="status" aria-live="polite">
-          <p className="shell__eyebrow">恢复完成</p>
-          <strong>{reconnectSuccessMessage}</strong>
+        <section
+          key={recoveryNotice?.token}
+          className="panel room-reconnect-success room-reconnect-success--active"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div className="room-reconnect-success__status">
+            <span className="room-reconnect-success__pulse" aria-hidden="true" />
+            <p className="shell__eyebrow">同步已恢复</p>
+          </div>
+          <strong className="room-reconnect-success__title">{reconnectSuccessMessage}</strong>
           <span className="room-reconnect-success__hint">{reconnectSuccessContext}</span>
         </section>
       ) : null}

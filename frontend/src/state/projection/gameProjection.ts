@@ -142,7 +142,7 @@ export type GameProjectionState = {
   isFallback: boolean;
   isLoading: boolean;
   error: string | null;
-  recoveryNotice: "reconnected" | null;
+  recoveryNotice: { kind: "reconnected"; token: number } | null;
   applySnapshot: (snapshot: ProjectionSnapshot) => void;
   refreshProjection: () => Promise<void>;
 };
@@ -1397,8 +1397,9 @@ export function useGameProjection(roomId: string): GameProjectionState {
   const [isFallback, setIsFallback] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [recoveryNotice, setRecoveryNotice] = useState<"reconnected" | null>(null);
+  const [recoveryNotice, setRecoveryNotice] = useState<{ kind: "reconnected"; token: number } | null>(null);
   const errorRef = useRef<string | null>(null);
+  const recoveryNoticeTokenRef = useRef(0);
 
   function updateError(nextError: string | null) {
     errorRef.current = nextError;
@@ -1409,7 +1410,8 @@ export function useGameProjection(roomId: string): GameProjectionState {
     const hadError = errorRef.current !== null;
     updateError(null);
     if (hadError) {
-      setRecoveryNotice("reconnected");
+      recoveryNoticeTokenRef.current += 1;
+      setRecoveryNotice({ kind: "reconnected", token: recoveryNoticeTokenRef.current });
     }
   }
 
@@ -1420,12 +1422,12 @@ export function useGameProjection(roomId: string): GameProjectionState {
 
     const timer = window.setTimeout(() => {
       setRecoveryNotice(null);
-    }, 2200);
+    }, 3200);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [recoveryNotice]);
+  }, [recoveryNotice?.token]);
 
   async function refreshProjection() {
     setIsLoading(true);
