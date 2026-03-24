@@ -32,6 +32,23 @@ function buildReconnectRecoveryNarrative(options: {
   isSpectator: boolean;
   latestSummary: string | null;
   pendingActionLabel: string;
+  auctionSummary: {
+    actingBidderId: string;
+    actingBidderName: string;
+    highestBid: number;
+    highestBidderName: string | null;
+    nextMinimumBid: number;
+    lotLabel: string;
+  } | null;
+  tradeSummary: {
+    proposerPlayerId: string;
+    proposerName: string;
+    counterpartyPlayerId: string;
+    counterpartyName: string;
+  } | null;
+  activeJailCardCount: number;
+  currentTurnJailCardCount: number;
+  currentTurnJailAttempts: number;
   pendingProperty: { label: string; price: number } | null;
   resolutionSummary: { actorPlayerId: string; actorName: string; reasonLabel: string; shortfall: number } | null;
   turnState: string;
@@ -52,6 +69,38 @@ function buildReconnectRecoveryNarrative(options: {
       ? "现在轮到你"
       : `现在轮到 ${options.currentTurnPlayerName}`;
     return `${intro} ${propertyActorLabel}决定是否以 ${options.pendingProperty.price} 买下 ${options.pendingProperty.label}。`;
+  }
+
+  if (options.auctionSummary) {
+    const auctionActorLabel = !options.isSpectator && options.auctionSummary.actingBidderId === options.activePlayerId
+      ? `现在轮到你决定是否至少以 ${options.auctionSummary.nextMinimumBid} 继续竞拍 ${options.auctionSummary.lotLabel}`
+      : `现在轮到 ${options.auctionSummary.actingBidderName} 决定是否继续竞拍 ${options.auctionSummary.lotLabel}`;
+    const highestBidLabel = options.auctionSummary.highestBidderName
+      ? `，当前最高价是 ${options.auctionSummary.highestBidderName} 的 ${options.auctionSummary.highestBid}`
+      : "，当前还没有领先报价";
+    return `${intro} ${auctionActorLabel}${highestBidLabel}。`;
+  }
+
+  if (options.tradeSummary) {
+    if (!options.isSpectator && options.tradeSummary.counterpartyPlayerId === options.activePlayerId) {
+      return `${intro} 现在轮到你决定是否接受 ${options.tradeSummary.proposerName} 递来的交易报价。`;
+    }
+
+    if (!options.isSpectator && options.tradeSummary.proposerPlayerId === options.activePlayerId) {
+      return `${intro} 你的报价已经送到 ${options.tradeSummary.counterpartyName} 面前，现在等待对方表态。`;
+    }
+
+    return `${intro} 现在等待 ${options.tradeSummary.counterpartyName} 回应 ${options.tradeSummary.proposerName} 的交易报价。`;
+  }
+
+  if (options.turnState === "awaiting-jail-decision") {
+    const jailActorLabel = !options.isSpectator && options.currentTurnPlayerId === options.activePlayerId
+      ? "现在轮到你决定如何离开监狱"
+      : `现在轮到 ${options.currentTurnPlayerName} 决定如何离开监狱`;
+    const jailOptions = !options.isSpectator && options.currentTurnPlayerId === options.activePlayerId
+      ? `可选掷骰、支付 50 罚金${options.activeJailCardCount > 0 ? `或使用 ${options.activeJailCardCount} 张出狱卡` : ""}`
+      : `${options.currentTurnPlayerName} 已有 ${options.currentTurnJailAttempts} 次尝试记录${options.currentTurnJailCardCount > 0 ? `，手上还有 ${options.currentTurnJailCardCount} 张出狱卡` : ""}`;
+    return `${intro} ${jailActorLabel}，${jailOptions}。`;
   }
 
   if (options.turnState === "awaiting-roll") {
@@ -272,24 +321,6 @@ export function GamePage() {
       ? "已重新连入牌局，可以继续旁观当前进展"
       : "已重新连入牌局，当前进度已同步"
     : null;
-  const reconnectSuccessContext = buildReconnectRecoveryNarrative({
-    activePlayerId,
-    currentTurnPlayerId: projection.currentTurnPlayerId,
-    currentTurnPlayerName: projection.currentTurnPlayerName,
-    isSpectator,
-    latestSummary: latestProjectionEvent?.summary ?? null,
-    pendingActionLabel: projection.pendingActionLabel,
-    pendingProperty: projection.pendingProperty,
-    resolutionSummary: projection.resolutionSummary
-      ? {
-        actorPlayerId: projection.resolutionSummary.actorPlayerId,
-        actorName: projection.resolutionSummary.actorName,
-        reasonLabel: projection.resolutionSummary.reasonLabel,
-        shortfall: projection.resolutionSummary.shortfall,
-      }
-      : null,
-    turnState: projection.turnState,
-  });
   const auctionSummary = projection.auctionSummary;
   const tradeSummary = projection.tradeSummary;
   const auctionQuickBidOptions = auctionSummary
@@ -362,6 +393,45 @@ export function GamePage() {
   const resolutionActor = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
   const activeJailCardCount = activeProjectionPlayer?.heldCardIds?.length ?? 0;
   const currentTurnJailCardCount = currentTurnProjectionPlayer?.heldCardIds?.length ?? 0;
+  const reconnectSuccessContext = buildReconnectRecoveryNarrative({
+    activePlayerId,
+    currentTurnPlayerId: projection.currentTurnPlayerId,
+    currentTurnPlayerName: projection.currentTurnPlayerName,
+    isSpectator,
+    latestSummary: latestProjectionEvent?.summary ?? null,
+    pendingActionLabel: projection.pendingActionLabel,
+    auctionSummary: auctionSummary
+      ? {
+        actingBidderId: auctionSummary.actingBidderId,
+        actingBidderName: auctionSummary.actingBidderName,
+        highestBid: auctionSummary.highestBid,
+        highestBidderName: auctionSummary.highestBidderName,
+        nextMinimumBid: auctionSummary.nextMinimumBid,
+        lotLabel: auctionSummary.lotLabel,
+      }
+      : null,
+    tradeSummary: tradeSummary
+      ? {
+        proposerPlayerId: tradeSummary.proposerPlayerId,
+        proposerName: tradeSummary.proposerName,
+        counterpartyPlayerId: tradeSummary.counterpartyPlayerId,
+        counterpartyName: tradeSummary.counterpartyName,
+      }
+      : null,
+    activeJailCardCount,
+    currentTurnJailCardCount,
+    currentTurnJailAttempts: currentTurnProjectionPlayer?.jailTurnsServed ?? 0,
+    pendingProperty: projection.pendingProperty,
+    resolutionSummary: projection.resolutionSummary
+      ? {
+        actorPlayerId: projection.resolutionSummary.actorPlayerId,
+        actorName: projection.resolutionSummary.actorName,
+        reasonLabel: projection.resolutionSummary.reasonLabel,
+        shortfall: projection.resolutionSummary.shortfall,
+      }
+      : null,
+    turnState: projection.turnState,
+  });
   const tradeNetCash = Number(tradeOfferedCash) - Number(tradeRequestedCash);
   const tradeNetCashLabel = tradeNetCash === 0
     ? "现金净流向: 无净变化"
