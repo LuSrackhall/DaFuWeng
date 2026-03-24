@@ -618,6 +618,21 @@ body {
   gap: 10px;
 }
 
+.room-recovery-recap {
+  display: grid;
+  gap: 8px;
+  border-radius: 16px;
+  padding: 14px 16px;
+  background:
+    radial-gradient(circle at top right, rgba(124, 201, 149, 0.12), transparent 36%),
+    rgba(4, 12, 10, 0.22);
+  border: 1px solid rgba(124, 201, 149, 0.16);
+}
+
+.room-recovery-recap__meta {
+  color: rgba(246, 236, 212, 0.64);
+}
+
 .room-chip {
   display: grid;
   gap: 4px;

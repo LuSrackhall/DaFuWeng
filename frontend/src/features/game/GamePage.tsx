@@ -25,6 +25,22 @@ type BoardResultFeedback = {
   tone: BoardResultFeedbackTone;
 };
 
+type RecoveryRecapSnapshot = {
+  token: number;
+  title: string;
+  detail: string;
+  meta: string;
+};
+
+function buildRecoveryRecapDetail(context: string) {
+  const dividerIndex = context.indexOf("。 ");
+  if (dividerIndex >= 0) {
+    return context.slice(dividerIndex + 2).trim();
+  }
+
+  return context.trim();
+}
+
 function buildReconnectRecoveryNarrative(options: {
   activePlayerId: string;
   currentTurnPlayerId: string;
@@ -138,6 +154,7 @@ export function GamePage() {
   const [isTurnToolsOpen, setIsTurnToolsOpen] = useState(false);
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
+  const [lastRecoveryRecap, setLastRecoveryRecap] = useState<RecoveryRecapSnapshot | null>(null);
   const presentation = usePresentationState(
     projection.currentTurnPlayerId,
     projection.players,
@@ -432,6 +449,24 @@ export function GamePage() {
       : null,
     turnState: projection.turnState,
   });
+  useEffect(() => {
+    if (!recoveryNotice) {
+      return;
+    }
+
+    setLastRecoveryRecap({
+      token: recoveryNotice.token,
+      title: latestProjectionEvent?.summary ?? "系统已把这局追到最新进度。",
+      detail: buildRecoveryRecapDetail(reconnectSuccessContext),
+      meta: isSpectator ? "当前仍为只读观战" : projection.pendingActionLabel,
+    });
+  }, [
+    recoveryNotice?.token,
+    latestProjectionEvent?.summary,
+    reconnectSuccessContext,
+    isSpectator,
+    projection.pendingActionLabel,
+  ]);
   const tradeNetCash = Number(tradeOfferedCash) - Number(tradeRequestedCash);
   const tradeNetCashLabel = tradeNetCash === 0
     ? "现金净流向: 无净变化"
@@ -1836,6 +1871,14 @@ export function GamePage() {
               <span>{overviewProgressLabel}</span>
             </article>
           </div>
+          {!reconnectSuccessMessage && lastRecoveryRecap ? (
+            <article className="room-recovery-recap" key={lastRecoveryRecap.token}>
+              <p className="shell__eyebrow">最近恢复</p>
+              <strong>{lastRecoveryRecap.title}</strong>
+              <span>{lastRecoveryRecap.detail}</span>
+              <span className="room-recovery-recap__meta">{lastRecoveryRecap.meta}</span>
+            </article>
+          ) : null}
           <div className="room-overview__roster">
             {projection.players.map((player) => (
               <article className="room-chip" key={player.id}>

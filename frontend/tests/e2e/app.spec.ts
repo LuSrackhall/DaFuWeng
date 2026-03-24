@@ -838,6 +838,11 @@ test("reconnect success falls back to current turn context when no latest event 
   await expect(recoveryBar.getByText("已重新连入牌局，当前进度已同步")).toBeVisible({ timeout: 10000 });
   await expect(recoveryBar.getByText("系统已把这局追到最新进度。 现在轮到你继续掷骰。")).toBeVisible();
   await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeVisible();
+  await expect(recoveryBar).toHaveCount(0, { timeout: 5000 });
+  const recapCard = page.locator(".room-recovery-recap");
+  await expect(recapCard.getByText("最近恢复")).toBeVisible();
+  await expect(recapCard.getByText("系统已把这局追到最新进度。")).toBeVisible();
+  await expect(recapCard.getByText("现在轮到你继续掷骰。")).toBeVisible();
 });
 
 test("mobile player reconnect narrates property decision recovery", async ({
@@ -1398,6 +1403,339 @@ test("reconnect success narrates jail decision recovery", async ({
   await expect(page.getByRole("button", { name: "尝试掷骰出狱" })).toBeVisible();
   await expect(page.getByRole("button", { name: "支付 50 罚金" })).toBeVisible();
   await expect(page.getByRole("button", { name: "使用出狱卡" })).toBeVisible();
+});
+
+test("spectator reconnect keeps a lightweight recovery recap during live auction", async ({
+  page,
+}) => {
+  const roomId = "room-spectator-reconnect-auction";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 2,
+    eventSequence: 2,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      { id: "p1", name: "房主甲", cash: 1500, position: 1, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: [
+      { id: "evt-1", type: "room-started", sequence: 1, snapshotVersion: 1, summary: "房主甲 开始了本局。", playerId: "p1" },
+      { id: "evt-2", type: "property-declined", sequence: 2, snapshotVersion: 2, summary: "房主甲 放弃购买 东湖路。", playerId: "p1", tileId: "tile-1", tileIndex: 1, tileLabel: "东湖路", tilePrice: 160 },
+    ],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 3,
+    eventSequence: 3,
+    turnState: "awaiting-auction",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家完成竞拍动作",
+    pendingAuction: {
+      tileId: "tile-1",
+      tileIndex: 1,
+      label: "东湖路",
+      price: 160,
+      initiatorPlayerId: "p1",
+      highestBid: 51,
+      highestBidderId: "p2",
+      passedPlayerIds: [],
+    },
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      { id: "evt-3", type: "auction-bid-submitted", sequence: 3, snapshotVersion: 3, summary: "玩家乙 目前以 51 领先。", playerId: "p2", amount: 51, tileId: "tile-1", tileIndex: 1, tileLabel: "东湖路" },
+    ],
+  };
+
+  await page.addInitScript(() => {
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        const instances = (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources ?? [];
+        instances.push(this);
+        (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = instances;
+      }
+
+      addEventListener() {}
+      close() {}
+      emitError() {
+        this.onerror?.();
+      }
+    }
+
+    (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = [];
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  });
+
+  let shouldRecover = false;
+  let didRecover = false;
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: initialSnapshot });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    if (shouldRecover && !didRecover) {
+      didRecover = true;
+      await route.fulfill({ json: { snapshot: recoveredSnapshot, events: [] } });
+      return;
+    }
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+  await expect(page.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
+  shouldRecover = true;
+  await page.evaluate(() => {
+    const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
+    instances[0]?.emitError();
+  });
+
+  const syncShell = page.locator(".room-sync-shell");
+  await expect(syncShell.getByText("刚刚和房间断了一下线")).toBeVisible();
+  await expect(syncShell).toHaveCount(0, { timeout: 10000 });
+
+  const recoveryBar = page.locator(".room-reconnect-success");
+  await expect(recoveryBar.getByText("已重新连入牌局，可以继续旁观当前进展")).toBeVisible({ timeout: 10000 });
+  await expect(recoveryBar.locator(".room-reconnect-success__hint")).toContainText("现在轮到 房主甲 决定是否继续竞拍 东湖路");
+  await expect(page.getByRole("button", { name: "提交出价" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "放弃本轮竞拍" })).toHaveCount(0);
+  await expect(recoveryBar).toHaveCount(0, { timeout: 5000 });
+
+  const recapCard = page.locator(".room-recovery-recap");
+  await expect(recapCard.getByText("最近恢复")).toBeVisible();
+  await expect(recapCard.getByText("玩家乙 目前以 51 领先。")).toBeVisible();
+  await expect(recapCard.getByText("现在轮到 房主甲 决定是否继续竞拍 东湖路，当前最高价是 玩家乙 的 51。")).toBeVisible();
+  await expect(recapCard.getByText("当前仍为只读观战")).toBeVisible();
+});
+
+test("spectator reconnect keeps a lightweight recovery recap during trade response", async ({
+  page,
+}) => {
+  const roomId = "room-spectator-reconnect-trade";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 1,
+    eventSequence: 1,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      { id: "p1", name: "房主甲", cash: 1500, position: 0, properties: ["tile-1"], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: [
+      { id: "evt-1", type: "room-started", sequence: 1, snapshotVersion: 1, summary: "房主甲 开始了本局。", playerId: "p1" },
+    ],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 2,
+    eventSequence: 2,
+    turnState: "awaiting-trade-response",
+    currentTurnPlayerId: "p2",
+    pendingActionLabel: "等待当前玩家回应交易报价",
+    pendingTrade: {
+      proposerPlayerId: "p1",
+      counterpartyPlayerId: "p2",
+      offeredCash: 120,
+      requestedCash: 30,
+      offeredTileIds: ["tile-1"],
+      requestedTileIds: [],
+      offeredCardIds: [],
+      requestedCardIds: [],
+      snapshotVersion: 2,
+    },
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      { id: "evt-2", type: "trade-proposed", sequence: 2, snapshotVersion: 2, summary: "房主甲 向 玩家乙 发出一笔交易报价。", playerId: "p1" },
+    ],
+  };
+
+  await page.addInitScript(() => {
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        const instances = (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources ?? [];
+        instances.push(this);
+        (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = instances;
+      }
+
+      addEventListener() {}
+      close() {}
+      emitError() {
+        this.onerror?.();
+      }
+    }
+
+    (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = [];
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  });
+
+  let shouldRecover = false;
+  let didRecover = false;
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: initialSnapshot });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    if (shouldRecover && !didRecover) {
+      didRecover = true;
+      await route.fulfill({ json: { snapshot: recoveredSnapshot, events: [] } });
+      return;
+    }
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+  await expect(page.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
+  shouldRecover = true;
+  await page.evaluate(() => {
+    const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
+    instances[0]?.emitError();
+  });
+
+  const recoveryBar = page.locator(".room-reconnect-success");
+  await expect(recoveryBar.getByText("已重新连入牌局，可以继续旁观当前进展")).toBeVisible({ timeout: 10000 });
+  await expect(recoveryBar.locator(".room-reconnect-success__hint")).toContainText("现在等待 玩家乙 回应 房主甲 的交易报价。");
+  await expect(page.getByRole("button", { name: "接受交易" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "拒绝交易" })).toHaveCount(0);
+  await expect(recoveryBar).toHaveCount(0, { timeout: 5000 });
+
+  const recapCard = page.locator(".room-recovery-recap");
+  await expect(recapCard.getByText("最近恢复")).toBeVisible();
+  await expect(recapCard.getByText("房主甲 向 玩家乙 发出一笔交易报价。")).toBeVisible();
+  await expect(recapCard.getByText("现在等待 玩家乙 回应 房主甲 的交易报价。")).toBeVisible();
+  await expect(recapCard.getByText("当前仍为只读观战")).toBeVisible();
+});
+
+test("spectator reconnect keeps a lightweight recovery recap during jail decision", async ({
+  page,
+}) => {
+  const roomId = "room-spectator-reconnect-jail";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 1,
+    eventSequence: 1,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      { id: "p1", name: "房主甲", cash: 1500, position: 10, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: ["card-jail"], jailTurnsServed: 1, inJail: true, isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: [
+      { id: "evt-1", type: "player-jailed", sequence: 1, snapshotVersion: 1, summary: "房主甲 进入监狱，下一回合必须先处理出狱决策。", playerId: "p1" },
+    ],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 2,
+    eventSequence: 2,
+    turnState: "awaiting-jail-decision",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家处理出狱决策",
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      { id: "evt-2", type: "jail-roll-attempted", sequence: 2, snapshotVersion: 2, summary: "房主甲 仍在监狱中，当前需要继续处理出狱决策。", playerId: "p1", failedAttemptCount: 1 },
+    ],
+  };
+
+  await page.addInitScript(() => {
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        const instances = (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources ?? [];
+        instances.push(this);
+        (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = instances;
+      }
+
+      addEventListener() {}
+      close() {}
+      emitError() {
+        this.onerror?.();
+      }
+    }
+
+    (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = [];
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  });
+
+  let shouldRecover = false;
+  let didRecover = false;
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: initialSnapshot });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    if (shouldRecover && !didRecover) {
+      didRecover = true;
+      await route.fulfill({ json: { snapshot: recoveredSnapshot, events: [] } });
+      return;
+    }
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+  await expect(page.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
+  shouldRecover = true;
+  await page.evaluate(() => {
+    const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
+    instances[0]?.emitError();
+  });
+
+  const recoveryBar = page.locator(".room-reconnect-success");
+  await expect(recoveryBar.getByText("已重新连入牌局，可以继续旁观当前进展")).toBeVisible({ timeout: 10000 });
+  await expect(recoveryBar.locator(".room-reconnect-success__hint")).toContainText("现在轮到 房主甲 决定如何离开监狱");
+  await expect(page.getByRole("button", { name: "尝试掷骰出狱" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "支付 50 罚金" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "使用出狱卡" })).toHaveCount(0);
+  await expect(recoveryBar).toHaveCount(0, { timeout: 5000 });
+
+  const recapCard = page.locator(".room-recovery-recap");
+  await expect(recapCard.getByText("最近恢复")).toBeVisible();
+  await expect(recapCard.getByText("房主甲 仍在监狱中，当前需要继续处理出狱决策。")).toBeVisible();
+  await expect(recapCard.getByText(/现在轮到 房主甲 决定如何离开监狱/)).toBeVisible();
+  await expect(recapCard.getByText("当前仍为只读观战")).toBeVisible();
 });
 
 test("second reconnect replaces the previous reconnect narrative context", async ({
