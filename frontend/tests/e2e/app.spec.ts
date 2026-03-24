@@ -401,6 +401,85 @@ test("room sync shell shows reconnect guidance after realtime error and clears a
   await expect(page.locator(".room-shell__pill").getByText("玩家乙")).toBeVisible();
 });
 
+test("spectator reconnect stays read-only after realtime error and catch-up recovery", async ({
+  browser,
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("房主昵称").fill("房主甲");
+  await page.getByRole("button", { name: "创建房间" }).click();
+
+  await expect(page).toHaveURL(/\/room\/room-\d+$/);
+  const roomId = extractRoomId(page.url());
+
+  const guestPage = await browser.newPage();
+  await guestPage.goto("/");
+  await guestPage.getByLabel("加入房间").fill(roomId);
+  await guestPage.getByLabel("玩家昵称").fill("玩家乙");
+  await guestPage.getByRole("button", { name: "加入房间" }).click();
+  await expect(guestPage).toHaveURL(new RegExp(`/room/${roomId}$`));
+
+  const spectatorPage = await browser.newPage();
+  await spectatorPage.addInitScript(() => {
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        const instances = (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources ?? [];
+        instances.push(this);
+        (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = instances;
+      }
+
+      addEventListener() {}
+      close() {}
+      emitError() {
+        this.onerror?.();
+      }
+    }
+
+    (window as typeof window & { __testEventSources?: FakeEventSource[] }).__testEventSources = [];
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  });
+
+  await page.getByRole("button", { name: "房主开始游戏" }).click();
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
+  await spectatorPage.goto(`/room/${roomId}`);
+  await expect(
+    spectatorPage.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作."),
+  ).toHaveCount(0);
+  await expect(
+    spectatorPage.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。"),
+  ).toBeVisible();
+  await expect(
+    spectatorPage.locator(".stage-card--overview").getByText("当前以只读观战身份查看此房间。").first(),
+  ).toBeVisible();
+  await expect(spectatorPage.getByRole("button", { name: /以 .* 身份掷骰/ })).toHaveCount(0);
+
+  await spectatorPage.evaluate(() => {
+    const instances = (window as typeof window & { __testEventSources?: Array<{ emitError(): void }> }).__testEventSources ?? [];
+    instances[0]?.emitError();
+  });
+
+  const spectatorSyncShell = spectatorPage.locator(".room-sync-shell");
+  await expect(spectatorSyncShell.getByText("刚刚和房间断了一下线")).toBeVisible();
+  await expect(spectatorSyncShell.getByText("当前以观战视角查看")).toBeVisible();
+  await expect(spectatorSyncShell.getByText("先看住这局眼前的进度，等连接恢复后会继续刷新。")).toBeVisible();
+  await expect(spectatorPage.getByRole("button", { name: /以 .* 身份掷骰/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
+  await expect(page.getByText(/可购买 东湖路，价格 160。/)).toBeVisible();
+
+  await expect(spectatorSyncShell).toHaveCount(0, { timeout: 10000 });
+  await expect(spectatorPage.getByText(/可购买 东湖路，价格 160。/)).toBeVisible({ timeout: 10000 });
+  await expect(spectatorPage.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toBeVisible();
+  await expect(spectatorPage.getByRole("button", { name: "购买地产" })).toHaveCount(0);
+  await expect(spectatorPage.getByRole("button", { name: /以 .* 身份掷骰/ })).toHaveCount(0);
+
+  await spectatorPage.close();
+  await guestPage.close();
+});
+
 test("two real players can create, join, start, buy, pay rent, and refresh the same authoritative room", async ({
   browser,
   page,
@@ -428,11 +507,11 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
 
   await expect(page.getByText("等待房间开始")).toBeVisible();
   await expect(guestPage.getByText("等待房间开始")).toBeVisible();
-  await expect(page.getByText("当前主操作", { exact: true })).toBeVisible();
+  await expect(page.getByText("现在该做什么", { exact: true })).toBeVisible();
   await expect(page.locator(".room-primary-anchor").getByText("现在由房主推进开局")).toBeVisible();
   await expect(page.getByText("当前人数: 2")).toBeVisible();
   await expect(page.locator(".stage-card--overview").getByText("当前以 房主甲 身份加入此房间。").first()).toBeVisible();
-  await expect(page.getByText(/这是服务端权威房间。刷新后会恢复同一房间快照/)).toBeVisible();
+  await expect(page.getByText(/刷新后会回到这同一局，并继续保留你刚才的身份/)).toBeVisible();
   await expect(page.getByText("房主: 房主甲")).toBeVisible();
   await expect(guestPage.locator(".stage-card--overview").getByText("当前以 玩家乙 身份加入此房间。").first()).toBeVisible();
 
@@ -616,8 +695,8 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
   await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
-  await expect(page.getByRole("button", { name: "展开回合工具区" })).toBeVisible();
-  await page.getByRole("button", { name: "展开回合工具区" }).click();
+  await expect(page.getByRole("button", { name: "展开本回合可选动作" })).toBeVisible();
+  await page.getByRole("button", { name: "展开本回合可选动作" }).click();
   await expect(page.getByText("发起双边交易报价", { exact: true })).toBeVisible();
   await expect(page.getByText("选对象", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "下一步：选择我给出的内容" }).click();
@@ -720,7 +799,7 @@ test("rejected trade shows a recovery card and restores the proposer's turn", as
   await page.getByRole("button", { name: "购买地产" }).click();
   await guestPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
 
-  await page.getByRole("button", { name: "展开回合工具区" }).click();
+  await page.getByRole("button", { name: "展开本回合可选动作" }).click();
   await page.getByText("发起双边交易报价", { exact: true }).isVisible();
   await page.getByRole("button", { name: "下一步：选择我给出的内容" }).click();
   await page.getByLabel("我出现金").fill("120");
@@ -1745,11 +1824,11 @@ test("turn tools shelf stays collapsed by default and reveals optional tools on 
 
   await expect(page.getByText(/可发起交易/)).toBeVisible();
   await expect(page.getByText(/可开发地产 1 处/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "展开回合工具区" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "展开本回合可选动作" })).toBeVisible();
   await expect(page.getByText("发起双边交易报价", { exact: true })).toHaveCount(0);
   await expect(page.getByText("地产开发", { exact: true })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "展开回合工具区" }).click();
+  await page.getByRole("button", { name: "展开本回合可选动作" }).click();
 
   await expect(page.getByText("发起双边交易报价", { exact: true })).toBeVisible();
   await expect(page.getByText("地产开发", { exact: true })).toBeVisible();
@@ -1888,7 +1967,7 @@ test("stepwise trade composer guides the draft before entering pending trade res
 
   await page.goto(`/room/${roomId}`);
 
-  await page.getByRole("button", { name: "展开回合工具区" }).click();
+  await page.getByRole("button", { name: "展开本回合可选动作" }).click();
   await expect(page.getByText("选对象", { exact: true })).toBeVisible();
   await expect(page.getByLabel("我出现金")).toHaveCount(0);
 

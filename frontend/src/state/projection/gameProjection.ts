@@ -222,7 +222,7 @@ function buildWaitingRoomSummary(snapshot: ProjectionSnapshot): WaitingRoomSumma
     blockerLabel: canStart
       ? "已满足最少开局人数，房主可以开始本局。"
       : `至少还需要 ${playersNeeded} 名玩家加入，房主才能开始。`,
-    reconnectLabel: "这是服务端权威房间。刷新后会恢复同一房间快照，并保持已加入身份。",
+    reconnectLabel: "刷新后会回到这同一局，并继续保留你刚才的身份。",
     seats: snapshot.players.map((player) => ({
       playerId: player.id,
       name: player.name,

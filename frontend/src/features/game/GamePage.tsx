@@ -161,9 +161,9 @@ export function GamePage() {
       : projection.turnState === "awaiting-auction"
         ? "公开拍卖"
         : projection.turnState === "awaiting-trade-response"
-          ? "交易响应"
+          ? "等待交易答复"
         : projection.turnState === "awaiting-deficit-resolution"
-          ? "资金结算"
+          ? "补齐欠款"
           : "对局进行中";
           const roomShellTitle = projection.waitingRoomSummary ? "等待开局" : roomPhaseLabel;
   const latestEventSummary = projection.recentEvents.at(-1)?.summary ?? "暂无最新事件。";
@@ -219,7 +219,7 @@ export function GamePage() {
         identityStatus,
         actionStatus,
         stageCards,
-        freshnessLabel: `已看到第 ${projection.snapshotVersion} 次房间更新 · 第 ${projection.eventSequence} 条进展`,
+        freshnessLabel: `你现在看到的是这局目前接到的最新进度`,
         latestLabel: isFallback ? "还在等这局的最新进度" : latestEventSummary,
         connectionLabel: error ?? statusLabel,
       };
@@ -556,7 +556,7 @@ export function GamePage() {
           eyebrowLabel: "结果达成",
           title: `${actorName} 买下 ${latestProjectionEvent.tileLabel ?? "地产"}`,
           metaLabel: "买地结果已落地",
-          detail: `支付 ${latestProjectionEvent.amount ?? 0}，归属已经完成同步。`,
+          detail: `支付 ${latestProjectionEvent.amount ?? 0}，归属已经确认。`,
           nextLabel: projection.pendingActionLabel,
           diceLabel,
           chipLabel: "地产成交",
@@ -567,7 +567,7 @@ export function GamePage() {
         return {
           eyebrowLabel: "即时后果",
           title: `${actorName} 支付租金`,
-          metaLabel: "现金结果已同步",
+          metaLabel: "现金结果已确认",
           detail: `${ownerName ?? "收租方"} 收到 ${latestProjectionEvent.amount ?? 0}，当前回合已继续推进。`,
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -579,7 +579,7 @@ export function GamePage() {
         return {
           eyebrowLabel: "即时后果",
           title: `${actorName} 支付税费`,
-          metaLabel: "税费结算已同步",
+          metaLabel: "税费结果已确认",
           detail: `向银行支付 ${latestProjectionEvent.amount ?? 0}，税费结算已完成。`,
           nextLabel: projection.pendingActionLabel,
           diceLabel,
@@ -616,7 +616,7 @@ export function GamePage() {
           eyebrowLabel: "结果达成",
           title: `${actorName} 开发 ${latestProjectionEvent.tileLabel ?? "地产"}`,
           metaLabel: "地产状态已升级",
-          detail: `建筑等级已提升到 ${latestProjectionEvent.improvementLevel ?? 0}，租金威胁同步上升。`,
+          detail: `建筑等级已提升到 ${latestProjectionEvent.improvementLevel ?? 0}，后续租金也会跟着提高。`,
           nextLabel: projection.pendingActionLabel,
           diceLabel,
           chipLabel: "地产状态",
@@ -640,8 +640,8 @@ export function GamePage() {
           ? {
               eyebrowLabel: "最近结果",
               title: latestProjectionEvent.summary,
-              metaLabel: "结果已同步到当前棋盘",
-              detail: `焦点地块 ${boardTileLabels.get(presentation.highlightedTileId ?? "") ?? latestProjectionEvent.tileLabel ?? "已更新"}，结果已同步到当前棋盘。`,
+              metaLabel: "结果已经落到棋盘上",
+              detail: `焦点地块 ${boardTileLabels.get(presentation.highlightedTileId ?? "") ?? latestProjectionEvent.tileLabel ?? "已更新"}，这一步已经落到当前棋盘。`,
               nextLabel: projection.pendingActionLabel,
               diceLabel,
               chipLabel: "最近骰子",
@@ -1181,7 +1181,7 @@ export function GamePage() {
         actions = canRoll ? (
           <div className="lobby__actions">
             <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
-              {isSubmittingCommand && canRoll ? "同步中..." : `以 ${activePlayerName} 身份掷骰`}
+              {isSubmittingCommand && canRoll ? "进行中..." : `以 ${activePlayerName} 身份掷骰`}
             </button>
           </div>
         ) : null;
@@ -1193,7 +1193,7 @@ export function GamePage() {
         className={`player-card room-primary-anchor room-primary-anchor--${tone}${isMobileAnchorTray ? " room-primary-anchor--mobile-tray" : ""}`}
         style={mobilePrimaryAnchorStyle}
       >
-        <p className="shell__eyebrow">当前主操作</p>
+        <p className="shell__eyebrow">现在该做什么</p>
         <strong>{title}</strong>
         {isMobileAnchorTray ? (
           <div className="room-primary-anchor__impact-block">
@@ -1226,7 +1226,7 @@ export function GamePage() {
       <section className="player-card turn-tools-shelf section-card">
         <div className="turn-tools-shelf__header">
           <div className="turn-tools-shelf__copy">
-            <strong>回合工具区</strong>
+            <strong>本回合可选动作</strong>
             <p className="turn-tools-shelf__summary">{summaryParts.join(" · ")}</p>
             <p className="turn-tools-shelf__hint">这些是当前回合可选的经营动作，不会替代主动作。</p>
           </div>
@@ -1235,7 +1235,7 @@ export function GamePage() {
             type="button"
             onClick={() => setIsTurnToolsOpen((current) => !current)}
           >
-            {isTurnToolsOpen ? "收起回合工具区" : "展开回合工具区"}
+            {isTurnToolsOpen ? "收起本回合可选动作" : "展开本回合可选动作"}
           </button>
         </div>
         {isTurnToolsOpen ? (

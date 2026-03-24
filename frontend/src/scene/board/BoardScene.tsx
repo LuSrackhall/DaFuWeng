@@ -370,7 +370,7 @@ function drawCenterHud(
   root.addChild(eyebrow);
 
   const title = new Text({
-    text: resultFeedback ? resultFeedback.title : currentPlayer?.name ?? "等待同步",
+    text: resultFeedback ? resultFeedback.title : currentPlayer?.name ?? "正在更新局面",
     style: resultFeedback ? centerResultTitleStyle : centerTitleStyle,
   });
   title.anchor.set(0.5, 0);
@@ -393,9 +393,9 @@ function drawCenterHud(
       ? focusOwner
         ? `归属 ${focusOwner.name}`
         : highlightedTile.type === "property"
-          ? `待决策 · ${highlightedTile.price ?? "-"}`
-          : `事件地块 · ${highlightedTile.type}`
-      : "等待权威状态推进到下一格";
+          ? `可购买 · ${highlightedTile.price ?? "-"}`
+          : `特殊事件 · ${highlightedTile.type}`
+      : "正在等待这局继续往下走";
   const body = new Text({
     text: resultFeedback ? focusMeta : `焦点地块：${focusLabel}\n${focusMeta}`,
     style: centerBodyStyle,
@@ -405,7 +405,7 @@ function drawCenterHud(
   body.y = resultFeedback ? centerY + 118 : centerY + 108;
   root.addChild(body);
 
-  drawCenterChip(root, centerX + 24, centerY + centerHeight - 114, 132, "当前行动", currentPlayer?.name ?? "等待同步", feedbackAccent);
+  drawCenterChip(root, centerX + 24, centerY + centerHeight - 114, 132, "当前行动", currentPlayer?.name ?? "正在更新局面", feedbackAccent);
   drawCenterChip(root, centerX + centerWidth / 2 - 66, centerY + centerHeight - 114, 132, resultFeedback?.chipLabel ?? "待售地产", resultFeedback?.chipValue ?? `${Math.max(0, availablePropertyCount)}`, resultFeedback ? feedbackAccent : 0xe6c37d);
   drawCenterChip(root, centerX + centerWidth - 156, centerY + centerHeight - 114, 132, "最近骰子", resultFeedback?.diceLabel ?? (props.players.length > 0 ? "未掷出" : "--"), 0xa6c7b7);
 }
