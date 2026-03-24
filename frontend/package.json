@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "test:e2e": "playwright test --config playwright.config.ts"
+    "test:e2e": "playwright test --config playwright.config.ts",
+    "test:e2e:clean": "DAFUWENG_E2E_REUSE_SERVER=false DAFUWENG_E2E_FRONTEND_PORT=4183 DAFUWENG_E2E_BACKEND_PORT=8180 DAFUWENG_E2E_API_BASE_URL=http://127.0.0.1:8180 DAFUWENG_E2E_POCKETBASE_DATA_PATH=.tmp/e2e-pocketbase-clean.json playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "@dafuweng/board-config": "workspace:*",
