@@ -3,6 +3,14 @@ import type { BoardTile, PlayerState } from "@dafuweng/contracts";
 import { Application, Container, Graphics, Text, TextStyle } from "pixi.js";
 import { getTileGridPoint } from "./boardLayout";
 
+type BoardStageCue = {
+  eyebrowLabel: string;
+  title: string;
+  detail: string;
+  diceLabel: string | null;
+  accentTone: "default" | "warning" | "danger" | "success" | "neutral";
+};
+
 type BoardSceneProps = {
   board: BoardTile[];
   currentTurnPlayerId: string;
@@ -19,6 +27,19 @@ type BoardSceneProps = {
     chipValue: string;
     tone: "default" | "warning" | "danger" | "success" | "neutral";
   } | null;
+  stageCue: BoardStageCue | null;
+};
+
+type SceneAnimationCue = {
+  key: string;
+  startedAt: number;
+  durationMs: number;
+};
+
+type SceneAnimationState = {
+  progress: number;
+  pulse: number;
+  glowAlpha: number;
 };
 
 type TileTrackSide = "top" | "bottom" | "left" | "right" | "corner";
@@ -313,12 +334,38 @@ function drawCenterChip(root: Container, x: number, y: number, width: number, la
   root.addChild(valueText);
 }
 
+function createAdaptiveTextStyle(base: TextStyle, overrides: ConstructorParameters<typeof TextStyle>[0]) {
+  return new TextStyle({
+    ...base,
+    ...overrides,
+  });
+}
+
+function resolveSceneAnimationState(cue: SceneAnimationCue | null) {
+  if (!cue) {
+    return null;
+  }
+
+  const elapsed = performance.now() - cue.startedAt;
+  if (elapsed >= cue.durationMs) {
+    return null;
+  }
+
+  const progress = elapsed / cue.durationMs;
+  return {
+    progress,
+    pulse: Math.sin(progress * Math.PI),
+    glowAlpha: (1 - progress) * 0.22,
+  };
+}
+
 function drawCenterHud(
   root: Container,
   props: BoardSceneProps,
   boardX: number,
   boardY: number,
   tileSize: number,
+  animationState: SceneAnimationState | null,
 ) {
   const currentPlayer = props.players.find((player) => player.id === props.currentTurnPlayerId) ?? null;
   const currentPlayerIndex = currentPlayer ? props.players.findIndex((player) => player.id === currentPlayer.id) : -1;
@@ -332,63 +379,98 @@ function drawCenterHud(
   const ownedPropertyCount = props.players.reduce((total, player) => total + player.properties.length, 0);
   const availablePropertyCount = props.board.filter((tile) => tile.type === "property").length - ownedPropertyCount;
   const resultFeedback = props.resultFeedback;
+  const stageCue = props.stageCue;
   const feedbackAccent = getFeedbackAccent(resultFeedback?.tone ?? "default", currentPlayerColor);
+  const stageSize = tileSize * 11;
+  const compactHud = stageSize < 620;
+  const crampedHud = stageSize < 500;
 
-  const centerX = boardX + tileSize * 2.05;
-  const centerY = boardY + tileSize * 2.05;
-  const centerWidth = tileSize * 6.9;
-  const centerHeight = tileSize * 6.9;
+  const centerX = boardX + tileSize * 2.28;
+  const centerY = boardY + tileSize * 2.22;
+  const centerWidth = tileSize * 6.45;
+  const centerHeight = tileSize * 6.25;
+  const cardInset = compactHud ? 16 : 20;
+  const ribbonHeight = crampedHud ? 80 : 94;
+  const cardHeight = compactHud ? centerHeight - 20 : centerHeight - 10;
+  const titleStyle = createAdaptiveTextStyle(resultFeedback ? centerResultTitleStyle : centerTitleStyle, {
+    fontSize: resultFeedback ? (crampedHud ? 19 : compactHud ? 22 : 26) : (crampedHud ? 21 : compactHud ? 25 : 30),
+    wordWrapWidth: centerWidth - cardInset * 2 - 24,
+    lineHeight: crampedHud ? 22 : compactHud ? 25 : 29,
+  });
+  const eyebrowStyle = createAdaptiveTextStyle(centerEyebrowStyle, {
+    fontSize: crampedHud ? 10 : 11,
+    letterSpacing: crampedHud ? 1.1 : 1.7,
+  });
+  const bodyStyle = createAdaptiveTextStyle(centerBodyStyle, {
+    fontSize: crampedHud ? 11 : compactHud ? 12 : 13,
+    lineHeight: crampedHud ? 14 : compactHud ? 16 : 17,
+    wordWrapWidth: centerWidth - cardInset * 2 - 18,
+  });
+  const metaStyle = createAdaptiveTextStyle(centerResultMetaStyle, {
+    fontSize: crampedHud ? 9 : 10,
+    letterSpacing: crampedHud ? 0.8 : 1,
+  });
 
   const panelShadow = new Graphics();
-  panelShadow.roundRect(centerX + 4, centerY + 8, centerWidth, centerHeight, 32);
+  panelShadow.roundRect(centerX + 4, centerY + 8, centerWidth, cardHeight, 32);
   panelShadow.fill({ color: 0x07120f, alpha: 0.26 });
   root.addChild(panelShadow);
 
   const centerPanel = new Graphics();
-  centerPanel.roundRect(centerX, centerY, centerWidth, centerHeight, 32);
+  centerPanel.roundRect(centerX, centerY, centerWidth, cardHeight, 32);
   centerPanel.fill({ color: 0x10261f, alpha: 0.96 });
   centerPanel.stroke({ color: feedbackAccent, width: 2, alpha: 0.58 });
   root.addChild(centerPanel);
 
   const currentGlow = new Graphics();
-  currentGlow.roundRect(centerX + 18, centerY + 18, centerWidth - 36, 92, 24);
-  currentGlow.fill({ color: feedbackAccent, alpha: 0.1 });
+  currentGlow.roundRect(centerX + 18, centerY + 18, centerWidth - 36, ribbonHeight, 24);
+  currentGlow.fill({ color: feedbackAccent, alpha: 0.08 + (animationState?.glowAlpha ?? 0) });
   root.addChild(currentGlow);
 
   if (resultFeedback) {
     const resultBanner = new Graphics();
-    resultBanner.roundRect(centerX + 22, centerY + 22, centerWidth - 44, 124, 24);
-    resultBanner.fill({ color: feedbackAccent, alpha: getFeedbackBannerAlpha(resultFeedback.tone) });
+    const bannerInset = 22 - (animationState?.pulse ?? 0) * 2;
+    resultBanner.roundRect(centerX + bannerInset, centerY + bannerInset, centerWidth - bannerInset * 2, ribbonHeight + 22, 24);
+    resultBanner.fill({ color: feedbackAccent, alpha: getFeedbackBannerAlpha(resultFeedback.tone) + (animationState?.glowAlpha ?? 0) * 0.5 });
     resultBanner.stroke({ color: feedbackAccent, width: 1.5, alpha: 0.38 });
     root.addChild(resultBanner);
+
+    if (animationState) {
+      const burst = new Graphics();
+      burst.circle(centerX + centerWidth - 86, centerY + cardHeight - 66, 26 + animationState.pulse * 18);
+      burst.fill({ color: feedbackAccent, alpha: animationState.glowAlpha });
+      root.addChild(burst);
+    }
   }
 
-  const eyebrow = new Text({ text: resultFeedback ? resultFeedback.eyebrowLabel : "当前回合", style: centerEyebrowStyle });
+  const eyebrow = new Text({ text: resultFeedback ? resultFeedback.eyebrowLabel : stageCue?.eyebrowLabel ?? "当前回合", style: eyebrowStyle });
   eyebrow.anchor.set(0.5, 0);
   eyebrow.x = centerX + centerWidth / 2;
-  eyebrow.y = centerY + 24;
+  eyebrow.y = centerY + 22;
   root.addChild(eyebrow);
 
   const title = new Text({
-    text: resultFeedback ? resultFeedback.title : currentPlayer?.name ?? "牌局马上就到这一步",
-    style: resultFeedback ? centerResultTitleStyle : centerTitleStyle,
+    text: resultFeedback ? resultFeedback.title : stageCue?.title ?? currentPlayer?.name ?? "牌局马上就到这一步",
+    style: titleStyle,
   });
   title.anchor.set(0.5, 0);
   title.x = centerX + centerWidth / 2;
-  title.y = centerY + 48;
+  title.y = centerY + (crampedHud ? 42 : 48);
   root.addChild(title);
 
-  if (resultFeedback) {
-    const resultMeta = new Text({ text: resultFeedback.metaLabel, style: centerResultMetaStyle });
+  if (resultFeedback || stageCue) {
+    const resultMeta = new Text({ text: resultFeedback?.metaLabel ?? "当前舞台已对准这一步", style: metaStyle });
     resultMeta.anchor.set(0.5, 0);
     resultMeta.x = centerX + centerWidth / 2;
-    resultMeta.y = centerY + 86;
+    resultMeta.y = centerY + (crampedHud ? 70 : compactHud ? 76 : 82);
     root.addChild(resultMeta);
   }
 
   const focusLabel = highlightedTile?.label ?? "当前没有焦点地块";
   const focusMeta = resultFeedback
-    ? `${resultFeedback.detail}\n${resultFeedback.nextLabel}`
+    ? `${resultFeedback.detail}`
+    : stageCue
+      ? stageCue.detail
     : highlightedTile
       ? focusOwner
         ? `归属 ${focusOwner.name}`
@@ -397,17 +479,38 @@ function drawCenterHud(
           : `特殊事件 · ${highlightedTile.type}`
       : "下一步很快就会揭晓";
   const body = new Text({
-    text: resultFeedback ? focusMeta : `焦点地块：${focusLabel}\n${focusMeta}`,
-    style: centerBodyStyle,
+    text: resultFeedback || stageCue ? focusMeta : `焦点地块：${focusLabel}\n${focusMeta}`,
+    style: bodyStyle,
   });
   body.anchor.set(0.5, 0);
   body.x = centerX + centerWidth / 2;
-  body.y = resultFeedback ? centerY + 118 : centerY + 108;
+  body.y = centerY + (crampedHud ? 98 : compactHud ? 108 : 116);
   root.addChild(body);
 
-  drawCenterChip(root, centerX + 24, centerY + centerHeight - 114, 132, "当前行动", currentPlayer?.name ?? "牌局马上就到这一步", feedbackAccent);
-  drawCenterChip(root, centerX + centerWidth / 2 - 66, centerY + centerHeight - 114, 132, resultFeedback?.chipLabel ?? "待售地产", resultFeedback?.chipValue ?? `${Math.max(0, availablePropertyCount)}`, resultFeedback ? feedbackAccent : 0xe6c37d);
-  drawCenterChip(root, centerX + centerWidth - 156, centerY + centerHeight - 114, 132, "最近骰子", resultFeedback?.diceLabel ?? (props.players.length > 0 ? "未掷出" : "--"), 0xa6c7b7);
+  const bottomY = centerY + cardHeight - (compactHud ? 72 : 82);
+  const compactChipWidth = compactHud ? 118 : 136;
+  const bottomLeftX = centerX + 22;
+  const bottomRightX = centerX + centerWidth - compactChipWidth - 22;
+  const leftChipValue = resultFeedback?.chipValue ?? currentPlayer?.name ?? `${Math.max(0, availablePropertyCount)}`;
+  const rightChipValue = resultFeedback?.diceLabel ?? stageCue?.diceLabel ?? (props.players.length > 0 ? "待揭晓" : "--");
+
+  drawCenterChip(root, bottomLeftX, bottomY, compactChipWidth, resultFeedback?.chipLabel ?? "当前行动", leftChipValue, feedbackAccent);
+  drawCenterChip(root, bottomRightX, bottomY, compactChipWidth, "最近骰子", rightChipValue, 0xa6c7b7);
+
+  const footer = new Text({
+    text: resultFeedback?.nextLabel ?? `焦点地块 ${focusLabel}`,
+    style: createAdaptiveTextStyle(centerChipLabelStyle, {
+      fontSize: crampedHud ? 9 : 10,
+      fill: 0xf2e5c3,
+      wordWrapWidth: centerWidth - 48,
+      wordWrap: true,
+      letterSpacing: 0.2,
+    }),
+  });
+  footer.anchor.set(0.5, 0);
+  footer.x = centerX + centerWidth / 2;
+  footer.y = centerY + cardHeight - (compactHud ? 22 : 26);
+  root.addChild(footer);
 }
 
 function drawPlayerTokens(
@@ -479,7 +582,7 @@ function drawPlayerTokens(
   });
 }
 
-function renderBoardStage(app: Application, props: BoardSceneProps) {
+function renderBoardStage(app: Application, props: BoardSceneProps, animationState: SceneAnimationState | null = null) {
   const stage = app.stage;
   stage.removeChildren().forEach((child) => {
     child.destroy({ children: true });
@@ -498,7 +601,7 @@ function renderBoardStage(app: Application, props: BoardSceneProps) {
 
   drawSceneBackground(root, boardX, boardY, stageSize, tileSize);
   drawBoardTiles(root, props, boardX, boardY, tileSize, tileInnerSize, cellInset);
-  drawCenterHud(root, props, boardX, boardY, tileSize);
+  drawCenterHud(root, props, boardX, boardY, tileSize, animationState);
   drawPlayerTokens(root, props, boardX, boardY, tileSize);
 }
 
@@ -506,6 +609,9 @@ function BoardSceneInner(props: BoardSceneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<Application | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const tickerRef = useRef<(() => void) | null>(null);
+  const animationCueRef = useRef<SceneAnimationCue | null>(null);
+  const animationKeyRef = useRef<string | null>(null);
   const latestPropsRef = useRef(props);
 
   latestPropsRef.current = props;
@@ -539,7 +645,23 @@ function BoardSceneInner(props: BoardSceneProps) {
       const canvas = app.canvas as HTMLCanvasElement;
       stableHost.appendChild(canvas);
       appRef.current = app;
-      renderBoardStage(app, latestPropsRef.current);
+      renderBoardStage(app, latestPropsRef.current, resolveSceneAnimationState(animationCueRef.current));
+
+      const handleTick = () => {
+        const animationState = resolveSceneAnimationState(animationCueRef.current);
+        if (!animationState) {
+          if (animationCueRef.current) {
+            animationCueRef.current = null;
+            renderBoardStage(app, latestPropsRef.current, null);
+          }
+          return;
+        }
+
+        renderBoardStage(app, latestPropsRef.current, animationState);
+      };
+
+      app.ticker.add(handleTick);
+      tickerRef.current = handleTick;
 
       const observer = new ResizeObserver(() => {
         const currentHostRef = hostRef.current;
@@ -549,7 +671,7 @@ function BoardSceneInner(props: BoardSceneProps) {
         }
         const nextSize = getHostSize(currentHostRef);
         currentApp.renderer.resize(nextSize.width, nextSize.height);
-        renderBoardStage(currentApp, latestPropsRef.current);
+        renderBoardStage(currentApp, latestPropsRef.current, resolveSceneAnimationState(animationCueRef.current));
       });
 
       observer.observe(stableHost);
@@ -562,6 +684,10 @@ function BoardSceneInner(props: BoardSceneProps) {
       cancelled = true;
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
+      if (appRef.current && tickerRef.current) {
+        appRef.current.ticker.remove(tickerRef.current);
+      }
+      tickerRef.current = null;
       appRef.current?.destroy(true, { children: true });
       appRef.current = null;
       if (stableHost.firstChild) {
@@ -572,9 +698,30 @@ function BoardSceneInner(props: BoardSceneProps) {
 
   useEffect(() => {
     if (appRef.current) {
-      renderBoardStage(appRef.current, props);
+      renderBoardStage(appRef.current, props, resolveSceneAnimationState(animationCueRef.current));
     }
-  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback]);
+  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback, props.stageCue]);
+
+  useEffect(() => {
+    const nextAnimationKey = props.resultFeedback && props.resultFeedback.diceLabel
+      ? `${props.resultFeedback.title}|${props.resultFeedback.diceLabel}|${props.highlightedTileId ?? ""}`
+      : null;
+
+    if (!nextAnimationKey || nextAnimationKey === animationKeyRef.current) {
+      return;
+    }
+
+    animationKeyRef.current = nextAnimationKey;
+    animationCueRef.current = {
+      key: nextAnimationKey,
+      startedAt: performance.now(),
+      durationMs: 920,
+    };
+
+    if (appRef.current) {
+      renderBoardStage(appRef.current, props, resolveSceneAnimationState(animationCueRef.current));
+    }
+  }, [props.resultFeedback, props.highlightedTileId]);
 
   const currentPlayerName = props.players.find((player) => player.id === props.currentTurnPlayerId)?.name ?? "未知玩家";
   const highlightedTileLabel = props.highlightedTileId

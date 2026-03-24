@@ -25,6 +25,14 @@ type BoardResultFeedback = {
   tone: BoardResultFeedbackTone;
 };
 
+type BoardStageCue = {
+  eyebrowLabel: string;
+  title: string;
+  detail: string;
+  diceLabel: string | null;
+  accentTone: BoardResultFeedbackTone;
+};
+
 type RecoveryRecapSnapshot = {
   token: number;
   title: string;
@@ -899,6 +907,43 @@ export function GamePage() {
           : null;
     }
   })();
+  const boardStageCue: BoardStageCue | null = (() => {
+    const diceLabel = projection.lastRoll[0] || projection.lastRoll[1]
+      ? `${projection.lastRoll[0]} + ${projection.lastRoll[1]}`
+      : null;
+
+    if (projection.turnState === "awaiting-roll") {
+      return {
+        eyebrowLabel: activePlayerId === projection.currentTurnPlayerId && !isSpectator ? "回合骰台" : "等待掷骰",
+        title: activePlayerId === projection.currentTurnPlayerId && !isSpectator
+          ? `${activePlayerName} 的回合即将开启`
+          : `等待 ${projection.currentTurnPlayerName} 掷骰`,
+        detail: activePlayerId === projection.currentTurnPlayerId && !isSpectator
+          ? "骰子落定后，棋局会立即揭示买地、事件结算或下一步高压决策。"
+          : `${projection.currentTurnPlayerName} 完成掷骰后，当前棋盘才会正式揭晓下一步。`,
+        diceLabel,
+        accentTone: activePlayerId === projection.currentTurnPlayerId && !isSpectator ? "success" : "default",
+      };
+    }
+
+    if (presentation.highlightedTileId) {
+      return {
+        eyebrowLabel: "棋盘焦点",
+        title: boardTileLabels.get(presentation.highlightedTileId) ?? presentation.highlightedTileId,
+        detail: projection.pendingActionLabel,
+        diceLabel,
+        accentTone: "default",
+      };
+    }
+
+    return {
+      eyebrowLabel: "对局进行中",
+      title: projection.currentTurnPlayerName,
+      detail: projection.pendingActionLabel,
+      diceLabel,
+      accentTone: "default",
+    };
+  })();
   const mobilePrimaryAnchorStyle = isMobileAnchorTray
     ? {
         position: "fixed" as const,
@@ -1246,6 +1291,7 @@ export function GamePage() {
     let consequence = "完成当前主动作后，房间会推进到下一步。";
     let tone: PrimaryAnchorTone = "default";
     let actions: ReactNode = null;
+    const isAwaitingRoll = projection.turnState === "awaiting-roll";
 
     if (projection.waitingRoomSummary) {
       title = canStartRoom ? "现在由房主推进开局" : "等待房间准备完成";
@@ -1360,7 +1406,6 @@ export function GamePage() {
     } else {
       const isAwaitingProperty = projection.turnState === "awaiting-property-decision" && projection.pendingProperty !== null;
       const isAwaitingJail = projection.turnState === "awaiting-jail-decision";
-      const isAwaitingRoll = projection.turnState === "awaiting-roll";
       const isActiveTurnPlayer = activePlayerId === projection.currentTurnPlayerId;
 
       if (isAwaitingProperty && projection.pendingProperty) {
@@ -1427,7 +1472,7 @@ export function GamePage() {
           : "等待当前玩家掷骰后，房间会继续推进。";
         tone = isActiveTurnPlayer ? "success" : "default";
         actions = canRoll ? (
-          <div className="lobby__actions">
+          <div className="lobby__actions room-primary-anchor__actions">
             <button className="button button--primary" type="button" onClick={handleRollDice} disabled={!canRoll}>
               {isSubmittingCommand && canRoll ? "进行中..." : `以 ${activePlayerName} 身份掷骰`}
             </button>
@@ -1438,21 +1483,36 @@ export function GamePage() {
 
     return (
       <section
-        className={`player-card room-primary-anchor room-primary-anchor--${tone}${isMobileAnchorTray ? " room-primary-anchor--mobile-tray" : ""}`}
+        className={`player-card room-primary-anchor room-primary-anchor--${tone}${isMobileAnchorTray ? " room-primary-anchor--mobile-tray" : ""}${isAwaitingRoll ? " room-primary-anchor--roll-stage" : ""}`}
         style={mobilePrimaryAnchorStyle}
       >
         <p className="shell__eyebrow">现在该做什么</p>
         <strong>{title}</strong>
+        {isMobileAnchorTray && isAwaitingRoll ? actions : null}
+        {isAwaitingRoll ? (
+          <div className={`room-primary-anchor__dice-stage${canRoll ? " room-primary-anchor__dice-stage--active" : ""}`}>
+            <div className="room-primary-anchor__dice-pair" aria-hidden="true">
+              <span className="room-primary-anchor__die">●</span>
+              <span className="room-primary-anchor__die room-primary-anchor__die--offset">◆</span>
+            </div>
+            <div className="room-primary-anchor__dice-copy">
+              <p className="shell__eyebrow">回合骰台</p>
+              <strong>{canRoll ? "掷骰会立刻揭示这一手" : `${projection.currentTurnPlayerName} 即将掷出这一手`}</strong>
+              <span>{projection.lastRoll[0] || projection.lastRoll[1] ? `上一手结果 ${projection.lastRoll[0]} + ${projection.lastRoll[1]}` : "骰子落定后，房间会把下一步结果直接推到棋盘中央。"}</span>
+            </div>
+          </div>
+        ) : null}
         {isMobileAnchorTray ? (
           <div className="room-primary-anchor__impact-block">
             <span className="room-primary-anchor__impact-label">执行后果</span>
             <strong className="room-primary-anchor__impact-value">{consequence}</strong>
           </div>
         ) : null}
+        {isMobileAnchorTray && !isAwaitingRoll ? actions : null}
         <p className="action-surface__summary">{summary}</p>
         <p className="action-surface__hint">{hint}</p>
         {!isMobileAnchorTray ? <p className="action-surface__meta">{consequence}</p> : null}
-        {actions}
+        {!isMobileAnchorTray ? actions : null}
       </section>
     );
   }
@@ -1895,7 +1955,7 @@ export function GamePage() {
       ) : null}
 
       <div className="room-shell__layout">
-      <section className="panel panel--board board room-shell__board">
+      <section className={`panel panel--board board room-shell__board${projection.turnState === "awaiting-roll" ? " room-shell__board--roll-ready" : ""}`}>
         <div className="board__hero">
           <div className="board__hero-copy">
             <p className="shell__eyebrow">当前棋盘</p>
@@ -1917,6 +1977,7 @@ export function GamePage() {
           players={projection.players}
           highlightedTileId={presentation.highlightedTileId}
           resultFeedback={boardResultFeedback}
+          stageCue={boardStageCue}
         />
       </section>
       <aside className="panel panel--room-state room-shell__rail">
