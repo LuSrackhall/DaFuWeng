@@ -33,6 +33,16 @@ type BoardStageCue = {
   accentTone: BoardResultFeedbackTone;
 };
 
+type BoardSceneTransitionHint = {
+  transitionKey: string;
+  eventSequence: number;
+  snapshotVersion: number;
+  eventType: string;
+  actingPlayerId: string | null;
+  diceLabel: string | null;
+  diceTotal: number | null;
+};
+
 type RecoveryRecapSnapshot = {
   token: number;
   title: string;
@@ -944,6 +954,25 @@ export function GamePage() {
       accentTone: "default",
     };
   })();
+  const boardSceneTransitionHint: BoardSceneTransitionHint | null = latestProjectionEvent
+    ? {
+        transitionKey: `${projection.snapshotVersion}:${projection.eventSequence}:${latestProjectionEvent.type}`,
+        eventSequence: projection.eventSequence,
+        snapshotVersion: projection.snapshotVersion,
+        eventType: latestProjectionEvent.type,
+        actingPlayerId: latestProjectionEvent.playerId ?? null,
+        diceLabel: latestProjectionEvent.lastRoll
+          ? `${latestProjectionEvent.lastRoll[0]} + ${latestProjectionEvent.lastRoll[1]}`
+          : projection.lastRoll[0] || projection.lastRoll[1]
+            ? `${projection.lastRoll[0]} + ${projection.lastRoll[1]}`
+            : null,
+        diceTotal: latestProjectionEvent.lastRoll
+          ? latestProjectionEvent.lastRoll[0] + latestProjectionEvent.lastRoll[1]
+          : projection.lastRoll[0] || projection.lastRoll[1]
+            ? projection.lastRoll[0] + projection.lastRoll[1]
+            : null,
+      }
+    : null;
   const mobilePrimaryAnchorStyle = isMobileAnchorTray
     ? {
         position: "fixed" as const,
@@ -1978,6 +2007,7 @@ export function GamePage() {
           highlightedTileId={presentation.highlightedTileId}
           resultFeedback={boardResultFeedback}
           stageCue={boardStageCue}
+          transitionHint={boardSceneTransitionHint}
         />
       </section>
       <aside className="panel panel--room-state room-shell__rail">

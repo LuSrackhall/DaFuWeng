@@ -11,6 +11,16 @@ type BoardStageCue = {
   accentTone: "default" | "warning" | "danger" | "success" | "neutral";
 };
 
+type BoardSceneTransitionHint = {
+  transitionKey: string;
+  eventSequence: number;
+  snapshotVersion: number;
+  eventType: string;
+  actingPlayerId: string | null;
+  diceLabel: string | null;
+  diceTotal: number | null;
+};
+
 type BoardSceneProps = {
   board: BoardTile[];
   currentTurnPlayerId: string;
@@ -28,18 +38,35 @@ type BoardSceneProps = {
     tone: "default" | "warning" | "danger" | "success" | "neutral";
   } | null;
   stageCue: BoardStageCue | null;
+  transitionHint: BoardSceneTransitionHint | null;
 };
 
 type SceneAnimationCue = {
   key: string;
   startedAt: number;
   durationMs: number;
+  revealDurationMs: number;
+  moveStartMs: number;
+  moveDurationMs: number;
+  landingStartMs: number;
+  landingDurationMs: number;
+  movingPlayerId: string | null;
+  path: number[];
+  landingTileId: string | null;
+  diceLabel: string | null;
 };
 
 type SceneAnimationState = {
   progress: number;
   pulse: number;
   glowAlpha: number;
+  revealProgress: number;
+  movementProgress: number;
+  landingProgress: number;
+  movingPlayerId: string | null;
+  movingTileIndex: number | null;
+  landingTileId: string | null;
+  diceLabel: string | null;
 };
 
 type TileTrackSide = "top" | "bottom" | "left" | "right" | "corner";
@@ -248,6 +275,7 @@ function drawBoardTiles(
   tileSize: number,
   tileInnerSize: number,
   cellInset: number,
+  animationState: SceneAnimationState | null,
 ) {
   const ownerByTileId = new Map<string, PlayerState>();
   props.players.forEach((player) => {
@@ -283,16 +311,24 @@ function drawBoardTiles(
     drawTrackAccent(accentBand, tileSide, x, y, tileInnerSize, accentColor);
     root.addChild(accentBand);
 
+    const isLandingTile = animationState?.landingTileId === tile.id && animationState.landingProgress > 0;
     if (tile.id === props.highlightedTileId) {
       const highlightFrame = new Graphics();
       highlightFrame.roundRect(x - 5, y - 5, tileInnerSize + 10, tileInnerSize + 10, Math.max(12, tileSize * 0.2));
-      highlightFrame.stroke({ color: 0xf6e7af, width: 4, alpha: 0.85 });
+      highlightFrame.stroke({ color: 0xf6e7af, width: isLandingTile ? 4.8 : 4, alpha: isLandingTile ? 0.92 : 0.85 });
       root.addChild(highlightFrame);
 
       const highlightWash = new Graphics();
       highlightWash.roundRect(x + 2, y + 2, tileInnerSize - 4, tileInnerSize - 4, Math.max(8, tileSize * 0.14));
-      highlightWash.fill({ color: accentColor, alpha: 0.14 });
+      highlightWash.fill({ color: accentColor, alpha: 0.14 + (isLandingTile ? (animationState?.landingProgress ?? 0) * 0.16 : 0) });
       root.addChild(highlightWash);
+
+      if (isLandingTile) {
+        const landingPulse = new Graphics();
+        landingPulse.roundRect(x - 10, y - 10, tileInnerSize + 20, tileInnerSize + 20, Math.max(14, tileSize * 0.22));
+        landingPulse.stroke({ color: accentColor, width: 2.4, alpha: 0.38 + (animationState?.landingProgress ?? 0) * 0.2 });
+        root.addChild(landingPulse);
+      }
     }
 
     const label = new Text({ text: tile.label, style: boardLabelStyle });
@@ -341,6 +377,87 @@ function createAdaptiveTextStyle(base: TextStyle, overrides: ConstructorParamete
   });
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getTileCenter(tileIndex: number, boardX: number, boardY: number, tileSize: number) {
+  const { row, col } = getTileGridPoint(tileIndex);
+  return {
+    x: boardX + col * tileSize + tileSize / 2,
+    y: boardY + row * tileSize + tileSize / 2,
+  };
+}
+
+function getPlayerPositionMap(players: PlayerState[]) {
+  return new Map(players.map((player) => [player.id, player.position]));
+}
+
+function buildMovementPath(startPosition: number, endPosition: number, steps: number, boardSize: number) {
+  if (steps <= 0) {
+    return null;
+  }
+
+  const path = [startPosition];
+  let currentPosition = startPosition;
+
+  for (let stepIndex = 0; stepIndex < steps; stepIndex += 1) {
+    currentPosition = (currentPosition + 1) % boardSize;
+    path.push(currentPosition);
+  }
+
+  return currentPosition === endPosition ? path : null;
+}
+
+function buildSceneAnimationCue(previousProps: BoardSceneProps, nextProps: BoardSceneProps) {
+  const nextHint = nextProps.transitionHint;
+  const previousHint = previousProps.transitionHint;
+  if (!nextHint || !nextHint.diceTotal || !nextHint.diceLabel) {
+    return null;
+  }
+
+  if (!previousHint || nextHint.eventSequence !== previousHint.eventSequence + 1) {
+    return null;
+  }
+
+  const previousPositions = getPlayerPositionMap(previousProps.players);
+  const movedPlayers = nextProps.players.filter((player) => previousPositions.get(player.id) !== player.position);
+  if (movedPlayers.length > 1) {
+    return null;
+  }
+
+  const movedPlayer = movedPlayers[0] ?? null;
+  let path: number[] = [];
+  if (movedPlayer) {
+    const previousPosition = previousPositions.get(movedPlayer.id);
+    if (typeof previousPosition !== "number") {
+      return null;
+    }
+
+    const movementPath = buildMovementPath(previousPosition, movedPlayer.position, nextHint.diceTotal, nextProps.board.length);
+    if (!movementPath) {
+      return null;
+    }
+
+    path = movementPath;
+  }
+
+  return {
+    key: nextHint.transitionKey,
+    startedAt: performance.now(),
+    durationMs: movedPlayer ? 1320 : 760,
+    revealDurationMs: 280,
+    moveStartMs: 180,
+    moveDurationMs: movedPlayer ? 700 : 0,
+    landingStartMs: movedPlayer ? 860 : 280,
+    landingDurationMs: movedPlayer ? 420 : 360,
+    movingPlayerId: movedPlayer?.id ?? nextHint.actingPlayerId,
+    path,
+    landingTileId: nextProps.highlightedTileId,
+    diceLabel: nextHint.diceLabel,
+  } satisfies SceneAnimationCue;
+}
+
 function resolveSceneAnimationState(cue: SceneAnimationCue | null) {
   if (!cue) {
     return null;
@@ -352,10 +469,57 @@ function resolveSceneAnimationState(cue: SceneAnimationCue | null) {
   }
 
   const progress = elapsed / cue.durationMs;
+  const revealProgress = clamp(elapsed / cue.revealDurationMs, 0, 1);
+  const movementProgress = cue.moveDurationMs > 0
+    ? clamp((elapsed - cue.moveStartMs) / cue.moveDurationMs, 0, 1)
+    : 0;
+  const landingProgress = clamp((elapsed - cue.landingStartMs) / cue.landingDurationMs, 0, 1);
+  let movingTileIndex: number | null = null;
+
+  if (cue.path.length > 1 && movementProgress > 0) {
+    const pathIndex = Math.min(cue.path.length - 1, Math.floor(movementProgress * (cue.path.length - 1)) + 1);
+    movingTileIndex = cue.path[pathIndex] ?? cue.path.at(-1) ?? null;
+  }
+
   return {
     progress,
     pulse: Math.sin(progress * Math.PI),
     glowAlpha: (1 - progress) * 0.22,
+    revealProgress,
+    movementProgress,
+    landingProgress,
+    movingPlayerId: cue.movingPlayerId,
+    movingTileIndex,
+    landingTileId: cue.landingTileId,
+    diceLabel: cue.diceLabel,
+  };
+}
+
+function resolveAnimatedTokenPosition(
+  cue: SceneAnimationCue,
+  state: SceneAnimationState,
+  boardX: number,
+  boardY: number,
+  tileSize: number,
+) {
+  if (!cue.path.length || cue.path.length < 2 || state.movementProgress <= 0) {
+    return null;
+  }
+
+  const segmentCount = cue.path.length - 1;
+  const rawSegmentProgress = state.movementProgress * segmentCount;
+  const segmentIndex = Math.min(segmentCount - 1, Math.floor(rawSegmentProgress));
+  const segmentProgress = clamp(rawSegmentProgress - segmentIndex, 0, 1);
+  const startTile = cue.path[segmentIndex] ?? cue.path[0];
+  const endTile = cue.path[segmentIndex + 1] ?? cue.path.at(-1) ?? cue.path[0];
+  const start = getTileCenter(startTile, boardX, boardY, tileSize);
+  const end = getTileCenter(endTile, boardX, boardY, tileSize);
+  const easedProgress = 1 - (1 - segmentProgress) * (1 - segmentProgress);
+  const hop = Math.sin(segmentProgress * Math.PI) * Math.max(8, tileSize * 0.12);
+
+  return {
+    x: start.x + (end.x - start.x) * easedProgress,
+    y: start.y + (end.y - start.y) * easedProgress - hop,
   };
 }
 
@@ -426,6 +590,41 @@ function drawCenterHud(
   currentGlow.roundRect(centerX + 18, centerY + 18, centerWidth - 36, ribbonHeight, 24);
   currentGlow.fill({ color: feedbackAccent, alpha: 0.08 + (animationState?.glowAlpha ?? 0) });
   root.addChild(currentGlow);
+
+  if (animationState?.diceLabel && animationState.revealProgress < 1) {
+    const revealWidth = compactHud ? 128 : 154;
+    const revealHeight = compactHud ? 54 : 62;
+    const revealX = centerX + centerWidth / 2 - revealWidth / 2;
+    const revealY = centerY - 18;
+
+    const revealPill = new Graphics();
+    revealPill.roundRect(revealX, revealY, revealWidth, revealHeight, 22);
+    revealPill.fill({ color: 0x11261f, alpha: 0.9 });
+    revealPill.stroke({ color: feedbackAccent, width: 1.8, alpha: 0.45 + animationState.revealProgress * 0.22 });
+    root.addChild(revealPill);
+
+    const revealLabel = new Text({
+      text: "权威掷骰",
+      style: createAdaptiveTextStyle(centerChipLabelStyle, { fontSize: compactHud ? 9 : 10 }),
+    });
+    revealLabel.anchor.set(0.5, 0);
+    revealLabel.x = revealX + revealWidth / 2;
+    revealLabel.y = revealY + 10;
+    root.addChild(revealLabel);
+
+    const revealValue = new Text({
+      text: animationState.diceLabel,
+      style: createAdaptiveTextStyle(centerResultTitleStyle, {
+        fontSize: compactHud ? 20 : 24,
+        wordWrapWidth: revealWidth - 24,
+        lineHeight: compactHud ? 22 : 26,
+      }),
+    });
+    revealValue.anchor.set(0.5, 0);
+    revealValue.x = revealX + revealWidth / 2;
+    revealValue.y = revealY + 22;
+    root.addChild(revealValue);
+  }
 
   if (resultFeedback) {
     const resultBanner = new Graphics();
@@ -519,13 +718,54 @@ function drawPlayerTokens(
   boardX: number,
   boardY: number,
   tileSize: number,
+  animationCue: SceneAnimationCue | null,
+  animationState: SceneAnimationState | null,
 ) {
   const playersByPosition = new Map<number, PlayerState[]>();
   props.players.forEach((player) => {
+    if (player.id === animationState?.movingPlayerId && animationState.movementProgress > 0 && animationState.movementProgress < 1) {
+      return;
+    }
     const onTile = playersByPosition.get(player.position) ?? [];
     onTile.push(player);
     playersByPosition.set(player.position, onTile);
   });
+
+  function drawToken(player: PlayerState, tokenX: number, tokenY: number, tokenColor: number) {
+    const tokenRadius = Math.max(10, tileSize * 0.13);
+    const shadow = new Graphics();
+    shadow.circle(tokenX + 1.5, tokenY + 3, tokenRadius + 1);
+    shadow.fill({ color: 0x07120f, alpha: 0.28 });
+    root.addChild(shadow);
+
+    if (player.id === props.currentTurnPlayerId || player.id === animationState?.movingPlayerId) {
+      const ring = new Graphics();
+      ring.circle(tokenX, tokenY, tokenRadius + 7 + (player.id === animationState?.movingPlayerId ? (animationState?.pulse ?? 0) * 2 : 0));
+      ring.fill({ color: tokenColor, alpha: 0.14 + (player.id === animationState?.movingPlayerId ? (animationState?.glowAlpha ?? 0) * 0.45 : 0) });
+      ring.stroke({ color: 0xf6e7af, width: 2.5, alpha: 0.95 });
+      root.addChild(ring);
+    }
+
+    const token = new Graphics();
+    token.circle(tokenX, tokenY, tokenRadius);
+    token.fill({ color: tokenColor, alpha: player.isBankrupt ? 0.35 : 1 });
+    token.stroke({ color: 0x0f241d, width: 2, alpha: 0.84 });
+    root.addChild(token);
+
+    const tokenLabel = new Text({
+      text: player.name.slice(0, 1),
+      style: new TextStyle({
+        fontFamily: "Inter, Noto Sans SC, sans-serif",
+        fontSize: Math.max(10, tileSize * 0.13),
+        fill: 0x10251f,
+        fontWeight: "800",
+      }),
+    });
+    tokenLabel.anchor.set(0.5);
+    tokenLabel.x = tokenX;
+    tokenLabel.y = tokenY + 0.5;
+    root.addChild(tokenLabel);
+  }
 
   playersByPosition.forEach((playersOnTile, tileIndex) => {
     const { row, col } = getTileGridPoint(tileIndex);
@@ -542,47 +782,29 @@ function drawPlayerTokens(
       const paletteIndex = props.players.findIndex((candidate) => candidate.id === player.id);
       const tokenColor = playerTokenPalette[(paletteIndex >= 0 ? paletteIndex : playerIndex) % playerTokenPalette.length];
       const offset = offsets[playerIndex % offsets.length] ?? { x: 0, y: 0 };
-      const tokenRadius = Math.max(10, tileSize * 0.13);
       const tokenX = baseX + offset.x;
       const tokenY = baseY + offset.y;
-
-      const shadow = new Graphics();
-      shadow.circle(tokenX + 1.5, tokenY + 3, tokenRadius + 1);
-      shadow.fill({ color: 0x07120f, alpha: 0.28 });
-      root.addChild(shadow);
-
-      if (player.id === props.currentTurnPlayerId) {
-        const ring = new Graphics();
-        ring.circle(tokenX, tokenY, tokenRadius + 7);
-        ring.fill({ color: tokenColor, alpha: 0.14 });
-        ring.stroke({ color: 0xf6e7af, width: 2.5, alpha: 0.95 });
-        root.addChild(ring);
-      }
-
-      const token = new Graphics();
-      token.circle(tokenX, tokenY, tokenRadius);
-      token.fill({ color: tokenColor, alpha: player.isBankrupt ? 0.35 : 1 });
-      token.stroke({ color: 0x0f241d, width: 2, alpha: 0.84 });
-      root.addChild(token);
-
-      const tokenLabel = new Text({
-        text: player.name.slice(0, 1),
-        style: new TextStyle({
-          fontFamily: "Inter, Noto Sans SC, sans-serif",
-          fontSize: Math.max(10, tileSize * 0.13),
-          fill: 0x10251f,
-          fontWeight: "800",
-        }),
-      });
-      tokenLabel.anchor.set(0.5);
-      tokenLabel.x = tokenX;
-      tokenLabel.y = tokenY + 0.5;
-      root.addChild(tokenLabel);
+      drawToken(player, tokenX, tokenY, tokenColor);
     });
   });
+
+  if (animationCue && animationState?.movingPlayerId) {
+    const movingPlayer = props.players.find((player) => player.id === animationState.movingPlayerId);
+    const movingTokenPosition = resolveAnimatedTokenPosition(animationCue, animationState, boardX, boardY, tileSize);
+    if (movingPlayer && movingTokenPosition) {
+      const paletteIndex = props.players.findIndex((candidate) => candidate.id === movingPlayer.id);
+      const tokenColor = playerTokenPalette[(paletteIndex >= 0 ? paletteIndex : 0) % playerTokenPalette.length];
+      drawToken(movingPlayer, movingTokenPosition.x, movingTokenPosition.y, tokenColor);
+    }
+  }
 }
 
-function renderBoardStage(app: Application, props: BoardSceneProps, animationState: SceneAnimationState | null = null) {
+function renderBoardStage(
+  app: Application,
+  props: BoardSceneProps,
+  animationCue: SceneAnimationCue | null = null,
+  animationState: SceneAnimationState | null = null,
+) {
   const stage = app.stage;
   stage.removeChildren().forEach((child) => {
     child.destroy({ children: true });
@@ -600,9 +822,9 @@ function renderBoardStage(app: Application, props: BoardSceneProps, animationSta
   const tileInnerSize = tileSize - cellInset * 2;
 
   drawSceneBackground(root, boardX, boardY, stageSize, tileSize);
-  drawBoardTiles(root, props, boardX, boardY, tileSize, tileInnerSize, cellInset);
+  drawBoardTiles(root, props, boardX, boardY, tileSize, tileInnerSize, cellInset, animationState);
   drawCenterHud(root, props, boardX, boardY, tileSize, animationState);
-  drawPlayerTokens(root, props, boardX, boardY, tileSize);
+  drawPlayerTokens(root, props, boardX, boardY, tileSize, animationCue, animationState);
 }
 
 function BoardSceneInner(props: BoardSceneProps) {
@@ -612,6 +834,7 @@ function BoardSceneInner(props: BoardSceneProps) {
   const tickerRef = useRef<(() => void) | null>(null);
   const animationCueRef = useRef<SceneAnimationCue | null>(null);
   const animationKeyRef = useRef<string | null>(null);
+  const previousPropsRef = useRef<BoardSceneProps | null>(null);
   const latestPropsRef = useRef(props);
 
   latestPropsRef.current = props;
@@ -645,19 +868,19 @@ function BoardSceneInner(props: BoardSceneProps) {
       const canvas = app.canvas as HTMLCanvasElement;
       stableHost.appendChild(canvas);
       appRef.current = app;
-      renderBoardStage(app, latestPropsRef.current, resolveSceneAnimationState(animationCueRef.current));
+      renderBoardStage(app, latestPropsRef.current, animationCueRef.current, resolveSceneAnimationState(animationCueRef.current));
 
       const handleTick = () => {
         const animationState = resolveSceneAnimationState(animationCueRef.current);
         if (!animationState) {
           if (animationCueRef.current) {
             animationCueRef.current = null;
-            renderBoardStage(app, latestPropsRef.current, null);
+            renderBoardStage(app, latestPropsRef.current, null, null);
           }
           return;
         }
 
-        renderBoardStage(app, latestPropsRef.current, animationState);
+        renderBoardStage(app, latestPropsRef.current, animationCueRef.current, animationState);
       };
 
       app.ticker.add(handleTick);
@@ -671,7 +894,7 @@ function BoardSceneInner(props: BoardSceneProps) {
         }
         const nextSize = getHostSize(currentHostRef);
         currentApp.renderer.resize(nextSize.width, nextSize.height);
-        renderBoardStage(currentApp, latestPropsRef.current, resolveSceneAnimationState(animationCueRef.current));
+        renderBoardStage(currentApp, latestPropsRef.current, animationCueRef.current, resolveSceneAnimationState(animationCueRef.current));
       });
 
       observer.observe(stableHost);
@@ -698,30 +921,29 @@ function BoardSceneInner(props: BoardSceneProps) {
 
   useEffect(() => {
     if (appRef.current) {
-      renderBoardStage(appRef.current, props, resolveSceneAnimationState(animationCueRef.current));
+      renderBoardStage(appRef.current, props, animationCueRef.current, resolveSceneAnimationState(animationCueRef.current));
     }
-  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback, props.stageCue]);
+  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback, props.stageCue, props.transitionHint]);
 
   useEffect(() => {
-    const nextAnimationKey = props.resultFeedback && props.resultFeedback.diceLabel
-      ? `${props.resultFeedback.title}|${props.resultFeedback.diceLabel}|${props.highlightedTileId ?? ""}`
-      : null;
+    const previousProps = previousPropsRef.current;
+    if (previousProps) {
+      const nextAnimationKey = props.transitionHint?.transitionKey ?? null;
+      if (nextAnimationKey && nextAnimationKey !== animationKeyRef.current) {
+        const nextCue = buildSceneAnimationCue(previousProps, props);
+        if (nextCue) {
+          animationKeyRef.current = nextAnimationKey;
+          animationCueRef.current = nextCue;
 
-    if (!nextAnimationKey || nextAnimationKey === animationKeyRef.current) {
-      return;
+          if (appRef.current) {
+            renderBoardStage(appRef.current, props, animationCueRef.current, resolveSceneAnimationState(animationCueRef.current));
+          }
+        }
+      }
     }
 
-    animationKeyRef.current = nextAnimationKey;
-    animationCueRef.current = {
-      key: nextAnimationKey,
-      startedAt: performance.now(),
-      durationMs: 920,
-    };
-
-    if (appRef.current) {
-      renderBoardStage(appRef.current, props, resolveSceneAnimationState(animationCueRef.current));
-    }
-  }, [props.resultFeedback, props.highlightedTileId]);
+    previousPropsRef.current = props;
+  }, [props.players, props.highlightedTileId, props.resultFeedback, props.transitionHint]);
 
   const currentPlayerName = props.players.find((player) => player.id === props.currentTurnPlayerId)?.name ?? "未知玩家";
   const highlightedTileLabel = props.highlightedTileId
