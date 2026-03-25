@@ -22,6 +22,7 @@
 - updated `CHANGELOG.md`
 - generated GitHub Release notes
 - release summary artifact for marketing and post-release communication
+- engineering evidence appendix derived from CI release-evidence artifact content
 
 ## Role Handoff
 

@@ -24,3 +24,4 @@ name: "Testing And Release Instruction"
 - Marketing copy and changelog text should be generated from the release context, not written by hand each time.
 - Pull requests for substantial work should summarize the completed slice, quality evidence, remaining risks, and next-step recommendations in a stable template that CI can validate.
 - The repository should declare stable required status checks for main branch protection in versioned policy, and CI should generate release evidence artifacts on successful pushes to main without changing the release trigger chain.
+- The release workflow should consume CI release-evidence artifacts as soft engineering context, append them to release summaries, and keep semantic version inference unchanged.

@@ -1,9 +1,12 @@
 {
   "version": 1,
   "policyName": "release-evidence-policy",
+  "artifactName": "release-evidence",
   "outputDirectory": ".artifacts/release-evidence",
   "jsonFileName": "release-evidence.json",
   "markdownFileName": "release-evidence.md",
+  "summaryMarkdownFileName": "release-evidence-summary.md",
+  "summaryHeading": "## Engineering Evidence",
   "governancePolicyPath": ".github/policies/pr-iteration-governance.json",
   "requiredTopLevelFields": [
     "sourceKind",

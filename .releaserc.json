@@ -20,10 +20,16 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "printf '# Release Summary\n\nVersion: ${nextRelease.version}\n\n${nextRelease.notes}' > release-notes.md"
+        "prepareCmd": "printf '# Release Summary\n\nVersion: ${nextRelease.version}\n\n${nextRelease.notes}\n' > release-notes.md && if [ -f .artifacts/release-evidence/release-evidence-summary.md ]; then printf '\n' >> release-notes.md && cat .artifacts/release-evidence/release-evidence-summary.md >> release-notes.md; fi"
       }
     ],
     "@semantic-release/github",
+    [
+      "@semantic-release/exec",
+      {
+        "publishCmd": "python3 .github/hooks/scripts/publish_github_summary.py ${nextRelease.gitTag}"
+      }
+    ],
     [
       "@semantic-release/git",
       {

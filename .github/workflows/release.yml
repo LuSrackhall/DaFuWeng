@@ -23,6 +23,13 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10.6.5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Consume release evidence artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/hooks/scripts/consume_release_evidence.py
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -33,3 +40,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm release
+      - name: Upload release summary artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-summary
+          path: |
+            release-notes.md
+            .artifacts/release-evidence/release-evidence-summary.md

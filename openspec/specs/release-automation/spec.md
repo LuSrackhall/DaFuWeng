@@ -99,3 +99,21 @@ The system SHALL generate structured release evidence artifacts during successfu
 
 - **WHEN** the core ci jobs complete successfully on a push to main
 - **THEN** ci SHALL generate machine-readable and human-readable release evidence artifacts for later release automation consumption
+
+## Requirement: Release automation consumes CI release evidence artifacts
+
+The system SHALL consume the triggering ci run's release-evidence artifact during release automation and turn it into an engineering evidence appendix.
+
+### Scenario: Release workflow starts after ci success
+
+- **WHEN** the release workflow runs after a successful ci workflow_run on main
+- **THEN** it SHALL attempt to download the triggering ci run's release-evidence artifact and prepare an engineering evidence summary appendix for the release workspace
+
+## Requirement: Published releases include engineering evidence context
+
+The system SHALL append the engineering evidence summary appendix to the local release summary and the published GitHub Release body when available.
+
+### Scenario: Release publication succeeds
+
+- **WHEN** semantic-release publishes a versioned GitHub Release
+- **THEN** the release process SHALL add the engineering evidence appendix to the local release summary and to the published GitHub Release body without altering semantic version inference
