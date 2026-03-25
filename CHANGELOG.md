@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.15.0...v1.16.0) (2026-03-25)
+
+
+### Features
+
+* 增加棋盘回合接管提示与可访问性断言 ([e6e65df](https://github.com/LuSrackhall/DaFuWeng/commit/e6e65dfa2418e3de41ef93dd14b2d3c611648895))
+
 # [1.15.0](https://github.com/LuSrackhall/DaFuWeng/compare/v1.14.0...v1.15.0) (2026-03-24)
 
 
