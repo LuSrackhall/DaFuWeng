@@ -59,6 +59,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
         self.assertIn("Monopoly Rules Expert", state["requiredRoles"])
         self.assertIn("Monopoly UI UX Pro Max", state["requiredRoles"])
         self.assertIn("Monopoly Documentation Owner", state["requiredRoles"])
+        self.assertIn("Monopoly Full-Stack Performance Expert", state["requiredRoles"])
         self.assertIn("Monopoly Versioning Manager", state["requiredRoles"])
         self.assertNotIn("Monopoly Pixi Scene Engineer", state["requiredRoles"])
 
@@ -96,6 +97,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
         self.assertIn("Monopoly UI UX Pro Max", state["requiredRoles"])
         self.assertIn("Monopoly Rules Expert", state["requiredRoles"])
         self.assertIn("Monopoly Documentation Owner", state["requiredRoles"])
+        self.assertIn("Monopoly Full-Stack Performance Expert", state["requiredRoles"])
         self.assertIn("Monopoly Versioning Manager", state["requiredRoles"])
 
     def test_commit_is_denied_when_documentation_owner_is_missing(self) -> None:
@@ -132,6 +134,41 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             result["hookSpecificOutput"]["permissionDecisionReason"],
         )
 
+    def test_commit_is_denied_when_performance_role_is_missing(self) -> None:
+        state = role_rotation_state.init_state(
+            "implementation",
+            "2026-03-22-enforce-multi-agent-rotation",
+            "test",
+        )
+        for role in [
+            "GitHub Copilot Workflow Expert",
+            "Monopoly Product Manager",
+            "Monopoly UI UX Director",
+            "Monopoly UI UX Pro Max",
+            "Monopoly Rules Expert",
+            "Monopoly Tech Lead",
+            "Monopoly Senior Implementer",
+            "Monopoly Documentation Owner",
+            "Monopoly QA Lead",
+            "Monopoly Simulated Player",
+            "Monopoly Versioning Manager",
+        ]:
+            state = role_rotation_state.complete_role(role, "ready")
+
+        result = self.run_policy(
+            {"command": 'git commit -m "feat: 完成门禁测试"'},
+            state,
+        )
+
+        self.assertEqual(
+            result["hookSpecificOutput"]["permissionDecision"],
+            "deny",
+        )
+        self.assertIn(
+            "Monopoly Full-Stack Performance Expert",
+            result["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
     def test_edit_is_denied_when_workflow_is_uninitialized(self) -> None:
         result = self.run_policy(
             {"tool": "apply_patch", "input": "*** Begin Patch\n*** Add File: demo.txt\n+demo\n*** End Patch"},
@@ -160,6 +197,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "Monopoly UI UX Pro Max",
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
+            "Monopoly Full-Stack Performance Expert",
             "Monopoly Senior Implementer",
             "Monopoly Documentation Owner",
             "Monopoly QA Lead",
@@ -194,6 +232,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "Monopoly UI UX Pro Max",
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
+            "Monopoly Full-Stack Performance Expert",
             "Monopoly Senior Implementer",
             "Monopoly Documentation Owner",
             "Monopoly QA Lead",
@@ -225,6 +264,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "Monopoly UI UX Pro Max",
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
+            "Monopoly Full-Stack Performance Expert",
             "Monopoly Senior Implementer",
             "Monopoly Documentation Owner",
             "Monopoly QA Lead",
@@ -260,6 +300,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "Monopoly UI UX Pro Max",
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
+            "Monopoly Full-Stack Performance Expert",
             "Monopoly Senior Implementer",
             "Monopoly Documentation Owner",
             "Monopoly QA Lead",

@@ -53,8 +53,9 @@
 - Use `python3 .github/hooks/scripts/role_rotation.py status --json` whenever you need to inspect the remaining workflow gates.
 - In every conversation, explicitly clarify current progress and provide a role-by-role summary of which AI roles or subagents were used, what each one did, and which work remained with the main coding agent.
 - If no extra AI roles were used in the round, state that explicitly in the progress summary.
-- For Monopoly gameplay changes, prefer the sequence Product Manager -> UI UX Director -> Monopoly UI UX Pro Max -> Monopoly Rules Expert -> Tech Lead -> Senior Implementer -> QA Lead -> Simulated Player, with Monopoly Pixi Scene Engineer added when Pixi scene work is central.
+- For Monopoly gameplay changes, prefer the sequence Product Manager -> UI UX Director -> Monopoly UI UX Pro Max -> Monopoly Rules Expert -> Tech Lead -> Monopoly Full-Stack Performance Expert -> Senior Implementer -> QA Lead -> Simulated Player, with Monopoly Pixi Scene Engineer added when Pixi scene work is central.
 - For any substantial round, include `Monopoly Documentation Owner` before commit or release handoff so README and official documentation impact is explicitly reviewed.
+- For substantial gameplay, architecture, or workflow rounds, include `Monopoly Full-Stack Performance Expert` before commit or release handoff so performance and memory risks are explicitly reviewed.
 - UI and UX work must use `.github/prompts/ui-ux-pro-max/` as a formal workflow asset, either through Monopoly UI UX Pro Max or as a mandatory reference for Monopoly UI UX Director.
 - Before commit or release handoff, use Monopoly Versioning Manager to review semantic version impact, commit classification, and release facts.
 - Every final response must end with a dedicated Closing Guidance block as the absolute last section of the message; no content may appear after this block.
@@ -85,7 +86,11 @@
 ## Testing And Quality
 
 - Use unit tests for rule engines, rent calculation, movement, cards, jail rules, auctions, bankruptcy, and save or replay logic.
+- Treat unit tests as the default fast regression layer for deterministic rules and projection logic; do not rely on Playwright as the primary regression surface for those behaviors.
+- Every non-trivial feature or refactor must explicitly judge whether unit, integration, and E2E coverage are up to date, and whether failing tests indicate stale tests, stale specs, or business-logic regressions.
+- Prefer fixing business logic when a failure breaks a confirmed product or OpenSpec contract; update tests when a confirmed contract changed or a test is coupled to non-contract implementation details.
 - Use Playwright for end-to-end flows such as room creation, matchmaking or invite flow, turn progression, property purchase, rent payment, chance or community chest resolution, reconnection, and settlement.
+- Use integration tests for authoritative command validation, persistence, idempotency, reconnect, and snapshot recovery boundaries.
 - Treat pre-release playtesting as required work, not optional polish.
 
 ## Release And Automation

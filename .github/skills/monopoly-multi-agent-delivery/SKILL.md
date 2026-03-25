@@ -38,40 +38,44 @@ This skill must respect the repository's continuous iteration policy.
    - Call the `Monopoly Rules Expert` agent to validate that proposal, design, and specs still fit the classic Monopoly mental model.
 6. Lock the technical shape.
    - Call the `Monopoly Tech Lead` agent to define architecture slices, state boundaries, and automation impact.
-7. Route through OpenSpec.
+7. Review performance risk before implementation deepens.
+   - Use the `Monopoly Full-Stack Performance Expert` agent for substantial rounds that may affect rendering cost, memory pressure, recovery latency, event volume, or long-session stability.
+8. Route through OpenSpec.
    - Create or continue an OpenSpec change before substantial implementation.
    - Ensure proposal, design, and tasks are present before code-heavy work begins.
-8. Add Pixi specialization when board rendering is central.
+9. Add Pixi specialization when board rendering is central.
    - Call the `Monopoly Pixi Scene Engineer` agent when the task primarily concerns Pixi scene structure, camera movement, piece animation, or canvas performance.
-9. Implement in thin slices.
+10. Implement in thin slices.
    - Use the `Monopoly Senior Implementer` agent for code changes and validation.
-10. Build the quality gate.
+11. Build the quality gate.
    - Use the `Monopoly QA Lead` agent to define or review unit, integration, and Playwright coverage.
-11. Review long-lived documentation impact.
+   - Require an explicit verdict on whether any of those layers are lagging and whether failing checks imply stale tests or business-logic regressions.
+12. Review long-lived documentation impact.
    - Use the `Monopoly Documentation Owner` agent every substantial round to decide whether README or official docs must be updated.
    - Record an explicit "updated" or "checked and no changes needed" conclusion before commit.
-12. Simulate the player experience.
+13. Simulate the player experience.
    - Use the `Monopoly Simulated Player` agent before tagging or declaring a milestone ready.
-13. Wait for user confirmation when the change is user-facing or milestone-like.
+14. Wait for user confirmation when the change is user-facing or milestone-like.
    - Treat user approval as a release or commit boundary, not as an AI specialist role.
-14. Review version impact before commit or release handoff.
+15. Review version impact before commit or release handoff.
    - Use the `Monopoly Versioning Manager` agent to confirm semantic version impact, commit classification, and changelog-ready release facts.
-15. Start with workspace hygiene.
+16. Start with workspace hygiene.
    - Check git status before new implementation work.
    - If completed agent-owned work is still uncommitted, decide whether to commit and push it before starting the next slice.
    - Keep unrelated user changes out of agent commits and report them explicitly.
-16. Record the workflow state after every role handoff.
+17. Record the workflow state after every role handoff.
    - After each required role or waiver decision, run `.github/hooks/scripts/role_rotation.py complete --role "<role name>" --note "<summary>"` or `.github/hooks/scripts/role_rotation.py waive --role "<role name>" --reason "<reason>"`.
    - Use `.github/hooks/scripts/role_rotation.py status --json` before editing, committing, or preparing release work.
-17. Close the loop with management reporting.
+18. Close the loop with management reporting.
    - In progress updates and the final summary, include a role-by-role account of which AI roles were used, what each one contributed, and which work remained with the main coding agent.
    - If no supporting roles were used, state that explicitly.
-18. Use repository-friendly commits.
+19. Use repository-friendly commits.
    - Prefer conventional commit messages with Chinese subjects when committing implementation slices.
 
 ## Role Boundary Reminder
 
 - `Monopoly Documentation Owner` is now an every-round governance checkpoint for substantial work.
+- `Monopoly Full-Stack Performance Expert` is a fixed workflow role for substantial rounds, while `Monopoly Pixi Scene Engineer` remains a specialized opt-in role when board rendering is central.
 - `Monopoly Release Marketer` still exists, but it remains a release and external-facing messaging role rather than an implementation-round default gate.
 
 ## Output

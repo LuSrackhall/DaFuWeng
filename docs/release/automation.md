@@ -28,6 +28,8 @@
 
 ## Role Handoff
 
-- `Monopoly QA Lead` and `Monopoly Simulated Player` provide quality and experience gates.
+- `Monopoly QA Lead` provides the quality gate, including an explicit verdict on whether unit, integration, and Playwright coverage are current enough for the slice.
+- `Monopoly Full-Stack Performance Expert` provides a performance and memory-risk gate for slices that can affect runtime cost, recovery latency, or long-session stability.
+- `Monopoly Simulated Player` provides the player-experience gate after objective quality evidence is in place.
 - `Monopoly Versioning Manager` converts validated scope into semantic version and changelog facts.
 - `Monopoly Release Marketer` consumes those facts to produce Chinese and English release messaging.

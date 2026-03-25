@@ -17,3 +17,5 @@ description: "Use when planning or implementing any substantial Monopoly, 大富
 - Define how the change impacts multiplayer fairness, reconnection, turn order, and anti-desync guarantees.
 - Describe whether the change affects board data, cards, economy tuning, animation, onboarding, or monetizable future surfaces.
 - Call out backward compatibility for saved rooms, replay records, or PocketBase collections.
+- For substantial changes, explicitly state which risks belong in unit tests, which belong in integration tests, and which still require Playwright.
+- Call out whether existing automated coverage is current or lagging, and whether the slice introduces any performance or memory-sensitive paths that need dedicated review.

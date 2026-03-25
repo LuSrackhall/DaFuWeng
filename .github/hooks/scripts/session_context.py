@@ -30,6 +30,8 @@ def main() -> None:
         "start every conversation by checking git status; proactively decide whether completed agent-owned work should be committed and pushed; "
         "prefer conventional commit messages with Chinese subjects; and report round progress with a role-by-role summary of every AI agent or subagent used. "
         "Monopoly Documentation Owner must review every substantial round and explicitly decide whether README or official docs need updates. "
+        "Monopoly Full-Stack Performance Expert must review substantial rounds for performance and memory risks unless explicitly waived. "
+        "Monopoly QA Lead must explicitly judge whether unit, integration, and E2E coverage are current or lagging, and E2E should not be treated as the primary regression layer. "
         "Monopoly Release Marketer still exists and remains a release or external-facing messaging role, not an every-round implementation gate. "
         "This repository now enforces multi-agent role rotation for substantial work. Before any repository edit, commit, push, or release-like action, initialize workflow state with `python3 .github/hooks/scripts/role_rotation.py init --mode <planning|implementation|release> --change <active-change>` and then record each required role using `complete` or `waive`. Use `python3 .github/hooks/scripts/role_rotation.py status --json` to inspect missing gates."
     )

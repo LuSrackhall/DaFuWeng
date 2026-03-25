@@ -12,10 +12,12 @@ name: "Testing And Release Instruction"
 
 ## Test Strategy
 
-- Unit tests should cover deterministic game rules exhaustively.
-- Integration tests should cover backend command validation, PocketBase collection interactions, and reconnect flows.
-- Playwright should cover the user-critical happy paths plus at least one recovery path for disconnect or refresh.
+- Unit tests should be the primary fast feedback layer for deterministic game rules, state machines, and projection logic.
+- Integration tests should cover backend command validation, PocketBase collection interactions, idempotency, persistence, and reconnect flows.
+- Playwright should cover the user-critical happy paths plus at least one recovery path for disconnect or refresh, but it should not be treated as the primary regression layer for deterministic business logic.
 - A feature is not ready for release if its primary loop cannot be exercised in automated tests.
+- Every non-trivial feature, fix, or refactor must explicitly assess whether unit, integration, and E2E coverage are current or lagging.
+- When tests fail, first judge whether the failure breaks a confirmed contract or only a stale test assumption. Confirmed contract breaks should default to business-logic fixes; changed contracts or over-coupled tests should update the relevant tests.
 
 ## Workflow Expectations
 

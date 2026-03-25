@@ -25,25 +25,28 @@
    - 负责审查 OpenSpec 和功能设计是否符合经典大富翁的规则心智、公平性、节奏与经济压力。
 5. `Monopoly Tech Lead`
    - 负责架构边界、前后端职责、状态流、自动化与切片策略。
-6. `Monopoly Pixi Scene Engineer`
+6. `Monopoly Full-Stack Performance Expert`
+   - 负责性能预算、内存占用、长局退化、同步链路热点与跨端性能风险审查；不适用时也必须显式豁免。
+7. `Monopoly Pixi Scene Engineer`
    - 仅当任务以棋盘渲染、镜头、棋子动画、Pixi 场景结构或画布性能为中心时启用。
-7. `Monopoly Senior Implementer`
+8. `Monopoly Senior Implementer`
    - 负责实现与最小闭环验证。
-8. `Monopoly QA Lead`
+9. `Monopoly QA Lead`
    - 负责单测、集成、Playwright、回归风险与发布阻断判断。
-9. `Monopoly Documentation Owner`
+   - 每轮都要显式判断单元测试、集成测试、E2E 是否落后于实现，并说明该改测试还是该改业务逻辑。
+10. `Monopoly Documentation Owner`
    - 每轮都要检查 README 与官方文档是否需要同步更新；即使本轮无需改动，也必须形成明确结论。
-10. `Monopoly Simulated Player`
+11. `Monopoly Simulated Player`
    - 使用浏览器交互工具进行实际游玩与体验反馈。
    - 如可用，优先通过 `mcp_microsoft_pla_browser_click` 及相关浏览器工具执行游玩路径。
-11. 用户确认
+12. 用户确认
    - 若用户提出意见，回到相应上游角色重新走流程。
    - 若用户认可结果，进入提交与版本阶段。
-12. `Monopoly Versioning Manager`
+13. `Monopoly Versioning Manager`
    - 负责 conventional commits、semver 影响、changelog 事实、tag 与发布治理审查。
-13. Git 提交与推送
+14. Git 提交与推送
    - 仅在 workflow gate 满足后执行。
-14. `Monopoly Release Marketer`
+15. `Monopoly Release Marketer`
    - 该角色并未移除；仅在准备发版或外宣文案时介入，基于版本事实输出中英文营销文案与更新说明。
 
 ## 强制执行要求
@@ -83,5 +86,6 @@ python3 .github/hooks/scripts/role_rotation.py status --json
 - 每轮汇报必须包含角色分工总结：用了哪些角色、各自做了什么、哪些由主代理完成。
 - 若本轮没有调用额外角色，也要明确说明。
 - 每轮汇报必须明确说明是否已检查 README 与官方文档同步需求，以及本轮是否进行了相应更新。
+- 每轮汇报必须明确说明单元、集成、E2E 三层里哪些已覆盖、哪些落后，以及当前更应修改测试还是修改业务逻辑。
 - 若本轮未调用 `Monopoly Release Marketer`，应明确说明其未介入是因为本轮并非发布或外宣切片，而不是因为角色缺失。
 - 如果准备提交，先说明提交原因、涉及文件、验证结果，再执行提交。
