@@ -9,6 +9,14 @@ user-invocable: true
 
 Use this skill when a feature or milestone needs coordinated execution with minimal user involvement.
 
+## Continuous Iteration Policy
+
+This skill must respect the repository's continuous iteration policy.
+
+- Treat continuous iteration policy as the default delivery posture until the current slice is fully landed and validated.
+- After each completed slice, propose several concrete next steps, but never weaken validation or product quality.
+- Use careful thinking, deep research, and end-to-end completion before handing work back.
+
 ## When To Use
 
 - A new gameplay feature needs to move from idea to implementation.

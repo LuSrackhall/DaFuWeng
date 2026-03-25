@@ -26,6 +26,14 @@
 
 ## AI Workflow Rules
 
+- Persistent user delivery policy:
+  - 请持续不断地迭代我们的大富翁项目, 如果可以的话, 每次完成推进任务后, 请尽可能多给几步之后工作的推荐建议, 但千万不要影响迭代质量, 这样我们才能保证进度的同时不影响产品落地。
+  - 请仔细思考, 深度研究, 确保完美完成任务
+- Operationalize the persistent delivery policy by default:
+  - Keep iterating in concrete slices until the current slice is fully implemented and validated.
+  - After each completed slice, propose several concrete next steps, but never weaken validation or product quality to increase suggestion count.
+  - Treat careful thinking, deep research, and end-to-end completion as required behavior for implementation, not optional polish.
+
 - At the start of every new conversation, check the git working tree before proposing or implementing new work.
 - If previously completed implementation work is still uncommitted and it belongs to the current coding agent, decide proactively whether to commit and push it instead of waiting for the user to ask.
 - Do not mix unrelated user-owned local edits into agent commits. If the workspace is dirty because of unrelated changes, commit only the files that belong to the current slice and report the remaining dirty paths clearly.

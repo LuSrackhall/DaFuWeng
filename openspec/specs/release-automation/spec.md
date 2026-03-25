@@ -36,3 +36,17 @@ The system MUST publish tags, GitHub Releases, and associated notes through auto
 #### Scenario: Release notes need player-facing messaging
 - **WHEN** automated release notes are produced
 - **THEN** the release process SHALL support combining engineering change summaries with player-facing update copy in the generated release output
+
+### Requirement: CI validates persistent agent delivery policy wiring
+The system SHALL validate persistent repository-level agent delivery policy wiring in GitHub Actions before release jobs are eligible to run.
+
+#### Scenario: Validation workflow runs
+- **WHEN** the main CI workflow evaluates a revision
+- **THEN** it SHALL verify that the repository's persistent agent delivery policy source and required guidance targets remain synchronized
+
+### Requirement: Local session-start messaging inherits the persistent policy summary
+The system SHALL surface the persistent agent delivery policy summary during local session initialization.
+
+#### Scenario: A local agent session starts
+- **WHEN** the repository session-start hook runs
+- **THEN** it SHALL include a concise summary of the persistent agent delivery policy in the emitted system message
