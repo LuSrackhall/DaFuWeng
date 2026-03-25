@@ -2862,6 +2862,7 @@ test("declined property enters a readable live auction stage across two pages", 
 
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
   await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", new RegExp(`阶段收束 公开拍卖已结束，玩家乙 竞得 ${propertyDecision.label}`));
   await expect(guestPage.getByText(/现金: 1449/)).toBeVisible();
   await expect(guestPage.getByText(/地产: 1/)).toBeVisible();
 
@@ -2897,6 +2898,7 @@ test("unsold auction uses a neutral result card and board semantics", async ({
   await expect(page.getByText(/没有玩家接手这块地产，产权仍保持未售出状态。/)).toBeVisible();
   await expect(page.locator(".stage-card--neutral").getByText(`${propertyDecision.label} 本轮流拍`)).toBeVisible();
   await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", new RegExp(`最近结果 ${propertyDecision.label} 本轮流拍`));
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", new RegExp(`阶段收束 公开拍卖已结束，${propertyDecision.label} 本轮流拍`));
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
   await page.reload();
@@ -2995,6 +2997,7 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
   await expect(page.getByText(/成交后现金:/).first()).toBeVisible();
   await expect(page.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
   await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /最近结果 玩家乙 接受了 房主甲 的交易报价/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /阶段收束 交易回应已结束，玩家乙 接受了 房主甲 的交易报价/);
   await expect(guestPage.getByText("交易已成交", { exact: true })).toBeVisible();
   await expect(guestPage.getByText(/接受了 房主甲 的交易报价/)).toBeVisible();
   await expect(spectatorPage.getByText("交易已成交", { exact: true })).toBeVisible();
@@ -3059,6 +3062,7 @@ test("rejected trade shows a recovery card and restores the proposer's turn", as
   await expect(page.locator(".trade-rejection-card")).toHaveClass(/stage-card--neutral/);
   await expect(page.getByText(/没有发生任何现金、地产或卡牌转移/)).toBeVisible();
   await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /最近结果 玩家乙 拒绝了 房主甲 的交易报价/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /阶段收束 交易回应已结束，玩家乙 拒绝了 房主甲 的交易报价/);
   await expect(page.getByText(/房主甲 继续这一回合/)).toBeVisible();
   await expect(page.getByText(/房主甲 原本想交出/)).toBeVisible();
   await expect(guestPage.getByText("交易未成交", { exact: true })).toBeVisible();
@@ -3247,6 +3251,7 @@ test("deficit recovery panel shows mortgage impact and resolves through the reco
 
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
   await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /棋盘后果 房主甲 向银行支付税费 200/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /阶段收束 欠款阶段已结束，房主甲 已补齐 200 税费/);
   await expect(page.getByText(/现金: 145/)).toBeVisible();
   await expect(page.getByText(/抵押: 1/)).toBeVisible();
 });

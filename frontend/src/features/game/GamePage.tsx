@@ -79,6 +79,21 @@ type BoardPhaseFocusCue = {
   anchorTileId: string | null;
 };
 
+type BoardPhaseClosureCue = {
+  key: string;
+  phaseKind: "auction" | "trade-response" | "deficit";
+  resolutionKind: "settled" | "unsold" | "accepted" | "rejected" | "resolved";
+  tone: BoardResultFeedbackTone;
+  closureLabel: string;
+  headline: string;
+  detail: string;
+  resumeLabel: string;
+  ariaSummary: string;
+  primaryPlayerId: string | null;
+  secondaryPlayerId: string | null;
+  anchorTileId: string | null;
+};
+
 function buildBoardTurnHandoffStage(turnState: string, playerName: string, pendingActionLabel: string) {
   switch (turnState) {
     case "awaiting-roll":
@@ -1234,6 +1249,127 @@ export function GamePage() {
 
     return null;
   })();
+  const boardPhaseClosureCue: BoardPhaseClosureCue | null = (() => {
+    const resumeStage = buildBoardTurnHandoffStage(
+      projection.turnState,
+      projection.currentTurnPlayerName,
+      projection.pendingActionLabel,
+    );
+    const latestAuctionSettledEvent = [...projection.recentEvents]
+      .filter((event) => event.type === "auction-settled")
+      .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+    const latestDeficitStart = [...projection.recentEvents]
+      .filter((event) => event.type === "deficit-started")
+      .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+
+    if (latestAuctionSettledEvent?.playerId && projection.pendingAuction === null && projection.turnState !== "awaiting-auction") {
+      const winnerName = projection.players.find((player) => player.id === latestAuctionSettledEvent.playerId)?.name ?? "当前玩家";
+      const tileLabel = latestAuctionSettledEvent.tileLabel ?? "当前拍品";
+      const amount = latestAuctionSettledEvent.amount ?? latestAuctionSettledEvent.tilePrice ?? 0;
+
+      return {
+        key: `${latestAuctionSettledEvent.sequence}:${latestAuctionSettledEvent.type}:closure`,
+        phaseKind: "auction",
+        resolutionKind: "settled",
+        tone: "success",
+        closureLabel: "拍卖收束",
+        headline: `${winnerName} 竞得 ${tileLabel}`,
+        detail: `${tileLabel} 已按 ${amount} 成交，公开拍卖已经结束。`,
+        resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
+        ariaSummary: `公开拍卖已结束，${winnerName} 竞得 ${tileLabel}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        primaryPlayerId: latestAuctionSettledEvent.playerId,
+        secondaryPlayerId: null,
+        anchorTileId: latestAuctionSettledEvent.tileId ?? null,
+      };
+    }
+
+    if (projection.latestSettlementSummary?.kind === "auction-unsold") {
+      return {
+        key: `${projection.snapshotVersion}:${projection.eventSequence}:auction-closure`,
+        phaseKind: "auction",
+        resolutionKind: "unsold",
+        tone: "neutral",
+        closureLabel: "拍卖收束",
+        headline: projection.latestSettlementSummary.title,
+        detail: projection.latestSettlementSummary.detail,
+        resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
+        ariaSummary: `公开拍卖已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        primaryPlayerId: projection.currentTurnPlayerId,
+        secondaryPlayerId: null,
+        anchorTileId: presentation.highlightedTileId,
+      };
+    }
+
+    if (
+      projection.latestSettlementSummary?.kind === "trade-accepted"
+      && latestProjectionEvent?.type === "trade-accepted"
+    ) {
+      return {
+        key: `${projection.snapshotVersion}:${projection.eventSequence}:trade-accepted-closure`,
+        phaseKind: "trade-response",
+        resolutionKind: "accepted",
+        tone: "success",
+        closureLabel: "交易收束",
+        headline: projection.latestSettlementSummary.title,
+        detail: projection.latestSettlementSummary.detail,
+        resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
+        ariaSummary: `交易回应已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        primaryPlayerId: latestProjectionEvent.playerId ?? null,
+        secondaryPlayerId: latestProjectionEvent.ownerPlayerId ?? null,
+        anchorTileId: latestProjectionEvent.transferredPropertyIds?.[0] ?? latestProjectionEvent.requestedTileIds?.[0] ?? latestProjectionEvent.offeredTileIds?.[0] ?? null,
+      };
+    }
+
+    if (
+      projection.latestSettlementSummary?.kind === "trade-rejected"
+      && latestProjectionEvent?.type === "trade-rejected"
+    ) {
+      return {
+        key: `${projection.snapshotVersion}:${projection.eventSequence}:trade-rejected-closure`,
+        phaseKind: "trade-response",
+        resolutionKind: "rejected",
+        tone: "neutral",
+        closureLabel: "交易收束",
+        headline: projection.latestSettlementSummary.title,
+        detail: projection.latestSettlementSummary.detail,
+        resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
+        ariaSummary: `交易回应已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        primaryPlayerId: latestProjectionEvent.playerId ?? null,
+        secondaryPlayerId: latestProjectionEvent.ownerPlayerId ?? null,
+        anchorTileId: latestProjectionEvent.requestedTileIds?.[0] ?? latestProjectionEvent.offeredTileIds?.[0] ?? null,
+      };
+    }
+
+    if (
+      latestProjectionEvent?.type === "tax-paid"
+      && latestDeficitStart
+      && projection.pendingPayment === null
+      && latestProjectionEvent.sequence - latestDeficitStart.sequence <= 3
+    ) {
+      const actorName = latestProjectionEvent.playerId
+        ? projection.players.find((player) => player.id === latestProjectionEvent.playerId)?.name ?? projection.currentTurnPlayerName
+        : projection.currentTurnPlayerName;
+      const amount = latestProjectionEvent.amount ?? latestDeficitStart.amount ?? 0;
+      const reasonLabel = buildPaymentReasonLabel("tax");
+
+      return {
+        key: `${latestProjectionEvent.sequence}:${latestProjectionEvent.type}:closure`,
+        phaseKind: "deficit",
+        resolutionKind: "resolved",
+        tone: "success",
+        closureLabel: "恢复完成",
+        headline: `${actorName} 已补齐 ${amount} ${reasonLabel}`,
+        detail: "本次高压欠款阶段已经结束，棋盘会退回正常回合推进。",
+        resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
+        ariaSummary: `欠款阶段已结束，${actorName} 已补齐 ${amount} ${reasonLabel}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        primaryPlayerId: latestProjectionEvent.playerId ?? projection.currentTurnPlayerId,
+        secondaryPlayerId: null,
+        anchorTileId: latestProjectionEvent.tileId ?? latestDeficitStart.tileId ?? null,
+      };
+    }
+
+    return null;
+  })();
   const mobilePrimaryAnchorStyle = isMobileAnchorTray
     ? {
         position: "fixed" as const,
@@ -2272,6 +2408,7 @@ export function GamePage() {
           consequenceHint={boardConsequenceCue}
           handoffHint={boardTurnHandoffCue}
           phaseFocusHint={boardPhaseFocusCue}
+          phaseClosureHint={boardPhaseClosureCue}
         />
       </section>
       <aside className="panel panel--room-state room-shell__rail">
