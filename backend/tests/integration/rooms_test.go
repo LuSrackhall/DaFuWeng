@@ -962,6 +962,162 @@ func TestImprovedRentCanEnterDeficitRecovery(t *testing.T) {
 	}
 }
 
+func TestRentDeficitCanBeResolvedByMortgage(t *testing.T) {
+	_, mux, dataPath := newServiceForTestWithDice(t, [2]int{1, 1})
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Properties = []string{"tile-1"}
+		players[1].Position = 39
+		players[1].Cash = 0
+		players[1].Properties = []string{"tile-39"}
+		return players
+	})
+	mutateRoomSnapshot(t, dataPath, roomID, func(snapshot *pocketbase.PersistedRoomSnapshot) {
+		snapshot.CurrentTurnPlayerID = secondPlayerID
+	})
+	mux = reloadMuxWithDice(t, dataPath, [2]int{1, 1})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-mortgage-roll"})
+	rollRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(rollRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, secondPlayerID)))
+	if rollRecorder.Code != http.StatusOK {
+		t.Fatalf("expected rent deficit roll status 200, got %d", rollRecorder.Code)
+	}
+	var deficit map[string]any
+	_ = json.Unmarshal(rollRecorder.Body.Bytes(), &deficit)
+	if deficit["turnState"] != "awaiting-deficit-resolution" {
+		t.Fatalf("expected rent deficit state, got %v", deficit["turnState"])
+	}
+	pendingPayment := deficit["pendingPayment"].(map[string]any)
+	if pendingPayment["creditorPlayerId"] != hostID {
+		t.Fatalf("expected host as rent creditor, got %v", pendingPayment["creditorPlayerId"])
+	}
+
+	mortgagePayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-mortgage-1", "tileId": "tile-39"})
+	mortgageRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(mortgageRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/mortgage", mortgagePayload, playerToken(roomID, secondPlayerID)))
+	if mortgageRecorder.Code != http.StatusOK {
+		t.Fatalf("expected mortgage status 200, got %d", mortgageRecorder.Code)
+	}
+	var settled map[string]any
+	_ = json.Unmarshal(mortgageRecorder.Body.Bytes(), &settled)
+	if settled["turnState"] != "awaiting-roll" {
+		t.Fatalf("expected room to return to awaiting-roll after rent settlement, got %v", settled["turnState"])
+	}
+	if settled["pendingPayment"] != nil {
+		t.Fatalf("expected pending payment cleared after rent mortgage settlement")
+	}
+	players := settled["players"].([]any)
+	host := players[0].(map[string]any)
+	second := players[1].(map[string]any)
+	if host["cash"] != float64(1512) {
+		t.Fatalf("expected host cash 1512 after receiving rent, got %v", host["cash"])
+	}
+	if second["cash"] != float64(233) {
+		t.Fatalf("expected debtor cash 233 after mortgage and rent settlement, got %v", second["cash"])
+	}
+	mortgaged := second["mortgagedProperties"].([]any)
+	if len(mortgaged) != 1 || mortgaged[0] != "tile-39" {
+		t.Fatalf("expected tile-39 to be mortgaged, got %v", mortgaged)
+	}
+	if settled["currentTurnPlayerId"] != hostID {
+		t.Fatalf("expected turn to advance back to host, got %v", settled["currentTurnPlayerId"])
+	}
+}
+
+func TestRentDeficitSnapshotSurvivesReloadAndCanContinueMortgageRecovery(t *testing.T) {
+	_, mux, dataPath := newServiceForTestWithDice(t, [2]int{1, 1})
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Properties = []string{"tile-1"}
+		players[1].Position = 39
+		players[1].Cash = 0
+		players[1].Properties = []string{"tile-39"}
+		return players
+	})
+	mutateRoomSnapshot(t, dataPath, roomID, func(snapshot *pocketbase.PersistedRoomSnapshot) {
+		snapshot.CurrentTurnPlayerID = secondPlayerID
+	})
+	mux = reloadMuxWithDice(t, dataPath, [2]int{1, 1})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-reload-roll"})
+	mux.ServeHTTP(httptest.NewRecorder(), authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, secondPlayerID)))
+
+	reloadedMux := reloadMuxWithDice(t, dataPath, [2]int{1, 1})
+	reloadRecorder := httptest.NewRecorder()
+	reloadedMux.ServeHTTP(reloadRecorder, httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID, nil))
+	if reloadRecorder.Code != http.StatusOK {
+		t.Fatalf("expected reload room status 200, got %d", reloadRecorder.Code)
+	}
+	var reloaded map[string]any
+	_ = json.Unmarshal(reloadRecorder.Body.Bytes(), &reloaded)
+	if reloaded["turnState"] != "awaiting-deficit-resolution" {
+		t.Fatalf("expected reloaded room to stay in rent deficit, got %v", reloaded["turnState"])
+	}
+	reloadedPendingPayment := reloaded["pendingPayment"].(map[string]any)
+	if reloadedPendingPayment["creditorPlayerId"] != hostID {
+		t.Fatalf("expected reloaded rent creditor %s, got %v", hostID, reloadedPendingPayment["creditorPlayerId"])
+	}
+	if reloaded["currentTurnPlayerId"] != secondPlayerID {
+		t.Fatalf("expected debtor to remain current turn after reload, got %v", reloaded["currentTurnPlayerId"])
+	}
+
+	mortgagePayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-reload-mortgage", "tileId": "tile-39"})
+	mortgageRecorder := httptest.NewRecorder()
+	reloadedMux.ServeHTTP(mortgageRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/mortgage", mortgagePayload, playerToken(roomID, secondPlayerID)))
+	if mortgageRecorder.Code != http.StatusOK {
+		t.Fatalf("expected mortgage after reload status 200, got %d", mortgageRecorder.Code)
+	}
+	var settled map[string]any
+	_ = json.Unmarshal(mortgageRecorder.Body.Bytes(), &settled)
+	if settled["pendingPayment"] != nil {
+		t.Fatalf("expected pending payment cleared after reload recovery")
+	}
+	if settled["turnState"] != "awaiting-roll" {
+		t.Fatalf("expected room to return to awaiting-roll after reload recovery, got %v", settled["turnState"])
+	}
+}
+
+func TestRentDeficitRejectsNonDebtorMortgage(t *testing.T) {
+	_, mux, dataPath := newServiceForTestWithDice(t, [2]int{1, 1})
+	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Properties = []string{"tile-1"}
+		players[1].Position = 39
+		players[1].Cash = 0
+		players[1].Properties = []string{"tile-39"}
+		return players
+	})
+	mutateRoomSnapshot(t, dataPath, roomID, func(snapshot *pocketbase.PersistedRoomSnapshot) {
+		snapshot.CurrentTurnPlayerID = secondPlayerID
+	})
+	mux = reloadMuxWithDice(t, dataPath, [2]int{1, 1})
+
+	rollPayload, _ := json.Marshal(map[string]string{"playerId": secondPlayerID, "idempotencyKey": "rent-invalid-mortgage-roll"})
+	mux.ServeHTTP(httptest.NewRecorder(), authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/roll", rollPayload, playerToken(roomID, secondPlayerID)))
+
+	invalidMortgagePayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "rent-invalid-mortgage", "tileId": "tile-1"})
+	invalidMortgageRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(invalidMortgageRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/mortgage", invalidMortgagePayload, playerToken(roomID, hostID)))
+	if invalidMortgageRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected non-debtor mortgage to fail, got %d", invalidMortgageRecorder.Code)
+	}
+
+	roomRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(roomRecorder, httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID, nil))
+	if roomRecorder.Code != http.StatusOK {
+		t.Fatalf("expected room snapshot status 200, got %d", roomRecorder.Code)
+	}
+	var room map[string]any
+	_ = json.Unmarshal(roomRecorder.Body.Bytes(), &room)
+	if room["turnState"] != "awaiting-deficit-resolution" {
+		t.Fatalf("expected room to remain in deficit after rejected mortgage, got %v", room["turnState"])
+	}
+	if room["currentTurnPlayerId"] != secondPlayerID {
+		t.Fatalf("expected debtor to remain current turn after rejected mortgage, got %v", room["currentTurnPlayerId"])
+	}
+}
+
 func TestBankruptcyTransfersAssetsToPlayerCreditor(t *testing.T) {
 	_, mux, dataPath := newServiceForTest(t)
 	roomID, hostID, secondPlayerID, _ := createStartedRoom(t, mux)
