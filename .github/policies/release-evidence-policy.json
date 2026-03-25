@@ -5,8 +5,11 @@
   "outputDirectory": ".artifacts/release-evidence",
   "jsonFileName": "release-evidence.json",
   "markdownFileName": "release-evidence.md",
+  "semanticNotesFileName": "semantic-release-notes.md",
   "summaryMarkdownFileName": "release-evidence-summary.md",
   "summaryHeading": "## Engineering Evidence",
+  "bilingualSummaryMarkdownFileName": "release-bilingual-summary.md",
+  "bilingualSummaryHeading": "## Bilingual Release Summary",
   "governancePolicyPath": ".github/policies/pr-iteration-governance.json",
   "requiredTopLevelFields": [
     "sourceKind",

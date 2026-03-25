@@ -117,3 +117,12 @@ The system SHALL append the engineering evidence summary appendix to the local r
 
 - **WHEN** semantic-release publishes a versioned GitHub Release
 - **THEN** the release process SHALL add the engineering evidence appendix to the local release summary and to the published GitHub Release body without altering semantic version inference
+
+## Requirement: Published releases include deterministic bilingual summaries
+
+The system SHALL generate deterministic Chinese and English release summary appendices from semantic-release notes and engineering evidence without relying on external models.
+
+### Scenario: Release summary is prepared
+
+- **WHEN** the release workflow prepares local release summary artifacts
+- **THEN** it SHALL generate a bilingual appendix using only the current release notes and engineering evidence, and append that appendix to local summary artifacts and published release context when available

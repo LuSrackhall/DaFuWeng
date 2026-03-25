@@ -48,3 +48,4 @@ jobs:
           path: |
             release-notes.md
             .artifacts/release-evidence/release-evidence-summary.md
+            .artifacts/release-evidence/release-bilingual-summary.md

@@ -29,6 +29,8 @@ class PublishGitHubSummaryTests(unittest.TestCase):
             "outputDirectory": ".artifacts/release-evidence",
             "summaryMarkdownFileName": "release-evidence-summary.md",
             "summaryHeading": "## Engineering Evidence",
+            "bilingualSummaryMarkdownFileName": "release-bilingual-summary.md",
+            "bilingualSummaryHeading": "## Bilingual Release Summary",
         }
         path = repo_root / ".github/policies/release-evidence-policy.json"
         path.write_text(json.dumps(policy, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -43,6 +45,12 @@ class PublishGitHubSummaryTests(unittest.TestCase):
 
         unchanged = publish_github_summary.build_updated_body(updated, summary, "## Engineering Evidence")
         self.assertEqual(updated, unchanged)
+
+    def test_append_optional_section_ignores_missing_file(self) -> None:
+        repo_root = self.make_repo()
+        missing = repo_root / "missing.md"
+        updated = publish_github_summary.append_optional_section("Base notes", missing, "## Heading")
+        self.assertEqual(updated, "Base notes")
 
     def test_main_skips_when_summary_file_is_missing(self) -> None:
         repo_root = self.make_repo()

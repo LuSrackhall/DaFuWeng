@@ -28,6 +28,10 @@ def summary_path(policy: dict) -> Path:
     return REPO_ROOT / policy["outputDirectory"] / policy["summaryMarkdownFileName"]
 
 
+def bilingual_summary_path(policy: dict) -> Path:
+    return REPO_ROOT / policy["outputDirectory"] / policy["bilingualSummaryMarkdownFileName"]
+
+
 def api_request(url: str, token: str, method: str = "GET", payload: Optional[dict] = None) -> dict:
     data = None
     if payload is not None:
@@ -53,6 +57,15 @@ def build_updated_body(existing_body: str, summary: str, heading: str) -> str:
     return normalized_existing + "\n\n" + normalized_summary + "\n"
 
 
+def append_optional_section(existing_body: str, file_path: Path, heading: str) -> str:
+    if not file_path.is_file():
+        return existing_body
+    summary = file_path.read_text(encoding="utf-8").strip()
+    if not summary:
+        return existing_body
+    return build_updated_body(existing_body, summary, heading)
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print("Expected tag as the first argument.", file=sys.stderr)
@@ -66,13 +79,9 @@ def main() -> int:
 
     policy = load_policy()
     summary_file = summary_path(policy)
-    if not summary_file.is_file():
-        print("Skipping GitHub summary update because summary file is missing.")
-        return 0
-
-    summary = summary_file.read_text(encoding="utf-8").strip()
-    if not summary:
-        print("Skipping GitHub summary update because summary file is empty.")
+    bilingual_file = bilingual_summary_path(policy)
+    if not summary_file.is_file() and not bilingual_file.is_file():
+        print("Skipping GitHub summary update because summary files are missing.")
         return 0
 
     git_tag = sys.argv[1]
@@ -84,9 +93,10 @@ def main() -> int:
         if not isinstance(entity_id, int):
             print("Skipping GitHub summary update because entity id is unavailable.")
             return 0
-        updated_body = build_updated_body(existing_body, summary, policy.get("summaryHeading", "## Engineering Evidence"))
+        updated_body = append_optional_section(existing_body, summary_file, policy.get("summaryHeading", "## Engineering Evidence"))
+        updated_body = append_optional_section(updated_body, bilingual_file, policy.get("bilingualSummaryHeading", "## Bilingual Release Summary"))
         if updated_body == existing_body:
-            print("GitHub summary body already contains engineering evidence section.")
+            print("GitHub summary body already contains summary sections.")
             return 0
         api_request(
             f"{base}/{entity_id}",
