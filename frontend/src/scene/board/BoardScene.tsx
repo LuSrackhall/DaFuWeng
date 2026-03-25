@@ -59,13 +59,14 @@ type BoardPhaseFocusCue = {
 
 type BoardPhaseClosureCue = {
   key: string;
-  phaseKind: "auction" | "trade-response" | "deficit";
-  resolutionKind: "settled" | "unsold" | "accepted" | "rejected" | "resolved";
+  phaseKind: "auction" | "trade-response" | "deficit" | "jail" | "economic-chain";
+  resolutionKind: "settled" | "unsold" | "accepted" | "rejected" | "resolved" | "released" | "bankruptcy";
   tone: "default" | "warning" | "danger" | "success" | "neutral";
   closureLabel: string;
   headline: string;
   detail: string;
   resumeLabel: string;
+  nextStepLabel: string;
   ariaSummary: string;
   primaryPlayerId: string | null;
   secondaryPlayerId: string | null;
@@ -819,7 +820,7 @@ function drawCenterHud(
   if (phaseClosureHint) {
     const closureAccent = getFeedbackAccent(phaseClosureHint.tone, currentPlayerColor);
     const closureWidth = compactHud ? 186 : 214;
-    const closureHeight = compactHud ? 82 : 92;
+    const closureHeight = compactHud ? 106 : 118;
     const closureX = centerX + 14;
     const closureY = centerY + 16;
 
@@ -852,7 +853,7 @@ function drawCenterHud(
     root.addChild(closureHeadline);
 
     const closureResume = new Text({
-      text: `${phaseClosureHint.detail} ${phaseClosureHint.resumeLabel}`,
+      text: phaseClosureHint.detail,
       style: createAdaptiveTextStyle(centerBodyStyle, {
         fontSize: compactHud ? 10 : 11,
         lineHeight: compactHud ? 13 : 14,
@@ -864,6 +865,20 @@ function drawCenterHud(
     closureResume.x = closureX + 14;
     closureResume.y = closureY + 49;
     root.addChild(closureResume);
+
+    const nextStep = new Text({
+      text: `${phaseClosureHint.resumeLabel} · ${phaseClosureHint.nextStepLabel}`,
+      style: createAdaptiveTextStyle(centerChipLabelStyle, {
+        fontSize: compactHud ? 8.5 : 9.5,
+        fill: 0xf8f0dd,
+        letterSpacing: 0.2,
+        wordWrapWidth: closureWidth - 28,
+        wordWrap: true,
+      }),
+    });
+    nextStep.x = closureX + 14;
+    nextStep.y = closureY + closureHeight - 28;
+    root.addChild(nextStep);
   }
 
   if (phaseFocusHint) {

@@ -81,13 +81,14 @@ type BoardPhaseFocusCue = {
 
 type BoardPhaseClosureCue = {
   key: string;
-  phaseKind: "auction" | "trade-response" | "deficit";
-  resolutionKind: "settled" | "unsold" | "accepted" | "rejected" | "resolved";
+  phaseKind: "auction" | "trade-response" | "deficit" | "jail" | "economic-chain";
+  resolutionKind: "settled" | "unsold" | "accepted" | "rejected" | "resolved" | "released" | "bankruptcy";
   tone: BoardResultFeedbackTone;
   closureLabel: string;
   headline: string;
   detail: string;
   resumeLabel: string;
+  nextStepLabel: string;
   ariaSummary: string;
   primaryPlayerId: string | null;
   secondaryPlayerId: string | null;
@@ -116,6 +117,21 @@ function buildBoardTurnHandoffStage(turnState: string, playerName: string, pendi
         stageLabel: "当前舞台",
         stageDetail: pendingActionLabel,
       };
+  }
+}
+
+function buildBoardNextStepGuidance(turnState: string, playerName: string, pendingActionLabel: string) {
+  switch (turnState) {
+    case "awaiting-roll":
+      return `下一步由 ${playerName} 掷骰继续当前回合。`;
+    case "awaiting-jail-decision":
+      return `下一步由 ${playerName} 继续处理监狱决策。`;
+    case "awaiting-property-decision":
+      return `下一步由 ${playerName} 决定当前地产。`;
+    case "awaiting-deficit-resolution":
+      return `下一步由 ${playerName} 继续处理欠款恢复。`;
+    default:
+      return `下一步：${pendingActionLabel}`;
   }
 }
 
@@ -1255,8 +1271,19 @@ export function GamePage() {
       projection.currentTurnPlayerName,
       projection.pendingActionLabel,
     );
+    const nextStepGuidance = buildBoardNextStepGuidance(
+      projection.turnState,
+      projection.currentTurnPlayerName,
+      projection.pendingActionLabel,
+    );
     const latestAuctionSettledEvent = [...projection.recentEvents]
       .filter((event) => event.type === "auction-settled")
+      .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+    const latestJailResolvedEvent = [...projection.recentEvents]
+      .filter((event) => event.type === "jail-fine-paid" || event.type === "jail-card-used" || (event.type === "jail-roll-attempted" && event.releaseMethod === "roll"))
+      .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+    const latestBankruptcyEvent = [...projection.recentEvents]
+      .filter((event) => event.type === "bankruptcy-declared")
       .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
     const latestDeficitStart = [...projection.recentEvents]
       .filter((event) => event.type === "deficit-started")
@@ -1276,7 +1303,8 @@ export function GamePage() {
         headline: `${winnerName} 竞得 ${tileLabel}`,
         detail: `${tileLabel} 已按 ${amount} 成交，公开拍卖已经结束。`,
         resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
-        ariaSummary: `公开拍卖已结束，${winnerName} 竞得 ${tileLabel}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        nextStepLabel: nextStepGuidance,
+        ariaSummary: `公开拍卖已结束，${winnerName} 竞得 ${tileLabel}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}。${nextStepGuidance}`,
         primaryPlayerId: latestAuctionSettledEvent.playerId,
         secondaryPlayerId: null,
         anchorTileId: latestAuctionSettledEvent.tileId ?? null,
@@ -1293,7 +1321,8 @@ export function GamePage() {
         headline: projection.latestSettlementSummary.title,
         detail: projection.latestSettlementSummary.detail,
         resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
-        ariaSummary: `公开拍卖已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        nextStepLabel: nextStepGuidance,
+        ariaSummary: `公开拍卖已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}。${nextStepGuidance}`,
         primaryPlayerId: projection.currentTurnPlayerId,
         secondaryPlayerId: null,
         anchorTileId: presentation.highlightedTileId,
@@ -1313,7 +1342,8 @@ export function GamePage() {
         headline: projection.latestSettlementSummary.title,
         detail: projection.latestSettlementSummary.detail,
         resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
-        ariaSummary: `交易回应已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        nextStepLabel: nextStepGuidance,
+        ariaSummary: `交易回应已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}。${nextStepGuidance}`,
         primaryPlayerId: latestProjectionEvent.playerId ?? null,
         secondaryPlayerId: latestProjectionEvent.ownerPlayerId ?? null,
         anchorTileId: latestProjectionEvent.transferredPropertyIds?.[0] ?? latestProjectionEvent.requestedTileIds?.[0] ?? latestProjectionEvent.offeredTileIds?.[0] ?? null,
@@ -1333,7 +1363,8 @@ export function GamePage() {
         headline: projection.latestSettlementSummary.title,
         detail: projection.latestSettlementSummary.detail,
         resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
-        ariaSummary: `交易回应已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        nextStepLabel: nextStepGuidance,
+        ariaSummary: `交易回应已结束，${projection.latestSettlementSummary.title}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}。${nextStepGuidance}`,
         primaryPlayerId: latestProjectionEvent.playerId ?? null,
         secondaryPlayerId: latestProjectionEvent.ownerPlayerId ?? null,
         anchorTileId: latestProjectionEvent.requestedTileIds?.[0] ?? latestProjectionEvent.offeredTileIds?.[0] ?? null,
@@ -1341,7 +1372,36 @@ export function GamePage() {
     }
 
     if (
-      latestProjectionEvent?.type === "tax-paid"
+      latestJailResolvedEvent?.playerId
+      && projection.turnState !== "awaiting-jail-decision"
+      && !projection.players.find((player) => player.id === latestJailResolvedEvent.playerId)?.inJail
+    ) {
+      const actorName = projection.players.find((player) => player.id === latestJailResolvedEvent.playerId)?.name ?? projection.currentTurnPlayerName;
+      const releaseDetail = latestJailResolvedEvent.type === "jail-card-used"
+        ? `${actorName} 使用出狱卡离开了监狱。`
+        : latestJailResolvedEvent.type === "jail-fine-paid"
+          ? `${actorName} 支付 50 罚金后离开了监狱。`
+          : `${actorName} 掷出可释放结果，已经离开监狱。`;
+
+      return {
+        key: `${latestJailResolvedEvent.sequence}:${latestJailResolvedEvent.type}:closure`,
+        phaseKind: "jail",
+        resolutionKind: "released",
+        tone: "success",
+        closureLabel: "监狱收束",
+        headline: `${actorName} 已离开监狱`,
+        detail: releaseDetail,
+        resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
+        nextStepLabel: nextStepGuidance,
+        ariaSummary: `监狱决策已结束，${releaseDetail} 当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}。${nextStepGuidance}`,
+        primaryPlayerId: latestJailResolvedEvent.playerId,
+        secondaryPlayerId: null,
+        anchorTileId: "tile-10",
+      };
+    }
+
+    if (
+      (latestProjectionEvent?.type === "tax-paid" || latestProjectionEvent?.type === "rent-charged")
       && latestDeficitStart
       && projection.pendingPayment === null
       && latestProjectionEvent.sequence - latestDeficitStart.sequence <= 3
@@ -1350,7 +1410,13 @@ export function GamePage() {
         ? projection.players.find((player) => player.id === latestProjectionEvent.playerId)?.name ?? projection.currentTurnPlayerName
         : projection.currentTurnPlayerName;
       const amount = latestProjectionEvent.amount ?? latestDeficitStart.amount ?? 0;
-      const reasonLabel = buildPaymentReasonLabel("tax");
+      const reasonLabel = buildPaymentReasonLabel(latestDeficitStart.cardId ? "card" : latestDeficitStart.ownerPlayerId ? "rent" : "tax");
+      const creditorName = latestDeficitStart.ownerPlayerId
+        ? projection.players.find((player) => player.id === latestDeficitStart.ownerPlayerId)?.name ?? "债权方"
+        : "银行";
+      const closureDetail = latestDeficitStart.ownerPlayerId
+        ? `${actorName} 已向 ${creditorName} 补齐 ${amount} ${reasonLabel}，这条玩家债务链已经收束。`
+        : `本次高压欠款阶段已经结束，${actorName} 已补齐 ${amount} ${reasonLabel}。`;
 
       return {
         key: `${latestProjectionEvent.sequence}:${latestProjectionEvent.type}:closure`,
@@ -1358,13 +1424,40 @@ export function GamePage() {
         resolutionKind: "resolved",
         tone: "success",
         closureLabel: "恢复完成",
-        headline: `${actorName} 已补齐 ${amount} ${reasonLabel}`,
-        detail: "本次高压欠款阶段已经结束，棋盘会退回正常回合推进。",
+        headline: latestDeficitStart.ownerPlayerId ? `${creditorName} 已收到 ${amount}` : `${actorName} 已补齐 ${amount} ${reasonLabel}`,
+        detail: closureDetail,
         resumeLabel: `当前恢复到 ${resumeStage.stageLabel}`,
-        ariaSummary: `欠款阶段已结束，${actorName} 已补齐 ${amount} ${reasonLabel}。当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}`,
+        nextStepLabel: nextStepGuidance,
+        ariaSummary: `欠款阶段已结束，${closureDetail} 当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}。${nextStepGuidance}`,
         primaryPlayerId: latestProjectionEvent.playerId ?? projection.currentTurnPlayerId,
-        secondaryPlayerId: null,
+        secondaryPlayerId: latestDeficitStart.ownerPlayerId ?? null,
         anchorTileId: latestProjectionEvent.tileId ?? latestDeficitStart.tileId ?? null,
+      };
+    }
+
+    if (projection.latestSettlementSummary?.kind === "generic" && latestBankruptcyEvent?.playerId) {
+      const debtorName = projection.players.find((player) => player.id === latestBankruptcyEvent.playerId)?.name ?? "当前玩家";
+      const creditorName = latestBankruptcyEvent.ownerPlayerId
+        ? projection.players.find((player) => player.id === latestBankruptcyEvent.ownerPlayerId)?.name ?? "债权方"
+        : "银行";
+      const chainDetail = latestBankruptcyEvent.ownerPlayerId
+        ? `${debtorName} 已向 ${creditorName} 完成破产结算，这条复杂经济链已经收束。`
+        : `${debtorName} 已按银行债权规则完成破产结算，这条复杂经济链已经收束。`;
+
+      return {
+        key: `${latestBankruptcyEvent.sequence}:${latestBankruptcyEvent.type}:closure`,
+        phaseKind: "economic-chain",
+        resolutionKind: "bankruptcy",
+        tone: projection.roomState === "finished" ? "danger" : "neutral",
+        closureLabel: "链条收束",
+        headline: projection.latestSettlementSummary.title,
+        detail: chainDetail,
+        resumeLabel: projection.roomState === "finished" ? "当前结果已进入终局" : `当前恢复到 ${resumeStage.stageLabel}`,
+        nextStepLabel: projection.roomState === "finished" ? "下一步：本局已结束，只剩最终结算与回看。" : nextStepGuidance,
+        ariaSummary: `复杂经济链条已收束，${projection.latestSettlementSummary.title}。${projection.roomState === "finished" ? "本局已结束。" : `当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}。${nextStepGuidance}`}`,
+        primaryPlayerId: latestBankruptcyEvent.playerId,
+        secondaryPlayerId: latestBankruptcyEvent.ownerPlayerId ?? null,
+        anchorTileId: latestBankruptcyEvent.transferredPropertyIds?.[0] ?? null,
       };
     }
 
