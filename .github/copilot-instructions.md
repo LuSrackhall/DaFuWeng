@@ -34,6 +34,12 @@
   - After each completed slice, propose several concrete next steps, but never weaken validation or product quality to increase suggestion count.
   - Treat careful thinking, deep research, and end-to-end completion as required behavior for implementation, not optional polish.
 
+- Documentation governance policy:
+  - 所有 README 与官方文档默认以中文为主，除非发布营销、外部渠道分发或明确要求双语展示；若保留英文，中文仍应是主叙述。
+  - 每一轮工作都必须显式判断是否需要同步更新项目主页 README 与官方文档。
+  - 若当前切片改变了项目入口、长期架构事实、协作流程、发布方式或用户理解主路径，应在同一轮内更新 README 或官方文档，或在最终汇报中明确说明为何暂不更新。
+  - 若判断本轮无需更新 README 或官方文档，也必须在最终汇报中明确说明已完成检查且当前无需改动。
+
 - At the start of every new conversation, check the git working tree before proposing or implementing new work.
 - If previously completed implementation work is still uncommitted and it belongs to the current coding agent, decide proactively whether to commit and push it instead of waiting for the user to ask.
 - Do not mix unrelated user-owned local edits into agent commits. If the workspace is dirty because of unrelated changes, commit only the files that belong to the current slice and report the remaining dirty paths clearly.
