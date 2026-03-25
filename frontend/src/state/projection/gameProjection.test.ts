@@ -1,3 +1,4 @@
+import type { ProjectionSnapshot } from "@dafuweng/contracts";
 import { describe, expect, test } from "vitest";
 import { sampleProjection } from "@dafuweng/board-config";
 import { applyRoomEvents, applyStreamEnvelope, toProjectionView } from "./gameProjection";
@@ -464,6 +465,153 @@ describe("toProjectionView", () => {
     expect(projection.resolutionSummary?.reasonLabel).toBe("租金");
     expect(projection.resolutionSummary?.shortfall).toBe(40);
     expect(projection.resolutionSummary?.sourceTileId).toBe("tile-1");
+  });
+
+  test("restores player-creditor rent deficit directly from the authoritative snapshot", () => {
+    const projection = toProjectionView({
+      ...sampleProjection,
+      turnState: "awaiting-deficit-resolution",
+      currentTurnPlayerId: "p2",
+      pendingActionLabel: "等待当前玩家处理欠款",
+      pendingPayment: {
+        amount: 120,
+        reason: "rent",
+        creditorKind: "player",
+        creditorPlayerId: "p1",
+        sourceTileId: "tile-1",
+        sourceTileLabel: "南城路",
+      },
+      players: sampleProjection.players.map((player) => {
+        if (player.id === "p1") {
+          return {
+            ...player,
+            cash: 1520,
+            properties: ["tile-1"],
+          };
+        }
+        if (player.id === "p2") {
+          return {
+            ...player,
+            cash: 20,
+            properties: ["tile-39"],
+            mortgagedProperties: [],
+          };
+        }
+        return player;
+      }),
+      recentEvents: [],
+    });
+
+    expect(projection.resolutionSummary?.actorPlayerId).toBe("p2");
+    expect(projection.resolutionSummary?.actorName).toBe("玩家二");
+    expect(projection.resolutionSummary?.creditorLabel).toContain("房主");
+    expect(projection.resolutionSummary?.reasonLabel).toBe("租金");
+    expect(projection.resolutionSummary?.shortfall).toBe(100);
+    expect(projection.resolutionSummary?.availableMortgageCount).toBe(1);
+    expect(projection.resolutionSummary?.sourceTileId).toBe("tile-1");
+  });
+
+  test("keeps the same rent deficit chain through mortgage recovery until settlement", () => {
+    const rentDeficitSnapshot: ProjectionSnapshot = {
+      ...sampleProjection,
+      turnState: "awaiting-deficit-resolution",
+      currentTurnPlayerId: "p2",
+      pendingActionLabel: "等待当前玩家处理欠款",
+      pendingPayment: {
+        amount: 120,
+        reason: "rent",
+        creditorKind: "player",
+        creditorPlayerId: "p1",
+        sourceTileId: "tile-1",
+        sourceTileLabel: "南城路",
+      },
+      players: sampleProjection.players.map((player) => {
+        if (player.id === "p1") {
+          return {
+            ...player,
+            cash: 1520,
+            properties: ["tile-1"],
+          };
+        }
+        if (player.id === "p2") {
+          return {
+            ...player,
+            cash: 20,
+            properties: ["tile-39"],
+            mortgagedProperties: [],
+          };
+        }
+        return player;
+      }),
+      recentEvents: [
+        {
+          id: "evt-rent-deficit",
+          type: "deficit-started",
+          sequence: 30,
+          snapshotVersion: 30,
+          summary: "玩家二 需向 房主 支付 120 租金。",
+          playerId: "p2",
+          ownerPlayerId: "p1",
+          tileId: "tile-1",
+          tileIndex: 1,
+          tileLabel: "南城路",
+          amount: 120,
+          cashAfter: 20,
+        },
+      ],
+    };
+
+    const afterMortgage = applyRoomEvents(rentDeficitSnapshot, [
+      {
+        id: "evt-mortgage",
+        type: "property-mortgaged",
+        sequence: 31,
+        snapshotVersion: 31,
+        summary: "玩家二 抵押了 终章大道。",
+        playerId: "p2",
+        tileId: "tile-39",
+        tileIndex: 39,
+        tileLabel: "终章大道",
+        amount: 245,
+        cashAfter: 265,
+      },
+    ]);
+
+    expect(afterMortgage.currentTurnPlayerId).toBe("p2");
+    expect(afterMortgage.pendingPayment?.creditorPlayerId).toBe("p1");
+    expect(afterMortgage.players[1]?.cash).toBe(265);
+    expect(afterMortgage.players[1]?.mortgagedProperties).toContain("tile-39");
+
+    const settled = applyRoomEvents(afterMortgage, [
+      {
+        id: "evt-rent-settled",
+        type: "rent-charged",
+        sequence: 32,
+        snapshotVersion: 32,
+        summary: "玩家二 补齐了租金。",
+        playerId: "p2",
+        ownerPlayerId: "p1",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "南城路",
+        amount: 120,
+        cashAfter: 145,
+        ownerCashAfter: 1640,
+      },
+      {
+        id: "evt-turn-advanced",
+        type: "turn-advanced",
+        sequence: 33,
+        snapshotVersion: 32,
+        summary: "轮到下一位玩家行动。",
+        nextPlayerId: "p3",
+      },
+    ]);
+
+    expect(settled.pendingPayment).toBeNull();
+    expect(settled.turnState).toBe("awaiting-roll");
+    expect(settled.currentTurnPlayerId).toBe("p3");
+    expect(settled.players[0]?.cash).toBe(1640);
   });
 
   test("applies improvement build, sell, and rent deficit events", () => {

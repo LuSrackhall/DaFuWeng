@@ -9,6 +9,7 @@ import { BoardScene } from "../../scene/board/BoardScene";
 import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
 import { usePresentationState } from "../../state/presentation/gamePresentation";
+import { getAuctionBidValidation, getDeficitControlMode, sanitizeAuctionBidInput } from "./gameActionState";
 
 type TradeComposerStep = "counterparty" | "offered" | "requested" | "review";
 type PrimaryAnchorTone = "default" | "warning" | "danger" | "success";
@@ -382,13 +383,17 @@ export function GamePage() {
     && projection.roomState === "in-game"
     && projection.turnState === "awaiting-jail-decision"
     && activePlayerId === projection.currentTurnPlayerId;
-  const canResolveDeficit = !isFallback
-    && !isLoading
-    && !isSubmittingCommand
-    && projection.roomState === "in-game"
-    && projection.turnState === "awaiting-deficit-resolution"
-    && projection.pendingPayment !== null
-    && activePlayerId === projection.currentTurnPlayerId;
+  const deficitControlMode = getDeficitControlMode({
+    isFallback,
+    isLoading,
+    isSubmittingCommand,
+    roomState: projection.roomState,
+    turnState: projection.turnState,
+    pendingPayment: projection.pendingPayment,
+    currentTurnPlayerId: projection.currentTurnPlayerId,
+    activePlayerId,
+  });
+  const canResolveDeficit = deficitControlMode === "actionable";
   const canManageImprovements = !isFallback
     && !isLoading
     && !isSubmittingCommand
@@ -539,6 +544,10 @@ export function GamePage() {
         auctionSummary.nextMinimumBid + 50,
       ]))
     : [];
+  const auctionBidValidation = getAuctionBidValidation(
+    auctionBid,
+    auctionSummary?.nextMinimumBid ?? null,
+  );
   const auctionViewerLabel = auctionSummary
     ? canAuction
       ? `轮到你出价或放弃，下一口至少 ${auctionSummary.nextMinimumBid}。`
@@ -870,6 +879,7 @@ export function GamePage() {
   });
   const mortgageablePropertyOptions = resolutionPropertyOptions.filter((option) => option.canMortgage);
   const blockedRecoveryPropertyOptions = resolutionPropertyOptions.filter((option) => !option.canMortgage);
+  const resolutionActorName = projection.resolutionSummary?.actorName ?? "当前债务人";
   const bestRecoveryOption = mortgageablePropertyOptions.find((option) => option.settlesDeficit)
     ?? [...mortgageablePropertyOptions].sort((left, right) => right.mortgageValue - left.mortgageValue)[0]
     ?? null;
@@ -1656,10 +1666,14 @@ export function GamePage() {
     }
 
     const nextMinimumBid = auctionSummary.nextMinimumBid;
-    if (Number(auctionBid) < nextMinimumBid) {
-      setAuctionBid(String(nextMinimumBid));
-    }
-  }, [auctionSummary?.lotTileId, auctionSummary?.nextMinimumBid, auctionBid]);
+    setAuctionBid((current) => {
+      const parsedCurrent = getAuctionBidValidation(current, nextMinimumBid).parsedAmount;
+      if (parsedCurrent === null || parsedCurrent < nextMinimumBid) {
+        return String(nextMinimumBid);
+      }
+      return current;
+    });
+  }, [auctionSummary?.lotTileId, auctionSummary?.nextMinimumBid]);
 
   async function handleStartRoom() {
     if (!projection.hostId) {
@@ -1724,6 +1738,17 @@ export function GamePage() {
   }
 
   async function handleAuction(action: "bid" | "pass") {
+    if (action === "bid") {
+      if (!auctionBidValidation.isValid || auctionBidValidation.parsedAmount === null) {
+        setActionMessage(
+          auctionBidValidation.minimumBid !== null
+            ? `当前最低有效报价是 ${auctionBidValidation.minimumBid}。`
+            : "当前报价无效，请重新输入。",
+        );
+        return;
+      }
+    }
+
     setIsSubmittingCommand(true);
     setActionMessage(null);
 
@@ -1733,7 +1758,7 @@ export function GamePage() {
         idempotencyKey: crypto.randomUUID()
       };
       const snapshot = action === "bid"
-        ? await submitAuctionBid(roomId, { ...request, amount: Number(auctionBid) })
+        ? await submitAuctionBid(roomId, { ...request, amount: auctionBidValidation.parsedAmount ?? 0 })
         : await passAuction(roomId, request);
       applySnapshot(snapshot);
       setActionMessage(action === "bid" ? "这次出价已经送到房间里。" : "你已放弃这一轮竞拍。");
@@ -2025,11 +2050,21 @@ export function GamePage() {
             ))}
           </div>
           <label className="auction-stage__field room-primary-anchor__field">
-            <strong>当前出价</strong>
-            <input value={auctionBid} onChange={(event) => setAuctionBid(event.target.value)} />
+            <strong>你的本轮报价</strong>
+            <span className="trade-side__detail">最低有效价 {auctionSummary.nextMinimumBid}</span>
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              aria-label="你的本轮报价"
+              value={auctionBid}
+              onChange={(event) => setAuctionBid(sanitizeAuctionBidInput(event.target.value))}
+            />
+            {!auctionBidValidation.isValid ? (
+              <span className="trade-side__detail">请输入不低于 {auctionSummary.nextMinimumBid} 的整数报价。</span>
+            ) : null}
           </label>
           <div className="lobby__actions">
-            <button className="button button--primary" type="button" onClick={() => handleAuction("bid")} disabled={!canAuction}>
+            <button className="button button--primary" type="button" onClick={() => handleAuction("bid")} disabled={!canAuction || !auctionBidValidation.isValid}>
               提交出价
             </button>
             <button className="button button--secondary button--danger" type="button" onClick={() => handleAuction("pass")} disabled={!canAuction}>
@@ -2777,10 +2812,16 @@ export function GamePage() {
             <div className="deficit-stage__grid">
               <article className="trade-side">
                 <strong>可立即恢复的资产</strong>
-                <span>{mortgageablePropertyOptions.length > 0 ? "选择一处地产执行抵押。" : "当前没有可立即抵押的地产。"}</span>
+                <span>
+                  {mortgageablePropertyOptions.length > 0
+                    ? canResolveDeficit
+                      ? "选择一处地产执行抵押。"
+                      : `这些是 ${projection.resolutionSummary.actorName} 当前可立即用于恢复的资产。`
+                    : "当前没有可立即抵押的地产。"}
+                </span>
                 {mortgageablePropertyOptions.length > 0 ? (
                   <div className="asset-picker deficit-picker">
-                    {mortgageablePropertyOptions.map((option) => (
+                    {mortgageablePropertyOptions.map((option) => canResolveDeficit ? (
                       <button
                         key={option.id}
                         className="asset-chip asset-chip--recovery"
@@ -2792,6 +2833,12 @@ export function GamePage() {
                         <span>{option.detail || `可回收 ${option.mortgageValue}`}</span>
                         <span>{option.settlesDeficit ? "本次抵押后将补足欠款" : `抵押后仍差 ${option.nextShortfall}`}</span>
                       </button>
+                    ) : (
+                      <div key={option.id} className="asset-chip asset-chip--recovery asset-chip--static">
+                        <strong>{option.label}</strong>
+                        <span>{option.detail || `可回收 ${option.mortgageValue}`}</span>
+                        <span>{option.settlesDeficit ? `若由 ${resolutionActorName} 执行，本次可补足欠款` : `若由 ${resolutionActorName} 执行，抵押后仍差 ${option.nextShortfall}`}</span>
+                      </div>
                     ))}
                   </div>
                 ) : (

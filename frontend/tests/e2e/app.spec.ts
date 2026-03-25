@@ -1182,6 +1182,284 @@ test("mobile player reconnect narrates deficit recovery", async ({
   expect(hasHorizontalOverflow).toBe(false);
 });
 
+test("four-player reconnect keeps rent deficit recovery actionable only for the debtor", async ({
+  browser,
+  page,
+}) => {
+  const roomId = "room-four-player-rent-deficit-reconnect";
+  const initialSnapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 7,
+    eventSequence: 7,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p4",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 1520,
+        position: 1,
+        properties: ["tile-1"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 20,
+        position: 39,
+        properties: ["tile-39"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p3",
+        name: "玩家丙",
+        cash: 1500,
+        position: 8,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p4",
+        name: "玩家丁",
+        cash: 1500,
+        position: 12,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-1",
+        type: "room-started",
+        sequence: 1,
+        snapshotVersion: 1,
+        summary: "房主甲 开始了本局。",
+        playerId: "p1",
+      },
+      {
+        id: "evt-7",
+        type: "turn-advanced",
+        sequence: 7,
+        snapshotVersion: 7,
+        summary: "轮到下一位玩家行动。",
+        nextPlayerId: "p4",
+      },
+    ],
+  };
+  const recoveredSnapshot = {
+    ...initialSnapshot,
+    snapshotVersion: 8,
+    eventSequence: 8,
+    turnState: "awaiting-deficit-resolution",
+    currentTurnPlayerId: "p2",
+    pendingActionLabel: "等待当前玩家处理欠款",
+    pendingPayment: {
+      amount: 120,
+      reason: "rent",
+      creditorKind: "player",
+      creditorPlayerId: "p1",
+      sourceTileId: "tile-1",
+      sourceTileLabel: "南城路",
+    },
+    recentEvents: [
+      ...initialSnapshot.recentEvents,
+      {
+        id: "evt-8",
+        type: "deficit-started",
+        sequence: 8,
+        snapshotVersion: 8,
+        summary: "玩家乙 需向 房主甲 支付 120 租金。",
+        playerId: "p2",
+        ownerPlayerId: "p1",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "南城路",
+        amount: 120,
+        cashAfter: 20,
+      },
+    ],
+  };
+
+  async function openReconnectPlayerPage(
+    targetPage: Page,
+    session: { playerId: string; playerName: string; playerToken: string },
+  ) {
+    await targetPage.addInitScript(
+      ({ currentRoomId, currentSession }) => {
+        window.sessionStorage.setItem(
+          `dafuweng-active-player:${currentRoomId}`,
+          JSON.stringify(currentSession),
+        );
+
+        class FakeEventSource {
+          onerror: (() => void) | null = null;
+
+          constructor() {
+            const instances =
+              (
+                window as typeof window & {
+                  __testEventSources?: FakeEventSource[];
+                }
+              ).__testEventSources ?? [];
+            instances.push(this);
+            (
+              window as typeof window & {
+                __testEventSources?: FakeEventSource[];
+              }
+            ).__testEventSources = instances;
+          }
+
+          addEventListener() {}
+          close() {}
+          emitError() {
+            this.onerror?.();
+          }
+        }
+
+        (
+          window as typeof window & { __testEventSources?: FakeEventSource[] }
+        ).__testEventSources = [];
+        window.EventSource = FakeEventSource as unknown as typeof EventSource;
+      },
+      { currentRoomId: roomId, currentSession: session },
+    );
+
+    let shouldRecover = false;
+    let didRecover = false;
+
+    await targetPage.route(`**/api/rooms/${roomId}`, async (route, request) => {
+      if (request.method() === "GET") {
+        await route.fulfill({ json: initialSnapshot });
+        return;
+      }
+
+      await route.continue();
+    });
+    await targetPage.route(
+      `**/api/rooms/${roomId}/events?afterSequence=*`,
+      async (route) => {
+        if (shouldRecover && !didRecover) {
+          didRecover = true;
+          await route.fulfill({
+            json: { snapshot: recoveredSnapshot, events: [] },
+          });
+          return;
+        }
+
+        await route.fulfill({ json: { snapshot: null, events: [] } });
+      },
+    );
+
+    await targetPage.goto(`/room/${roomId}`);
+    await expect(
+      targetPage
+        .locator(".stage-card--overview")
+        .getByText(`当前以 ${session.playerName} 身份加入此房间。`)
+        .first(),
+    ).toBeVisible();
+    await expect(
+      targetPage.getByText("等待当前玩家掷骰").first(),
+    ).toBeVisible();
+
+    return async () => {
+      shouldRecover = true;
+      await targetPage.evaluate(() => {
+        const instances =
+          (
+            window as typeof window & {
+              __testEventSources?: Array<{ emitError(): void }>;
+            }
+          ).__testEventSources ?? [];
+        instances[0]?.emitError();
+      });
+    };
+  }
+
+  const thirdPage = await browser.newPage();
+  const triggerDebtorRecovery = await openReconnectPlayerPage(page, {
+    playerId: "p2",
+    playerName: "玩家乙",
+    playerToken: "debtor-token",
+  });
+  const triggerObserverRecovery = await openReconnectPlayerPage(thirdPage, {
+    playerId: "p3",
+    playerName: "玩家丙",
+    playerToken: "observer-token",
+  });
+
+  await triggerDebtorRecovery();
+  await triggerObserverRecovery();
+
+  const debtorRecoveryBar = page.locator(".room-reconnect-success");
+  await expect(
+    debtorRecoveryBar.getByText("已重新连入牌局，当前进度已同步"),
+  ).toBeVisible({ timeout: 10000 });
+  await expect(
+    debtorRecoveryBar.locator(".room-reconnect-success__hint"),
+  ).toContainText("玩家乙 需向 房主甲 支付 120 租金");
+  await expect(
+    debtorRecoveryBar.locator(".room-reconnect-success__hint"),
+  ).toContainText("现在轮到你处理租金欠款，还差 100");
+  await expect(
+    page.getByRole("button", { name: "抵押 终章大道" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "宣告破产" })).toBeVisible();
+
+  const observerRecoveryBar = thirdPage.locator(".room-reconnect-success");
+  await expect(
+    observerRecoveryBar.getByText("已重新连入牌局，当前进度已同步"),
+  ).toBeVisible({ timeout: 10000 });
+  await expect(
+    observerRecoveryBar.locator(".room-reconnect-success__hint"),
+  ).toContainText("玩家乙 需向 房主甲 支付 120 租金");
+  await expect(
+    observerRecoveryBar.locator(".room-reconnect-success__hint"),
+  ).toContainText("现在由 玩家乙处理租金欠款，还差 100");
+  await expect(
+    thirdPage
+      .locator(".room-primary-anchor")
+      .getByText("当前由 玩家乙 处理欠款，其他人暂时只能等待。"),
+  ).toBeVisible();
+  await expect(
+    thirdPage.getByRole("button", { name: /下一步先抵押/ }),
+  ).toHaveCount(0);
+  await expect(thirdPage.getByRole("button", { name: "宣告破产" })).toHaveCount(
+    0,
+  );
+  await expect(
+    thirdPage.getByText("若由 玩家乙 执行，本次可补足欠款"),
+  ).toBeVisible();
+  await expect(
+    thirdPage.getByText(
+      "当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。",
+    ),
+  ).toHaveCount(0);
+
+  await thirdPage.close();
+});
+
 test("reconnect success narrates live auction recovery", async ({
   page,
 }) => {
