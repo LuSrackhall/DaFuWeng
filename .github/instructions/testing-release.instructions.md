@@ -22,3 +22,4 @@ name: "Testing And Release Instruction"
 - Keep GitHub Actions jobs composable: lint, unit test, integration test, end-to-end test, package, release.
 - Release workflows should publish artifacts and notes without manual version edits.
 - Marketing copy and changelog text should be generated from the release context, not written by hand each time.
+- Pull requests for substantial work should summarize the completed slice, quality evidence, remaining risks, and next-step recommendations in a stable template that CI can validate.

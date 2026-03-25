@@ -93,6 +93,17 @@ jobs:
       - name: Validate persistent agent iteration policy
         run: python .github/hooks/scripts/validate_agent_iteration_policy.py
 
+  pr-governance:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Validate PR iteration governance
+        run: python .github/hooks/scripts/validate_pr_iteration_governance.py
+
   openspec:
     runs-on: ubuntu-latest
     steps:

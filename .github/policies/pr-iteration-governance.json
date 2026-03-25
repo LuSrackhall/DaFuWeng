@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "policyName": "pr-iteration-governance",
+  "requiredSections": [
+    {
+      "heading": "## 本轮完成切片",
+      "description": "说明本轮实际完成的最小交付切片。"
+    },
+    {
+      "heading": "## 质量证据",
+      "description": "列出已经完成的验证、测试或关键证据。"
+    },
+    {
+      "heading": "## 剩余风险",
+      "description": "说明仍未覆盖的风险、边界或已知限制。"
+    },
+    {
+      "heading": "## 下一步建议",
+      "description": "给出紧接本轮之后最值得继续推进的建议。"
+    }
+  ],
+  "templatePath": ".github/PULL_REQUEST_TEMPLATE.md",
+  "workflowPath": ".github/workflows/ci.yml"
+}
