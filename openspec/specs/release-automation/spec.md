@@ -126,3 +126,12 @@ The system SHALL generate deterministic Chinese and English release summary appe
 
 - **WHEN** the release workflow prepares local release summary artifacts
 - **THEN** it SHALL generate a bilingual appendix using only the current release notes and engineering evidence, and append that appendix to local summary artifacts and published release context when available
+
+## Requirement: Release automation emits standalone marketing summary artifacts
+
+The system SHALL generate a standalone marketing-summary artifact for external announcement reuse using only current release notes and engineering evidence.
+
+### Scenario: Marketing artifact is prepared
+
+- **WHEN** the release workflow prepares release artifacts
+- **THEN** it SHALL output a separate marketing-summary file suitable for outward-facing reuse without altering semantic version inference or the release trigger chain

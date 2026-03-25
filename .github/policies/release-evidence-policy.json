@@ -10,6 +10,8 @@
   "summaryHeading": "## Engineering Evidence",
   "bilingualSummaryMarkdownFileName": "release-bilingual-summary.md",
   "bilingualSummaryHeading": "## Bilingual Release Summary",
+  "marketingSummaryMarkdownFileName": "release-marketing-summary.md",
+  "marketingSummaryHeading": "## Marketing Summary",
   "governancePolicyPath": ".github/policies/pr-iteration-governance.json",
   "requiredTopLevelFields": [
     "sourceKind",

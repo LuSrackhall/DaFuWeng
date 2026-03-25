@@ -20,7 +20,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "mkdir -p .artifacts/release-evidence && printf '%s' '${nextRelease.notes}' > .artifacts/release-evidence/semantic-release-notes.md && printf '# Release Summary\n\nVersion: ${nextRelease.version}\n\n${nextRelease.notes}\n' > release-notes.md && if [ -f .artifacts/release-evidence/release-evidence-summary.md ]; then printf '\n' >> release-notes.md && cat .artifacts/release-evidence/release-evidence-summary.md >> release-notes.md; fi && python3 .github/hooks/scripts/generate_bilingual_release_summary.py ${nextRelease.version} && if [ -f .artifacts/release-evidence/release-bilingual-summary.md ]; then printf '\n' >> release-notes.md && cat .artifacts/release-evidence/release-bilingual-summary.md >> release-notes.md; fi"
+        "prepareCmd": "mkdir -p .artifacts/release-evidence && printf '%s' '${nextRelease.notes}' > .artifacts/release-evidence/semantic-release-notes.md && printf '# Release Summary\n\nVersion: ${nextRelease.version}\n\n${nextRelease.notes}\n' > release-notes.md && if [ -f .artifacts/release-evidence/release-evidence-summary.md ]; then printf '\n' >> release-notes.md && cat .artifacts/release-evidence/release-evidence-summary.md >> release-notes.md; fi && python3 .github/hooks/scripts/generate_bilingual_release_summary.py ${nextRelease.version} && python3 .github/hooks/scripts/generate_marketing_summary.py ${nextRelease.version} && if [ -f .artifacts/release-evidence/release-bilingual-summary.md ]; then printf '\n' >> release-notes.md && cat .artifacts/release-evidence/release-bilingual-summary.md >> release-notes.md; fi"
       }
     ],
     "@semantic-release/github",

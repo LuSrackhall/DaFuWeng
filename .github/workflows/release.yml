@@ -49,3 +49,9 @@ jobs:
             release-notes.md
             .artifacts/release-evidence/release-evidence-summary.md
             .artifacts/release-evidence/release-bilingual-summary.md
+      - name: Upload marketing summary artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketing-summary
+          path: .artifacts/release-evidence/release-marketing-summary.md

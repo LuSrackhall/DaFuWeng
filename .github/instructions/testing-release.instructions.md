@@ -26,3 +26,4 @@ name: "Testing And Release Instruction"
 - The repository should declare stable required status checks for main branch protection in versioned policy, and CI should generate release evidence artifacts on successful pushes to main without changing the release trigger chain.
 - The release workflow should consume CI release-evidence artifacts as soft engineering context, append them to release summaries, and keep semantic version inference unchanged.
 - Bilingual publish summaries should be generated deterministically from semantic-release notes and engineering evidence only, with conservative wording and no external model dependency.
+- External-facing marketing summary artifacts should remain deterministic, conservative, and separately uploadable from engineering summary artifacts.
