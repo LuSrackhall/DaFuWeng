@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "policyName": "release-evidence-policy",
+  "outputDirectory": ".artifacts/release-evidence",
+  "jsonFileName": "release-evidence.json",
+  "markdownFileName": "release-evidence.md",
+  "governancePolicyPath": ".github/policies/pr-iteration-governance.json",
+  "requiredTopLevelFields": [
+    "sourceKind",
+    "commitSha",
+    "workflowName",
+    "completedSlice",
+    "qualityEvidence",
+    "remainingRisks",
+    "nextStepRecommendations",
+    "warnings"
+  ]
+}

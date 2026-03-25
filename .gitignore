@@ -19,6 +19,7 @@ apps/desktop-tauri/src-tauri/target/
 apps/desktop-tauri/src-tauri/gen/
 
 release-notes.md
+.artifacts/
 .github/hooks/runtime/
 __pycache__/
 *.pyc

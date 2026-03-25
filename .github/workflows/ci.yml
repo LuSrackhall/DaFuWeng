@@ -104,6 +104,42 @@ jobs:
       - name: Validate PR iteration governance
         run: python .github/hooks/scripts/validate_pr_iteration_governance.py
 
+  branch-protection-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Validate branch protection contract
+        run: python .github/hooks/scripts/validate_branch_protection_contract.py
+
+  release-evidence:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs:
+      - commitlint
+      - frontend
+      - backend
+      - workflow-hooks
+      - agent-policy
+      - openspec
+      - branch-protection-contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Generate release evidence
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/hooks/scripts/generate_release_evidence.py
+      - name: Upload release evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence
+          path: .artifacts/release-evidence/
+
   openspec:
     runs-on: ubuntu-latest
     steps:

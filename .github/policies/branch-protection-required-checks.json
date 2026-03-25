@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "policyName": "branch-protection-required-checks",
+  "protectedBranch": "main",
+  "workflowName": "ci",
+  "requiredPullRequestChecks": [
+    "commitlint",
+    "frontend",
+    "backend",
+    "workflow-hooks",
+    "agent-policy",
+    "pr-governance",
+    "openspec",
+    "branch-protection-contract"
+  ],
+  "mainPushOnlyChecks": [
+    "release-evidence"
+  ],
+  "workflowPath": ".github/workflows/ci.yml"
+}
