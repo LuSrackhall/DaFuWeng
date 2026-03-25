@@ -78,8 +78,17 @@ func authorizedRequest(method string, path string, payload []byte, token string)
 
 func createStartedRoom(t *testing.T, mux *http.ServeMux) (string, string, string, map[string]any) {
 	t.Helper()
+	roomID, playerIDs, started := createStartedRoomWithPlayerNames(t, mux, []string{"测试房主", "第二位玩家"})
+	return roomID, playerIDs[0], playerIDs[1], started
+}
 
-	createPayload, _ := json.Marshal(map[string]string{"hostName": "测试房主"})
+func createStartedRoomWithPlayerNames(t *testing.T, mux *http.ServeMux, playerNames []string) (string, []string, map[string]any) {
+	t.Helper()
+	if len(playerNames) < 2 {
+		t.Fatalf("expected at least two player names to start room")
+	}
+
+	createPayload, _ := json.Marshal(map[string]string{"hostName": playerNames[0]})
 	createRequest := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(createPayload))
 	createRecorder := httptest.NewRecorder()
 	mux.ServeHTTP(createRecorder, createRequest)
@@ -91,19 +100,23 @@ func createStartedRoom(t *testing.T, mux *http.ServeMux) (string, string, string
 	roomID := created["roomId"].(string)
 	hostID := created["hostId"].(string)
 	rememberPlayerToken(roomID, hostID, hostSession["playerToken"].(string))
+	playerIDs := []string{hostID}
 
-	joinPayload, _ := json.Marshal(map[string]string{"playerName": "第二位玩家"})
-	joinRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/join", bytes.NewReader(joinPayload))
-	joinRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(joinRecorder, joinRequest)
-	if joinRecorder.Code != http.StatusOK {
-		t.Fatalf("expected join status 200, got %d", joinRecorder.Code)
+	for _, playerName := range playerNames[1:] {
+		joinPayload, _ := json.Marshal(map[string]string{"playerName": playerName})
+		joinRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+roomID+"/join", bytes.NewReader(joinPayload))
+		joinRecorder := httptest.NewRecorder()
+		mux.ServeHTTP(joinRecorder, joinRequest)
+		if joinRecorder.Code != http.StatusOK {
+			t.Fatalf("expected join status 200, got %d", joinRecorder.Code)
+		}
+
+		joined, session := decodeRoomEntryResponse(t, joinRecorder)
+		players := joined["players"].([]any)
+		playerID := players[len(players)-1].(map[string]any)["id"].(string)
+		rememberPlayerToken(roomID, playerID, session["playerToken"].(string))
+		playerIDs = append(playerIDs, playerID)
 	}
-
-	joined, secondSession := decodeRoomEntryResponse(t, joinRecorder)
-	players := joined["players"].([]any)
-	secondPlayerID := players[len(players)-1].(map[string]any)["id"].(string)
-	rememberPlayerToken(roomID, secondPlayerID, secondSession["playerToken"].(string))
 
 	startPayload, _ := json.Marshal(map[string]string{"hostId": hostID})
 	startRequest := authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/start", startPayload, playerToken(roomID, hostID))
@@ -115,7 +128,7 @@ func createStartedRoom(t *testing.T, mux *http.ServeMux) (string, string, string
 
 	var started map[string]any
 	_ = json.Unmarshal(startRecorder.Body.Bytes(), &started)
-	return roomID, hostID, secondPlayerID, started
+	return roomID, playerIDs, started
 }
 
 func TestRoomCreateReturnsSessionEnvelope(t *testing.T) {
@@ -1007,6 +1020,82 @@ func TestBankruptcyTransfersAssetsToPlayerCreditor(t *testing.T) {
 	}
 	if body["roomState"] != "finished" {
 		t.Fatalf("expected room to finish when one active player remains, got %v", body["roomState"])
+	}
+}
+
+func TestThreePlayerBankruptcyTransferKeepsRoomRunning(t *testing.T) {
+	_, mux, dataPath := newServiceForTest(t)
+	roomID, playerIDs, _ := createStartedRoomWithPlayerNames(t, mux, []string{"测试房主", "第二位玩家", "第三位玩家"})
+	hostID := playerIDs[0]
+	secondPlayerID := playerIDs[1]
+	thirdPlayerID := playerIDs[2]
+
+	mutateRoomPlayers(t, dataPath, roomID, func(players []rooms.Player) []rooms.Player {
+		players[0].Cash = 65
+		players[0].Properties = []string{"tile-1", "tile-3"}
+		players[0].MortgagedProperties = []string{"tile-3"}
+		players[0].PropertyImprovements = map[string]int{"tile-1": 2}
+		players[0].HeldCardIDs = []string{"chance-jail-card"}
+		players[1].Cash = 900
+		players[2].Cash = 1500
+		return players
+	})
+	mutateRoomSnapshot(t, dataPath, roomID, func(snapshot *pocketbase.PersistedRoomSnapshot) {
+		snapshot.TurnState = "awaiting-deficit-resolution"
+		snapshot.CurrentTurnPlayerID = hostID
+		pendingPayment, _ := json.Marshal(map[string]any{"amount": 140, "reason": "rent", "creditorKind": "player", "creditorPlayerId": secondPlayerID, "sourceTileId": "tile-6", "sourceTileLabel": "东湖路"})
+		snapshot.PendingPaymentJSON = pendingPayment
+	})
+	mux = reloadMuxWithDice(t, dataPath, [2]int{1, 1})
+
+	bankruptcyPayload, _ := json.Marshal(map[string]string{"playerId": hostID, "idempotencyKey": "three-player-creditor-bankruptcy"})
+	bankruptcyRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(bankruptcyRecorder, authorizedRequest(http.MethodPost, "/api/rooms/"+roomID+"/bankruptcy", bankruptcyPayload, playerToken(roomID, hostID)))
+	if bankruptcyRecorder.Code != http.StatusOK {
+		t.Fatalf("expected three-player bankruptcy status 200, got %d", bankruptcyRecorder.Code)
+	}
+
+	var body map[string]any
+	_ = json.Unmarshal(bankruptcyRecorder.Body.Bytes(), &body)
+	players := body["players"].([]any)
+	host := players[0].(map[string]any)
+	creditor := players[1].(map[string]any)
+	thirdPlayer := players[2].(map[string]any)
+
+	if host["isBankrupt"] != true {
+		t.Fatalf("expected bankrupt player flag for host")
+	}
+	if len(host["properties"].([]any)) != 0 {
+		t.Fatalf("expected bankrupt host properties cleared")
+	}
+	if creditor["cash"] != float64(965) {
+		t.Fatalf("expected creditor cash 965 after receiving remaining cash, got %v", creditor["cash"])
+	}
+	if thirdPlayer["id"] != thirdPlayerID {
+		t.Fatalf("expected third player to remain in room, got %v", thirdPlayer["id"])
+	}
+	if thirdPlayer["cash"] != float64(1500) {
+		t.Fatalf("expected third player cash 1500 to remain unchanged, got %v", thirdPlayer["cash"])
+	}
+	if body["turnState"] != "awaiting-roll" {
+		t.Fatalf("expected continued room to return to awaiting-roll, got %v", body["turnState"])
+	}
+	if body["roomState"] != "in-game" {
+		t.Fatalf("expected room to continue after three-player bankruptcy, got %v", body["roomState"])
+	}
+	if body["currentTurnPlayerId"] != secondPlayerID {
+		t.Fatalf("expected turn to hand off to creditor %s, got %v", secondPlayerID, body["currentTurnPlayerId"])
+	}
+	if body["pendingPayment"] != nil {
+		t.Fatalf("expected pending payment cleared after bankruptcy")
+	}
+	recentEvents := body["recentEvents"].([]any)
+	lastEvent := recentEvents[len(recentEvents)-1].(map[string]any)
+	if lastEvent["type"] != "turn-advanced" {
+		t.Fatalf("expected turn-advanced after continued bankruptcy, got %v", lastEvent["type"])
+	}
+	if lastEvent["nextPlayerId"] != secondPlayerID {
+		t.Fatalf("expected next player %s after bankruptcy, got %v", secondPlayerID, lastEvent["nextPlayerId"])
 	}
 }
 
