@@ -52,7 +52,43 @@ type BoardConsequenceCue = {
   spectatorLabel: string;
   anchorTileId: string | null;
   ariaSummary: string;
+  primaryPlayerId: string | null;
+  secondaryPlayerId: string | null;
 };
+
+type BoardTurnHandoffCue = {
+  key: string;
+  playerId: string;
+  playerName: string;
+  stageLabel: string;
+  stageDetail: string;
+  ariaSummary: string;
+};
+
+function buildBoardTurnHandoffStage(turnState: string, playerName: string, pendingActionLabel: string) {
+  switch (turnState) {
+    case "awaiting-roll":
+      return {
+        stageLabel: "等待掷骰",
+        stageDetail: `现在轮到 ${playerName} 掷骰。`,
+      };
+    case "awaiting-jail-decision":
+      return {
+        stageLabel: "监狱决策",
+        stageDetail: `现在轮到 ${playerName} 决定如何离开监狱。`,
+      };
+    case "awaiting-property-decision":
+      return {
+        stageLabel: "地产决策",
+        stageDetail: `现在轮到 ${playerName} 决定是否处理当前地产。`,
+      };
+    default:
+      return {
+        stageLabel: "当前舞台",
+        stageDetail: pendingActionLabel,
+      };
+  }
+}
 
 type RecoveryRecapSnapshot = {
   token: number;
@@ -1017,6 +1053,8 @@ export function GamePage() {
           spectatorLabel: `${actorName} 已取得 ${tileLabel}`,
           anchorTileId,
           ariaSummary: `${actorName} 买下 ${tileLabel}，支付 ${amount}，归属已确认`,
+          primaryPlayerId: latestBoardConsequenceEvent.playerId ?? null,
+          secondaryPlayerId: null,
         };
       }
       case "rent-charged": {
@@ -1030,6 +1068,8 @@ export function GamePage() {
           spectatorLabel: `${actorName} 向 ${ownerName ?? "收租方"} 支付租金 ${amount}`,
           anchorTileId,
           ariaSummary: `${actorName} 向 ${ownerName ?? "收租方"} 支付租金 ${amount}`,
+          primaryPlayerId: latestBoardConsequenceEvent.playerId ?? null,
+          secondaryPlayerId: latestBoardConsequenceEvent.ownerPlayerId ?? null,
         };
       }
       case "tax-paid": {
@@ -1043,6 +1083,8 @@ export function GamePage() {
           spectatorLabel: `${actorName} 已向银行支付税费 ${amount}`,
           anchorTileId,
           ariaSummary: `${actorName} 向银行支付税费 ${amount}`,
+          primaryPlayerId: latestBoardConsequenceEvent.playerId ?? null,
+          secondaryPlayerId: null,
         };
       }
       case "player-jailed": {
@@ -1055,12 +1097,30 @@ export function GamePage() {
           spectatorLabel: `${actorName} 已进入监狱，等待后续监狱决策`,
           anchorTileId,
           ariaSummary: `${actorName} 已进入监狱，后续等待监狱决策`,
+          primaryPlayerId: latestBoardConsequenceEvent.playerId ?? null,
+          secondaryPlayerId: null,
         };
       }
       default:
         return null;
     }
   })();
+  const boardTurnHandoffCue: BoardTurnHandoffCue | null = latestProjectionEvent?.type === "turn-advanced"
+    ? (() => {
+        const nextPlayerId = latestProjectionEvent.nextPlayerId ?? projection.currentTurnPlayerId;
+        const nextPlayerName = projection.players.find((player) => player.id === nextPlayerId)?.name ?? projection.currentTurnPlayerName;
+        const handoffStage = buildBoardTurnHandoffStage(projection.turnState, nextPlayerName, projection.pendingActionLabel);
+
+        return {
+          key: `${latestProjectionEvent.sequence}:${latestProjectionEvent.type}`,
+          playerId: nextPlayerId,
+          playerName: nextPlayerName,
+          stageLabel: handoffStage.stageLabel,
+          stageDetail: handoffStage.stageDetail,
+          ariaSummary: `${nextPlayerName} 接过当前回合，${handoffStage.stageDetail}`,
+        };
+      })()
+    : null;
   const mobilePrimaryAnchorStyle = isMobileAnchorTray
     ? {
         position: "fixed" as const,
@@ -2097,6 +2157,7 @@ export function GamePage() {
           stageCue={boardStageCue}
           transitionHint={boardSceneTransitionHint}
           consequenceHint={boardConsequenceCue}
+          handoffHint={boardTurnHandoffCue}
         />
       </section>
       <aside className="panel panel--room-state room-shell__rail">

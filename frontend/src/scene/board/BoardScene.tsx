@@ -30,6 +30,17 @@ type BoardConsequenceCue = {
   spectatorLabel: string;
   anchorTileId: string | null;
   ariaSummary: string;
+  primaryPlayerId: string | null;
+  secondaryPlayerId: string | null;
+};
+
+type BoardTurnHandoffCue = {
+  key: string;
+  playerId: string;
+  playerName: string;
+  stageLabel: string;
+  stageDetail: string;
+  ariaSummary: string;
 };
 
 type BoardSceneProps = {
@@ -51,6 +62,7 @@ type BoardSceneProps = {
   stageCue: BoardStageCue | null;
   transitionHint: BoardSceneTransitionHint | null;
   consequenceHint: BoardConsequenceCue | null;
+  handoffHint: BoardTurnHandoffCue | null;
 };
 
 type SceneAnimationCue = {
@@ -557,6 +569,7 @@ function drawCenterHud(
   const resultFeedback = props.resultFeedback;
   const stageCue = props.stageCue;
   const consequenceHint = props.consequenceHint;
+  const handoffHint = props.handoffHint;
   const feedbackAccent = getFeedbackAccent(resultFeedback?.tone ?? "default", currentPlayerColor);
   const stageSize = tileSize * 11;
   const compactHud = stageSize < 620;
@@ -643,7 +656,8 @@ function drawCenterHud(
     const resultBanner = new Graphics();
     const bannerInset = 22 - (animationState?.pulse ?? 0) * 2;
     resultBanner.roundRect(centerX + bannerInset, centerY + bannerInset, centerWidth - bannerInset * 2, ribbonHeight + 22, 24);
-    resultBanner.fill({ color: feedbackAccent, alpha: getFeedbackBannerAlpha(resultFeedback.tone) + (animationState?.glowAlpha ?? 0) * 0.5 });
+    const resultAlpha = (getFeedbackBannerAlpha(resultFeedback.tone) + (animationState?.glowAlpha ?? 0) * 0.5) * (handoffHint ? 0.54 : 1);
+    resultBanner.fill({ color: feedbackAccent, alpha: resultAlpha });
     resultBanner.stroke({ color: feedbackAccent, width: 1.5, alpha: 0.38 });
     root.addChild(resultBanner);
 
@@ -724,13 +738,50 @@ function drawCenterHud(
   footer.y = centerY + cardHeight - (compactHud ? 22 : 26);
   root.addChild(footer);
 
+  if (handoffHint && (!animationState?.diceLabel || animationState.revealProgress >= 1)) {
+    const bridgeWidth = compactHud ? 210 : 246;
+    const bridgeHeight = compactHud ? 54 : 62;
+    const bridgeX = centerX + centerWidth / 2 - bridgeWidth / 2;
+    const bridgeY = centerY - 18;
+
+    const bridge = new Graphics();
+    bridge.roundRect(bridgeX, bridgeY, bridgeWidth, bridgeHeight, 22);
+    bridge.fill({ color: 0x10261f, alpha: 0.92 });
+    bridge.stroke({ color: currentPlayerColor, width: 1.7, alpha: 0.5 });
+    root.addChild(bridge);
+
+    const handoffLabel = new Text({
+      text: `当前行动者 ${handoffHint.playerName}`,
+      style: createAdaptiveTextStyle(centerChipLabelStyle, {
+        fontSize: compactHud ? 9 : 10,
+        fill: 0xe6c37d,
+      }),
+    });
+    handoffLabel.anchor.set(0.5, 0);
+    handoffLabel.x = bridgeX + bridgeWidth / 2;
+    handoffLabel.y = bridgeY + 10;
+    root.addChild(handoffLabel);
+
+    const handoffStage = new Text({
+      text: handoffHint.stageLabel,
+      style: createAdaptiveTextStyle(centerChipValueStyle, {
+        fontSize: compactHud ? 16 : 18,
+        fill: 0xf8f0dd,
+      }),
+    });
+    handoffStage.anchor.set(0.5, 0);
+    handoffStage.x = bridgeX + bridgeWidth / 2;
+    handoffStage.y = bridgeY + 25;
+    root.addChild(handoffStage);
+  }
+
   if (consequenceHint) {
     const consequenceAccent = getFeedbackAccent(consequenceHint.tone, feedbackAccent);
     const ribbonWidth = centerWidth - 20;
     const ribbonHeight = compactHud ? 58 : 66;
     const ribbonX = centerX + 10;
     const ribbonY = centerY + cardHeight + 12;
-    const ribbonAlpha = 0.92 + (animationState?.landingProgress ?? 0) * 0.04;
+    const ribbonAlpha = (0.92 + (animationState?.landingProgress ?? 0) * 0.04) * (handoffHint ? 0.58 : 1);
 
     const ribbon = new Graphics();
     ribbon.roundRect(ribbonX, ribbonY, ribbonWidth, ribbonHeight, 20);
@@ -805,16 +856,25 @@ function drawPlayerTokens(
 
   function drawToken(player: PlayerState, tokenX: number, tokenY: number, tokenColor: number) {
     const tokenRadius = Math.max(10, tileSize * 0.13);
+    const isCurrentTurnPlayer = player.id === props.currentTurnPlayerId;
+    const isMovingPlayer = player.id === animationState?.movingPlayerId;
+    const isHandoffPlayer = player.id === props.handoffHint?.playerId;
+    const isConsequencePrimary = player.id === props.consequenceHint?.primaryPlayerId;
+    const isConsequenceSecondary = player.id === props.consequenceHint?.secondaryPlayerId;
     const shadow = new Graphics();
     shadow.circle(tokenX + 1.5, tokenY + 3, tokenRadius + 1);
     shadow.fill({ color: 0x07120f, alpha: 0.28 });
     root.addChild(shadow);
 
-    if (player.id === props.currentTurnPlayerId || player.id === animationState?.movingPlayerId) {
+    if (isCurrentTurnPlayer || isMovingPlayer || isConsequencePrimary || isConsequenceSecondary) {
       const ring = new Graphics();
-      ring.circle(tokenX, tokenY, tokenRadius + 7 + (player.id === animationState?.movingPlayerId ? (animationState?.pulse ?? 0) * 2 : 0));
-      ring.fill({ color: tokenColor, alpha: 0.14 + (player.id === animationState?.movingPlayerId ? (animationState?.glowAlpha ?? 0) * 0.45 : 0) });
-      ring.stroke({ color: 0xf6e7af, width: 2.5, alpha: 0.95 });
+      const ringBoost = isMovingPlayer ? (animationState?.pulse ?? 0) * 2 : isHandoffPlayer ? 1.8 : 0;
+      ring.circle(tokenX, tokenY, tokenRadius + 7 + ringBoost);
+      const fillAlpha = isConsequenceSecondary ? 0.1 : 0.14 + (isMovingPlayer ? (animationState?.glowAlpha ?? 0) * 0.45 : 0) + (isHandoffPlayer ? 0.06 : 0);
+      const strokeColor = isConsequenceSecondary ? tokenColor : 0xf6e7af;
+      const strokeAlpha = isConsequenceSecondary ? 0.74 : 0.95;
+      ring.fill({ color: tokenColor, alpha: fillAlpha });
+      ring.stroke({ color: strokeColor, width: isHandoffPlayer ? 3 : 2.5, alpha: strokeAlpha });
       root.addChild(ring);
     }
 
@@ -1028,11 +1088,14 @@ function BoardSceneInner(props: BoardSceneProps) {
   const consequenceSummary = props.consequenceHint
     ? `，棋盘后果 ${props.consequenceHint.ariaSummary}`
     : "";
+  const handoffSummary = props.handoffHint
+    ? `，回合接管 ${props.handoffHint.ariaSummary}`
+    : "";
 
   return (
     <div className="board__surface">
       <div
-        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}${consequenceSummary}`}
+        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}${consequenceSummary}${handoffSummary}`}
         className="board__pixi-host"
         ref={hostRef}
       />

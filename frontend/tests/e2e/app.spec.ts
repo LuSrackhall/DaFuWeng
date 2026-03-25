@@ -2767,6 +2767,7 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(page.locator(".board__pixi-host canvas")).toBeVisible();
   await expect(page.getByText(/这次买地结果已经记下/)).toBeVisible();
   await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", new RegExp(`棋盘后果 房主甲 买下 ${propertyDecision.label}，支付 ${propertyDecision.price}，归属已确认`));
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家乙 接过当前回合，现在轮到 玩家乙 掷骰。/);
   await expect(page.getByText(/现金: 1340/)).toBeVisible();
   await expect(page.getByText(/地产: 1/)).toBeVisible();
 
@@ -2778,6 +2779,7 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(guestPage.getByText(/现金: 1478/)).toBeVisible();
   await expect(page.getByText(/现金: 1362/)).toBeVisible();
   await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /棋盘后果 玩家乙 向 房主甲 支付租金 22/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 房主甲 接过当前回合，现在轮到 房主甲 掷骰。/);
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
 
   await page.reload();
