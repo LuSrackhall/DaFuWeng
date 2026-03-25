@@ -4098,6 +4098,117 @@ test("jail release closure restores a single next-step guidance", async ({
   await expect(page.getByRole("button", { name: "使用出狱卡" })).toHaveCount(0);
 });
 
+test("failed jail attempt keeps the jailed player as the visible takeover owner", async ({
+  page,
+}) => {
+  const roomId = "room-jail-hold-takeover";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 35,
+    eventSequence: 35,
+    turnState: "awaiting-jail-decision",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "房主甲 需要继续处理监狱决策。",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [2, 3],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 880,
+        position: 10,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: ["chance-jail-card"],
+        inJail: true,
+        jailTurnsServed: 2,
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1500,
+        position: 4,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-34",
+        type: "player-jailed",
+        sequence: 34,
+        snapshotVersion: 34,
+        summary: "房主甲 进入了监狱。",
+        playerId: "p1",
+        tileId: "tile-10",
+        tileIndex: 10,
+        tileLabel: "监狱",
+      },
+      {
+        id: "evt-35",
+        type: "jail-roll-attempted",
+        sequence: 35,
+        snapshotVersion: 35,
+        summary: "房主甲 仍在监狱中，当前需要继续处理出狱决策。",
+        playerId: "p1",
+        releaseMethod: "fine",
+        failedAttemptCount: 2,
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: snapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /行动接管 房主甲 正在接管当前监狱决策，本次尝试失败 2 次后仍需继续处理/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /阶段焦点 监狱决策，当前轮到 房主甲 继续处理留狱结果，这次已失败 2 次/);
+  await expect(page.getByRole("button", { name: "尝试掷骰出狱" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "支付 50 罚金" })).toBeVisible();
+});
+
 test("player-creditor deficit closure names the payee and next step", async ({
   page,
 }) => {
@@ -4352,6 +4463,263 @@ test("economic chain closure explains bankruptcy and end-state guidance", async 
   await expect(page.getByText(/房间已结束/).first()).toBeVisible();
   await expect(page.getByText(/状态: 已破产/)).toBeVisible();
   await expect(page.getByText(/现金: 1860/)).toBeVisible();
+});
+
+test("unfinished economic chain keeps the debtor takeover and brief visible", async ({
+  page,
+}) => {
+  const roomId = "room-economic-chain-open";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 43,
+    eventSequence: 43,
+    turnState: "awaiting-deficit-resolution",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "房主甲 仍需继续处理欠款恢复。",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: {
+      amount: 180,
+      reason: "rent",
+      creditorKind: "player",
+      creditorPlayerId: "p2",
+      sourceTileId: "tile-1",
+      sourceTileLabel: "东湖路",
+    },
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 65,
+        position: 1,
+        properties: ["tile-39"],
+        mortgagedProperties: ["tile-39"],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1500,
+        position: 3,
+        properties: ["tile-1"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-41",
+        type: "deficit-started",
+        sequence: 41,
+        snapshotVersion: 41,
+        summary: "房主甲 需向 玩家乙 支付 180 租金。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "东湖路",
+        amount: 180,
+        cashAfter: 20,
+      },
+      {
+        id: "evt-42",
+        type: "property-mortgaged",
+        sequence: 42,
+        snapshotVersion: 42,
+        summary: "房主甲 抵押了 终章大道。",
+        playerId: "p1",
+        tileId: "tile-39",
+        tileIndex: 39,
+        tileLabel: "终章大道",
+        amount: 45,
+        cashAfter: 65,
+      },
+      {
+        id: "evt-43",
+        type: "improvement-sold",
+        sequence: 43,
+        snapshotVersion: 43,
+        summary: "房主甲 卖掉了一处建筑继续补款。",
+        playerId: "p1",
+        tileId: "tile-39",
+        tileIndex: 39,
+        tileLabel: "终章大道",
+        amount: 0,
+        cashAfter: 65,
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: snapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /行动接管 房主甲 正在接管未收束的经济链路，已完成 2 步恢复，仍需继续处理对 玩家乙 的义务/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /阶段焦点 欠款恢复，当前轮到 房主甲 继续处理未收束的 租金链路，已完成 2 步恢复/);
+  await expect(page.getByRole("button", { name: "宣告破产" })).toBeVisible();
+});
+
+test("player-creditor bankruptcy transfer makes the receiver the takeover focus", async ({
+  page,
+}) => {
+  const roomId = "room-bankruptcy-transfer-takeover";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 61,
+    eventSequence: 61,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p2",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      {
+        id: "p1",
+        name: "房主甲",
+        cash: 0,
+        position: 1,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: true,
+      },
+      {
+        id: "p2",
+        name: "玩家乙",
+        cash: 1780,
+        position: 3,
+        properties: ["tile-1", "tile-39"],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+      {
+        id: "p3",
+        name: "玩家丙",
+        cash: 1500,
+        position: 5,
+        properties: [],
+        mortgagedProperties: [],
+        propertyImprovements: {},
+        heldCardIds: [],
+        isBankrupt: false,
+      },
+    ],
+    recentEvents: [
+      {
+        id: "evt-60",
+        type: "deficit-started",
+        sequence: 60,
+        snapshotVersion: 60,
+        summary: "房主甲 需向 玩家乙 支付 300 租金。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        tileId: "tile-1",
+        tileIndex: 1,
+        tileLabel: "东湖路",
+        amount: 300,
+        cashAfter: 20,
+      },
+      {
+        id: "evt-61",
+        type: "bankruptcy-declared",
+        sequence: 61,
+        snapshotVersion: 61,
+        summary: "房主甲 向 玩家乙 宣告破产。",
+        playerId: "p1",
+        ownerPlayerId: "p2",
+        transferredPropertyIds: ["tile-39"],
+        transferredCardIds: [],
+      },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p2",
+        playerName: "玩家乙",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route, request) => {
+    if (request.method() === "GET") {
+      await route.fulfill({ json: snapshot });
+      return;
+    }
+
+    await route.continue();
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /行动接管 玩家乙 正在接管 房主甲 的破产移交结果/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /阶段收束 复杂经济链条已收束，房主甲 已向 玩家乙 破产结算。当前恢复为 玩家乙 的等待掷骰/);
+  await expect(page.getByRole("button", { name: /以 玩家乙 身份掷骰/ })).toBeVisible();
 });
 
 test("turn tools shelf stays collapsed by default and reveals optional tools on demand", async ({

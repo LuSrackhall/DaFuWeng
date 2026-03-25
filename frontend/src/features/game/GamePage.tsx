@@ -1,4 +1,5 @@
 import { sampleBoard } from "@dafuweng/board-config";
+import type { ProjectionEvent } from "@dafuweng/contracts";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -65,13 +66,24 @@ type BoardTurnHandoffCue = {
   ariaSummary: string;
 };
 
+type BoardActorTakeoverCue = {
+  key: string;
+  playerId: string;
+  playerName: string;
+  tone: BoardResultFeedbackTone;
+  scenarioLabel: string;
+  detail: string;
+  ariaSummary: string;
+};
+
 type BoardPhaseFocusCue = {
   key: string;
-  phaseKind: "auction" | "trade-response" | "deficit";
+  phaseKind: "auction" | "trade-response" | "deficit" | "jail";
   tone: BoardResultFeedbackTone;
   phaseLabel: string;
   headline: string;
   detail: string;
+  briefLabel: string | null;
   pressureLabel: string;
   ariaSummary: string;
   primaryPlayerId: string | null;
@@ -133,6 +145,13 @@ function buildBoardNextStepGuidance(turnState: string, playerName: string, pendi
     default:
       return `下一步：${pendingActionLabel}`;
   }
+}
+
+function countEconomicChainSteps(events: ProjectionEvent[], startSequence: number) {
+  return events.filter((event) =>
+    event.sequence > startSequence
+    && (event.type === "property-mortgaged" || event.type === "improvement-sold")
+  ).length;
 }
 
 function buildPaymentReasonLabel(reason: "tax" | "jail" | "rent" | "card") {
@@ -1179,6 +1198,81 @@ export function GamePage() {
         };
       })()
     : null;
+  const boardActorTakeoverCue: BoardActorTakeoverCue | null = (() => {
+    const latestJailAttemptEvent = [...projection.recentEvents]
+      .filter((event) => event.type === "jail-roll-attempted")
+      .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+    const latestBankruptcyEvent = [...projection.recentEvents]
+      .filter((event) => event.type === "bankruptcy-declared")
+      .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+    const latestDeficitStart = [...projection.recentEvents]
+      .filter((event) => event.type === "deficit-started")
+      .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+
+    if (
+      projection.turnState === "awaiting-jail-decision"
+      && latestJailAttemptEvent?.playerId === projection.currentTurnPlayerId
+      && latestJailAttemptEvent.releaseMethod !== "roll"
+    ) {
+      const playerName = projection.currentTurnPlayerName;
+      const failedCount = latestJailAttemptEvent.failedAttemptCount ?? 0;
+
+      return {
+        key: `${latestJailAttemptEvent.sequence}:${latestJailAttemptEvent.type}:takeover`,
+        playerId: projection.currentTurnPlayerId,
+        playerName,
+        tone: "danger",
+        scenarioLabel: "当前承压者",
+        detail: `${playerName} 本次未能离开监狱，当前仍由他继续处理出狱决策。`,
+        ariaSummary: `${playerName} 正在接管当前监狱决策，本次尝试失败 ${failedCount} 次后仍需继续处理`,
+      };
+    }
+
+    if (
+      projection.turnState === "awaiting-deficit-resolution"
+      && projection.pendingPayment
+      && latestDeficitStart
+    ) {
+      const actorName = projection.currentTurnPlayerName;
+      const creditorName = projection.pendingPayment.creditorKind === "player" && projection.pendingPayment.creditorPlayerId
+        ? projection.players.find((player) => player.id === projection.pendingPayment?.creditorPlayerId)?.name ?? "债权方"
+        : "银行";
+      const recoverySteps = countEconomicChainSteps(projection.recentEvents, latestDeficitStart.sequence);
+
+      return {
+        key: `${projection.snapshotVersion}:${projection.eventSequence}:deficit-takeover`,
+        playerId: projection.currentTurnPlayerId,
+        playerName: actorName,
+        tone: "danger",
+        scenarioLabel: recoverySteps > 0 ? "链路处理中" : "当前承压者",
+        detail: recoverySteps > 0
+          ? `${actorName} 已完成 ${recoverySteps} 步恢复，但仍需向 ${creditorName} 处理剩余义务。`
+          : `${actorName} 正在承接这笔对 ${creditorName} 的恢复链路。`,
+        ariaSummary: recoverySteps > 0
+          ? `${actorName} 正在接管未收束的经济链路，已完成 ${recoverySteps} 步恢复，仍需继续处理对 ${creditorName} 的义务`
+          : `${actorName} 正在接管当前欠款恢复，对手方为 ${creditorName}`,
+      };
+    }
+
+    if (latestBankruptcyEvent?.ownerPlayerId) {
+      const receiverName = projection.players.find((player) => player.id === latestBankruptcyEvent.ownerPlayerId)?.name ?? "债权方";
+      const debtorName = latestBankruptcyEvent.playerId
+        ? projection.players.find((player) => player.id === latestBankruptcyEvent.playerId)?.name ?? "当前玩家"
+        : "当前玩家";
+
+      return {
+        key: `${latestBankruptcyEvent.sequence}:${latestBankruptcyEvent.type}:takeover`,
+        playerId: latestBankruptcyEvent.ownerPlayerId,
+        playerName: receiverName,
+        tone: projection.roomState === "finished" ? "neutral" : "warning",
+        scenarioLabel: "当前接收者",
+        detail: `${receiverName} 正在接收 ${debtorName} 的剩余资产与现金转移。`,
+        ariaSummary: `${receiverName} 正在接管 ${debtorName} 的破产移交结果`,
+      };
+    }
+
+    return null;
+  })();
   const boardPhaseFocusCue: BoardPhaseFocusCue | null = (() => {
     if (projection.turnState === "awaiting-auction" && projection.pendingAuction) {
       const pendingAuction = projection.pendingAuction;
@@ -1204,6 +1298,7 @@ export function GamePage() {
         ariaSummary: hasLeadingBid
           ? `公开拍卖，当前轮到 ${activeBidderName} 决定 ${pendingAuction.label}，${highestBidderName} 以 ${pendingAuction.highestBid} 领先`
           : `公开拍卖，当前轮到 ${activeBidderName} 为 ${pendingAuction.label} 开价`,
+        briefLabel: null,
         primaryPlayerId: activeBidderId,
         secondaryPlayerId: pendingAuction.highestBidderId,
         anchorTileId: pendingAuction.tileId,
@@ -1233,9 +1328,43 @@ export function GamePage() {
         detail: `${responderName} 正在回应 ${proposerName} 的报价，房间暂停等待这一次双边表态。`,
         pressureLabel,
         ariaSummary: `交易回应，当前轮到 ${responderName} 回应 ${proposerName} 的报价`,
+        briefLabel: null,
         primaryPlayerId: responderId,
         secondaryPlayerId: proposerId,
         anchorTileId,
+      };
+    }
+
+    if (projection.turnState === "awaiting-jail-decision") {
+      const latestJailAttemptEvent = [...projection.recentEvents]
+        .filter((event) => event.type === "jail-roll-attempted")
+        .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+      const actorName = projection.currentTurnPlayerName;
+      const failedCount = latestJailAttemptEvent?.failedAttemptCount ?? 0;
+      const failedAttempt = latestJailAttemptEvent?.playerId === projection.currentTurnPlayerId && latestJailAttemptEvent.releaseMethod !== "roll";
+      const briefLabel = failedAttempt
+        ? `失败 ${failedCount} 次 · 仍可支付 50、使用出狱卡或等待下一次尝试`
+        : currentTurnJailCardCount > 0
+          ? `当前可用出狱卡 ${currentTurnJailCardCount} 张`
+          : "当前没有可用出狱卡";
+
+      return {
+        key: `${projection.snapshotVersion}:${projection.eventSequence}:jail-focus`,
+        phaseKind: "jail",
+        tone: failedAttempt ? "danger" : "warning",
+        phaseLabel: "监狱决策",
+        headline: failedAttempt ? `${actorName} 仍在监狱` : `${actorName} 等待出狱`,
+        detail: failedAttempt
+          ? `${actorName} 这次掷骰未能脱困，当前回合仍停在监狱决策。`
+          : `${actorName} 需要先处理监狱决策，当前普通回合还未恢复。`,
+        briefLabel,
+        pressureLabel: failedAttempt ? `留狱继续 · 第 ${failedCount} 次尝试` : `监狱中 · 已尝试 ${currentTurnProjectionPlayer?.jailTurnsServed ?? 0} 次`,
+        ariaSummary: failedAttempt
+          ? `监狱决策，当前轮到 ${actorName} 继续处理留狱结果，这次已失败 ${failedCount} 次`
+          : `监狱决策，当前轮到 ${actorName} 处理出狱方式`,
+        primaryPlayerId: projection.currentTurnPlayerId,
+        secondaryPlayerId: null,
+        anchorTileId: "tile-10",
       };
     }
 
@@ -1247,6 +1376,15 @@ export function GamePage() {
         ? projection.players.find((player) => player.id === pendingPayment.creditorPlayerId)?.name ?? "债权方"
         : "银行";
       const reasonLabel = buildPaymentReasonLabel(pendingPayment.reason);
+      const latestDeficitStart = [...projection.recentEvents]
+        .filter((event) => event.type === "deficit-started")
+        .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+      const recoveryStepCount = latestDeficitStart ? countEconomicChainSteps(projection.recentEvents, latestDeficitStart.sequence) : 0;
+      const briefLabel = recoveryStepCount > 0
+        ? `已完成 ${recoveryStepCount} 步恢复 · 当前现金 ${projection.players.find((player) => player.id === debtorId)?.cash ?? 0} / 仍需 ${pendingPayment.amount}`
+        : pendingPayment.creditorKind === "player"
+          ? `当前债权方 ${creditorName} · 普通回合仍未恢复`
+          : "当前仍在处理高压恢复链路";
 
       return {
         key: `${projection.snapshotVersion}:${projection.eventSequence}:deficit-focus`,
@@ -1255,8 +1393,11 @@ export function GamePage() {
         phaseLabel: "补齐欠款",
         headline: `${debtorName} 正在补款`,
         detail: `${debtorName} 需要先向 ${creditorName} 补齐 ${pendingPayment.amount} ${reasonLabel}，当前回合会停在恢复步骤。`,
+        briefLabel,
         pressureLabel: `仍需 ${pendingPayment.amount}`,
-        ariaSummary: `欠款恢复，当前轮到 ${debtorName} 处理 ${pendingPayment.amount} ${reasonLabel}欠款`,
+        ariaSummary: recoveryStepCount > 0
+          ? `欠款恢复，当前轮到 ${debtorName} 继续处理未收束的 ${reasonLabel}链路，已完成 ${recoveryStepCount} 步恢复`
+          : `欠款恢复，当前轮到 ${debtorName} 处理 ${pendingPayment.amount} ${reasonLabel}欠款`,
         primaryPlayerId: debtorId,
         secondaryPlayerId: pendingPayment.creditorKind === "player" ? (pendingPayment.creditorPlayerId ?? null) : null,
         anchorTileId: pendingPayment.sourceTileId ?? null,
@@ -1441,7 +1582,9 @@ export function GamePage() {
         ? projection.players.find((player) => player.id === latestBankruptcyEvent.ownerPlayerId)?.name ?? "债权方"
         : "银行";
       const chainDetail = latestBankruptcyEvent.ownerPlayerId
-        ? `${debtorName} 已向 ${creditorName} 完成破产结算，这条复杂经济链已经收束。`
+        ? projection.roomState === "finished"
+          ? `${debtorName} 已向 ${creditorName} 完成破产结算，这条复杂经济链已经收束。`
+          : `${creditorName} 正在接收 ${debtorName} 的剩余资产与现金移交，普通回合尚未恢复。`
         : `${debtorName} 已按银行债权规则完成破产结算，这条复杂经济链已经收束。`;
 
       return {
@@ -1455,8 +1598,8 @@ export function GamePage() {
         resumeLabel: projection.roomState === "finished" ? "当前结果已进入终局" : `当前恢复到 ${resumeStage.stageLabel}`,
         nextStepLabel: projection.roomState === "finished" ? "下一步：本局已结束，只剩最终结算与回看。" : nextStepGuidance,
         ariaSummary: `复杂经济链条已收束，${projection.latestSettlementSummary.title}。${projection.roomState === "finished" ? "本局已结束。" : `当前恢复为 ${projection.currentTurnPlayerName} 的${resumeStage.stageLabel}。${nextStepGuidance}`}`,
-        primaryPlayerId: latestBankruptcyEvent.playerId,
-        secondaryPlayerId: latestBankruptcyEvent.ownerPlayerId ?? null,
+        primaryPlayerId: latestBankruptcyEvent.ownerPlayerId ?? latestBankruptcyEvent.playerId,
+        secondaryPlayerId: latestBankruptcyEvent.ownerPlayerId ? latestBankruptcyEvent.playerId : null,
         anchorTileId: latestBankruptcyEvent.transferredPropertyIds?.[0] ?? null,
       };
     }
@@ -2500,6 +2643,7 @@ export function GamePage() {
           transitionHint={boardSceneTransitionHint}
           consequenceHint={boardConsequenceCue}
           handoffHint={boardTurnHandoffCue}
+          actorTakeoverHint={boardActorTakeoverCue}
           phaseFocusHint={boardPhaseFocusCue}
           phaseClosureHint={boardPhaseClosureCue}
         />

@@ -43,13 +43,24 @@ type BoardTurnHandoffCue = {
   ariaSummary: string;
 };
 
+type BoardActorTakeoverCue = {
+  key: string;
+  playerId: string;
+  playerName: string;
+  tone: "default" | "warning" | "danger" | "success" | "neutral";
+  scenarioLabel: string;
+  detail: string;
+  ariaSummary: string;
+};
+
 type BoardPhaseFocusCue = {
   key: string;
-  phaseKind: "auction" | "trade-response" | "deficit";
+  phaseKind: "auction" | "trade-response" | "deficit" | "jail";
   tone: "default" | "warning" | "danger" | "success" | "neutral";
   phaseLabel: string;
   headline: string;
   detail: string;
+  briefLabel: string | null;
   pressureLabel: string;
   ariaSummary: string;
   primaryPlayerId: string | null;
@@ -93,6 +104,7 @@ type BoardSceneProps = {
   transitionHint: BoardSceneTransitionHint | null;
   consequenceHint: BoardConsequenceCue | null;
   handoffHint: BoardTurnHandoffCue | null;
+  actorTakeoverHint: BoardActorTakeoverCue | null;
   phaseFocusHint: BoardPhaseFocusCue | null;
   phaseClosureHint: BoardPhaseClosureCue | null;
 };
@@ -610,6 +622,7 @@ function drawCenterHud(
   const stageCue = props.stageCue;
   const consequenceHint = props.consequenceHint;
   const handoffHint = props.handoffHint;
+  const actorTakeoverHint = props.actorTakeoverHint;
   const phaseFocusHint = props.phaseFocusHint;
   const phaseClosureHint = props.phaseClosureHint;
   const feedbackAccent = getFeedbackAccent(resultFeedback?.tone ?? "default", currentPlayerColor);
@@ -817,6 +830,47 @@ function drawCenterHud(
     root.addChild(handoffStage);
   }
 
+  if (actorTakeoverHint && !handoffHint && (!animationState?.diceLabel || animationState.revealProgress >= 1)) {
+    const bridgeWidth = compactHud ? 232 : 274;
+    const bridgeHeight = compactHud ? 62 : 70;
+    const bridgeX = centerX + centerWidth / 2 - bridgeWidth / 2;
+    const bridgeY = centerY - 24;
+    const takeoverAccent = getFeedbackAccent(actorTakeoverHint.tone, currentPlayerColor);
+
+    const bridge = new Graphics();
+    bridge.roundRect(bridgeX, bridgeY, bridgeWidth, bridgeHeight, 22);
+    bridge.fill({ color: 0x10261f, alpha: 0.94 });
+    bridge.stroke({ color: takeoverAccent, width: 1.9, alpha: 0.58 });
+    root.addChild(bridge);
+
+    const takeoverLabel = new Text({
+      text: `${actorTakeoverHint.scenarioLabel} ${actorTakeoverHint.playerName}`,
+      style: createAdaptiveTextStyle(centerChipLabelStyle, {
+        fontSize: compactHud ? 9 : 10,
+        fill: 0xe6c37d,
+      }),
+    });
+    takeoverLabel.anchor.set(0.5, 0);
+    takeoverLabel.x = bridgeX + bridgeWidth / 2;
+    takeoverLabel.y = bridgeY + 9;
+    root.addChild(takeoverLabel);
+
+    const takeoverDetail = new Text({
+      text: actorTakeoverHint.detail,
+      style: createAdaptiveTextStyle(centerBodyStyle, {
+        fontSize: compactHud ? 10 : 11,
+        lineHeight: compactHud ? 13 : 14,
+        fill: 0xf8f0dd,
+        wordWrapWidth: bridgeWidth - 28,
+        align: "center",
+      }),
+    });
+    takeoverDetail.anchor.set(0.5, 0);
+    takeoverDetail.x = bridgeX + bridgeWidth / 2;
+    takeoverDetail.y = bridgeY + 25;
+    root.addChild(takeoverDetail);
+  }
+
   if (phaseClosureHint) {
     const closureAccent = getFeedbackAccent(phaseClosureHint.tone, currentPlayerColor);
     const closureWidth = compactHud ? 186 : 214;
@@ -884,7 +938,7 @@ function drawCenterHud(
   if (phaseFocusHint) {
     const phaseAccent = getFeedbackAccent(phaseFocusHint.tone, currentPlayerColor);
     const focusWidth = compactHud ? 186 : 214;
-    const focusHeight = compactHud ? 94 : 106;
+    const focusHeight = compactHud ? 112 : 126;
     const focusX = centerX + centerWidth - focusWidth - 14;
     const focusY = centerY + 16;
 
@@ -930,6 +984,21 @@ function drawCenterHud(
     phaseDetail.y = focusY + 48;
     root.addChild(phaseDetail);
 
+    if (phaseFocusHint.briefLabel) {
+      const brief = new Text({
+        text: phaseFocusHint.briefLabel,
+        style: createAdaptiveTextStyle(centerChipLabelStyle, {
+          fontSize: compactHud ? 8.5 : 9.5,
+          fill: 0xf8f0dd,
+          wordWrapWidth: focusWidth - 28,
+          wordWrap: true,
+        }),
+      });
+      brief.x = focusX + 14;
+      brief.y = focusY + focusHeight - 36;
+      root.addChild(brief);
+    }
+
     const pressure = new Text({
       text: phaseFocusHint.pressureLabel,
       style: createAdaptiveTextStyle(centerChipLabelStyle, {
@@ -938,7 +1007,7 @@ function drawCenterHud(
       }),
     });
     pressure.x = focusX + 14;
-    pressure.y = focusY + focusHeight - 20;
+    pressure.y = focusY + focusHeight - 18;
     root.addChild(pressure);
   }
 
@@ -1032,22 +1101,23 @@ function drawPlayerTokens(
     const isPhaseSecondary = player.id === props.phaseFocusHint?.secondaryPlayerId;
     const isClosurePrimary = player.id === props.phaseClosureHint?.primaryPlayerId;
     const isClosureSecondary = player.id === props.phaseClosureHint?.secondaryPlayerId;
+    const isTakeoverPlayer = player.id === props.actorTakeoverHint?.playerId;
     const shadow = new Graphics();
     shadow.circle(tokenX + 1.5, tokenY + 3, tokenRadius + 1);
     shadow.fill({ color: 0x07120f, alpha: 0.28 });
     root.addChild(shadow);
 
-    if (isCurrentTurnPlayer || isMovingPlayer || isConsequencePrimary || isConsequenceSecondary || isPhasePrimary || isPhaseSecondary || isClosurePrimary || isClosureSecondary) {
+    if (isCurrentTurnPlayer || isMovingPlayer || isConsequencePrimary || isConsequenceSecondary || isPhasePrimary || isPhaseSecondary || isClosurePrimary || isClosureSecondary || isTakeoverPlayer) {
       const ring = new Graphics();
       const ringBoost = isMovingPlayer ? (animationState?.pulse ?? 0) * 2 : isHandoffPlayer ? 1.8 : 0;
       ring.circle(tokenX, tokenY, tokenRadius + 7 + ringBoost);
       const fillAlpha = isConsequenceSecondary || isPhaseSecondary || isClosureSecondary
         ? 0.1
-        : 0.14 + (isMovingPlayer ? (animationState?.glowAlpha ?? 0) * 0.45 : 0) + (isHandoffPlayer || isPhasePrimary || isClosurePrimary ? 0.06 : 0);
+        : 0.14 + (isMovingPlayer ? (animationState?.glowAlpha ?? 0) * 0.45 : 0) + (isHandoffPlayer || isPhasePrimary || isClosurePrimary || isTakeoverPlayer ? 0.06 : 0);
       const strokeColor = isConsequenceSecondary || isPhaseSecondary || isClosureSecondary ? tokenColor : 0xf6e7af;
       const strokeAlpha = isConsequenceSecondary || isPhaseSecondary || isClosureSecondary ? 0.74 : 0.95;
       ring.fill({ color: tokenColor, alpha: fillAlpha });
-      ring.stroke({ color: strokeColor, width: isHandoffPlayer || isPhasePrimary || isClosurePrimary ? 3 : 2.5, alpha: strokeAlpha });
+      ring.stroke({ color: strokeColor, width: isHandoffPlayer || isPhasePrimary || isClosurePrimary || isTakeoverPlayer ? 3 : 2.5, alpha: strokeAlpha });
       root.addChild(ring);
     }
 
@@ -1228,7 +1298,7 @@ function BoardSceneInner(props: BoardSceneProps) {
     if (appRef.current) {
       renderBoardStage(appRef.current, props, animationCueRef.current, resolveSceneAnimationState(animationCueRef.current));
     }
-  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback, props.stageCue, props.transitionHint, props.consequenceHint, props.handoffHint, props.phaseFocusHint, props.phaseClosureHint]);
+  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback, props.stageCue, props.transitionHint, props.consequenceHint, props.handoffHint, props.actorTakeoverHint, props.phaseFocusHint, props.phaseClosureHint]);
 
   useEffect(() => {
     const previousProps = previousPropsRef.current;
@@ -1248,7 +1318,7 @@ function BoardSceneInner(props: BoardSceneProps) {
     }
 
     previousPropsRef.current = props;
-  }, [props.players, props.highlightedTileId, props.resultFeedback, props.transitionHint, props.phaseFocusHint, props.phaseClosureHint]);
+  }, [props.players, props.highlightedTileId, props.resultFeedback, props.transitionHint, props.actorTakeoverHint, props.phaseFocusHint, props.phaseClosureHint]);
 
   const currentPlayerName = props.players.find((player) => player.id === props.currentTurnPlayerId)?.name ?? "未知玩家";
   const highlightedTileLabel = props.highlightedTileId
@@ -1264,6 +1334,9 @@ function BoardSceneInner(props: BoardSceneProps) {
   const handoffSummary = props.handoffHint
     ? `，回合接管 ${props.handoffHint.ariaSummary}`
     : "";
+  const takeoverSummary = props.actorTakeoverHint
+    ? `，行动接管 ${props.actorTakeoverHint.ariaSummary}`
+    : "";
   const phaseSummary = props.phaseFocusHint
     ? `，阶段焦点 ${props.phaseFocusHint.ariaSummary}`
     : "";
@@ -1274,7 +1347,7 @@ function BoardSceneInner(props: BoardSceneProps) {
   return (
     <div className="board__surface">
       <div
-        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}${consequenceSummary}${handoffSummary}${phaseSummary}${closureSummary}`}
+        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}${consequenceSummary}${handoffSummary}${takeoverSummary}${phaseSummary}${closureSummary}`}
         className="board__pixi-host"
         ref={hostRef}
       />
