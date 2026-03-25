@@ -10,6 +10,7 @@ import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
 import { usePresentationState } from "../../state/presentation/gamePresentation";
 import { getAuctionBidValidation, getDeficitControlMode, sanitizeAuctionBidInput } from "./gameActionState";
+import { buildRecentEventFeed, defaultEventFeedPreferences, EVENT_FEED_PREFERENCES_STORAGE_KEY, sanitizeEventFeedCustomCount, sanitizeEventFeedPreferences } from "./roomEventFeed";
 
 type TradeComposerStep = "counterparty" | "offered" | "requested" | "review";
 type PrimaryAnchorTone = "default" | "warning" | "danger" | "success";
@@ -330,6 +331,8 @@ export function GamePage() {
   const [tradeOfferedCardIds, setTradeOfferedCardIds] = useState<string[]>([]);
   const [tradeRequestedCardIds, setTradeRequestedCardIds] = useState<string[]>([]);
   const [tradeComposerStep, setTradeComposerStep] = useState<TradeComposerStep>("counterparty");
+  const [eventFeedPreferences, setEventFeedPreferences] = useState(defaultEventFeedPreferences);
+  const [isEventFeedSettingsOpen, setIsEventFeedSettingsOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isTurnToolsOpen, setIsTurnToolsOpen] = useState(false);
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
@@ -605,7 +608,9 @@ export function GamePage() {
       ? "如果你点头，这笔交换会立刻生效；如果你摇头，对局会回到报价方继续行动。"
       : "如果对方点头，这笔交换会立刻生效；如果对方摇头，就会轮到你继续这一回合。"
     : null;
-  const diagnosticsEventLines = projection.recentEvents.slice(-5).reverse();
+  const diagnosticsEventLines = [...projection.recentEvents].sort((left, right) => right.sequence - left.sequence);
+  const recentEventFeed = buildRecentEventFeed(projection.recentEvents, eventFeedPreferences);
+  const nearestEventFeedItem = recentEventFeed.items.find((item) => item.isNearest) ?? null;
   const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
   const currentTurnProjectionPlayer = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
   const resolutionActor = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
@@ -1631,15 +1636,39 @@ export function GamePage() {
         backdropFilter: "blur(18px)",
       }
     : undefined;
-  const overviewProgressLabel = projection.latestSettlementSummary
-    ? "当前正式结果见下方最近结果卡。"
-    : latestEventSummary;
-
   useEffect(() => {
     if (!tradeCounterpartyId && otherPlayers.length > 0) {
       setTradeCounterpartyId(otherPlayers[0].id);
     }
   }, [otherPlayers, tradeCounterpartyId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const raw = window.localStorage.getItem(EVENT_FEED_PREFERENCES_STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+
+    try {
+      setEventFeedPreferences(sanitizeEventFeedPreferences(JSON.parse(raw)));
+    } catch {
+      setEventFeedPreferences(defaultEventFeedPreferences);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      EVENT_FEED_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(eventFeedPreferences),
+    );
+  }, [eventFeedPreferences]);
 
   useEffect(() => {
     const selectableOfferedTileIds = new Set(
@@ -2553,6 +2582,109 @@ export function GamePage() {
     );
   }
 
+  function renderRecentEventFeed() {
+    return (
+      <section className={`board-event-feed board-event-feed--${eventFeedPreferences.nearEventPlacement}`}>
+        <div className="board-event-feed__header">
+          <div className="board-event-feed__copy">
+            <p className="shell__eyebrow">牌局纪事</p>
+            <strong>最近事件</strong>
+            <span>
+              {nearestEventFeedItem
+                ? `当前显示 ${recentEventFeed.visibleCount} / ${recentEventFeed.retainedCount} 条，最新一条是：${nearestEventFeedItem.summary}`
+                : "当前还没有可回看的房间事件。"}
+            </span>
+          </div>
+          <button
+            className="board-event-feed__settings-toggle"
+            type="button"
+            onClick={() => setIsEventFeedSettingsOpen((current) => !current)}
+          >
+            {isEventFeedSettingsOpen ? "收起事件设置" : "事件显示设置"}
+          </button>
+        </div>
+        {isEventFeedSettingsOpen ? (
+          <div className="board-event-feed__settings" aria-label="最近事件显示设置">
+            <label className="board-event-feed__field">
+              <strong>最新事件靠哪里</strong>
+              <select
+                value={eventFeedPreferences.nearEventPlacement}
+                onChange={(event) => setEventFeedPreferences((current) => ({
+                  ...current,
+                  nearEventPlacement: event.target.value === "top" ? "top" : "bottom",
+                }))}
+              >
+                <option value="bottom">靠下（默认）</option>
+                <option value="top">靠上</option>
+              </select>
+            </label>
+            <label className="board-event-feed__field">
+              <strong>最新事件编号</strong>
+              <select
+                value={eventFeedPreferences.nearEventNumbering}
+                onChange={(event) => setEventFeedPreferences((current) => ({
+                  ...current,
+                  nearEventNumbering: event.target.value === "near-large" ? "near-large" : "near-small",
+                }))}
+              >
+                <option value="near-small">更小（默认）</option>
+                <option value="near-large">更大</option>
+              </select>
+            </label>
+            <label className="board-event-feed__field">
+              <strong>显示数量</strong>
+              <select
+                value={eventFeedPreferences.visibleCountMode}
+                onChange={(event) => setEventFeedPreferences((current) => ({
+                  ...current,
+                  visibleCountMode: event.target.value === "all"
+                    ? "all"
+                    : event.target.value === "custom"
+                      ? "custom"
+                      : "default",
+                }))}
+              >
+                <option value="default">默认 8 条</option>
+                <option value="all">全部（当前最多保留 {recentEventFeed.retainedCount} 条）</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+            {eventFeedPreferences.visibleCountMode === "custom" ? (
+              <label className="board-event-feed__field">
+                <strong>自定义数量</strong>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={eventFeedPreferences.customVisibleCount}
+                  onChange={(event) => setEventFeedPreferences((current) => ({
+                    ...current,
+                    customVisibleCount: sanitizeEventFeedCustomCount(Number(event.target.value)),
+                  }))}
+                />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+        {recentEventFeed.items.length > 0 ? (
+          <ol className="board-event-feed__list">
+            {recentEventFeed.items.map((item) => (
+              <li className={`board-event-feed__item${item.isNearest ? " board-event-feed__item--nearest" : ""}`} key={item.id}>
+                <span className="board-event-feed__number">{item.displayNumber}</span>
+                <div className="board-event-feed__body">
+                  <strong>{item.summary}</strong>
+                  <span>事件序列 {item.sequence}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="board-event-feed__empty">当前还没有事件进入这局的可见时间线。</p>
+        )}
+      </section>
+    );
+  }
+
   return (
     <main className="room-shell">
       <header className="room-shell__topbar">
@@ -2668,20 +2800,23 @@ export function GamePage() {
             <span>{isSpectator ? "当前只读观战" : `当前身份：${activePlayerName}`}</span>
           </div>
         </div>
-        <BoardScene
-          board={sampleBoard}
-          currentTurnPlayerId={projection.currentTurnPlayerId}
-          players={projection.players}
-          highlightedTileId={presentation.highlightedTileId}
-          resultFeedback={boardResultFeedback}
-          stageCue={boardStageCue}
-          transitionHint={boardSceneTransitionHint}
-          consequenceHint={boardConsequenceCue}
-          handoffHint={boardTurnHandoffCue}
-          actorTakeoverHint={boardActorTakeoverCue}
-          phaseFocusHint={boardPhaseFocusCue}
-          phaseClosureHint={boardPhaseClosureCue}
-        />
+        <div className="board__stage-shell">
+          <BoardScene
+            board={sampleBoard}
+            currentTurnPlayerId={projection.currentTurnPlayerId}
+            players={projection.players}
+            highlightedTileId={presentation.highlightedTileId}
+            resultFeedback={boardResultFeedback}
+            stageCue={boardStageCue}
+            transitionHint={boardSceneTransitionHint}
+            consequenceHint={boardConsequenceCue}
+            handoffHint={boardTurnHandoffCue}
+            actorTakeoverHint={boardActorTakeoverCue}
+            phaseFocusHint={boardPhaseFocusCue}
+            phaseClosureHint={boardPhaseClosureCue}
+          />
+          {renderRecentEventFeed()}
+        </div>
       </section>
       <aside className="panel panel--room-state room-shell__rail">
         <p className="panel__meta">当前阶段与操作</p>
@@ -2706,10 +2841,6 @@ export function GamePage() {
             <article className="status-card">
               <strong>房主</strong>
               <span>{projection.hostPlayerName}</span>
-            </article>
-            <article className="status-card">
-              <strong>最新进展</strong>
-              <span>{overviewProgressLabel}</span>
             </article>
           </div>
           {!reconnectSuccessMessage && lastRecoveryRecap ? (
@@ -2789,10 +2920,8 @@ export function GamePage() {
               </article>
             </div>
             <span>{auctionSummary.statusLabel}</span>
-            <span>{auctionViewerLabel}</span>
             <span>仍在竞拍: {auctionSummary.activeBidderNames.join(" / ")}</span>
             <span>已退出: {auctionSummary.passedPlayerNames.join(" / ") || "暂无"}</span>
-            {canAuction ? <span>主动作已提升到顶部锚点；这里保留拍卖上下文与结果阅读。</span> : null}
           </section>
         ) : null}
 
@@ -2807,7 +2936,6 @@ export function GamePage() {
             <span>仍差: {projection.resolutionSummary.shortfall}</span>
             <span>可抵押资产: {projection.resolutionSummary.availableMortgageCount} 处</span>
             <span>{projection.resolutionSummary.consequenceLabel}</span>
-            <span>{deficitViewerLabel}</span>
             {needsStepwiseRecovery ? <span>这笔欠款无法一步补足；顶部锚点会在每次抵押后继续给出下一步建议。</span> : null}
             <div className="deficit-stage__grid">
               <article className="trade-side">
@@ -2875,7 +3003,6 @@ export function GamePage() {
             <div className="trade-response-stage__hero">
               <strong>{tradeWaitingHeadline}</strong>
               <span>{tradeWaitingPrimarySummary}</span>
-              <span>{tradeWaitingCapabilityLabel}</span>
             </div>
             <div className="trade-response-stage__outcome">
               <strong>接下来会怎样</strong>
@@ -2897,10 +3024,6 @@ export function GamePage() {
               </article>
             </div>
             <span>{tradeStageViewerLabel}</span>
-            <div className="trade-response-stage__readonly">
-              <strong>当前处理内容</strong>
-              <span>{tradeWaitingCapabilityLabel}</span>
-            </div>
           </section>
         ) : null}
 
@@ -2988,8 +3111,8 @@ export function GamePage() {
             <span>{projection.lastRoll.join(" + ")}</span>
           </article>
           <article className="status-card">
-            <strong>{projection.latestSettlementSummary ? "当前责任" : "下一步"}</strong>
-            <span>{projection.latestSettlementSummary?.nextStepLabel ?? projection.pendingActionLabel}</span>
+            <strong>事件窗口</strong>
+            <span>{`当前保留 ${recentEventFeed.retainedCount} 条 · 当前显示 ${recentEventFeed.visibleCount} 条`}</span>
           </article>
         </div>
 
@@ -3042,7 +3165,7 @@ export function GamePage() {
                 </article>
               </div>
               <p className="panel__subtitle">当前说明: {projection.pendingActionLabel}</p>
-              <h4 className="panel__title">最近事件</h4>
+              <h4 className="panel__title">技术事件序列</h4>
               <ol className="event-log">
                 {diagnosticsEventLines.map((event) => (
                   <li key={event.id}>#{event.sequence} {event.summary}</li>

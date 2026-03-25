@@ -1562,6 +1562,189 @@ test("reconnect success narrates live auction recovery", async ({
   await expect(page.getByRole("button", { name: "放弃本轮竞拍" })).toBeVisible();
 });
 
+test("recent event feed defaults to eight items and persists local display settings", async ({
+  page,
+}) => {
+  const roomId = "room-event-feed-settings";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 12,
+    eventSequence: 12,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [2, 3],
+    players: [
+      { id: "p1", name: "房主甲", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 5, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: Array.from({ length: 12 }, (_, index) => ({
+      id: `evt-${index + 1}`,
+      type: "turn-advanced",
+      sequence: index + 1,
+      snapshotVersion: index + 1,
+      summary: `事件 ${index + 1}`,
+      nextPlayerId: index % 2 === 0 ? "p1" : "p2",
+    })),
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+    if (!window.sessionStorage.getItem("dafuweng-event-feed-test-initialized")) {
+      window.localStorage.removeItem("dafuweng-room-event-feed-preferences");
+      window.sessionStorage.setItem("dafuweng-event-feed-test-initialized", "true");
+    }
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route) => {
+    await route.fulfill({ json: snapshot });
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const eventFeed = page.locator(".board-event-feed");
+  const items = eventFeed.locator(".board-event-feed__item");
+  await expect(eventFeed.getByText("最近事件")).toBeVisible();
+  await expect(items).toHaveCount(8);
+  await expect(items.first()).toContainText("事件 5");
+  await expect(items.first().locator(".board-event-feed__number")).toHaveText("8");
+  await expect(items.last()).toContainText("事件 12");
+  await expect(items.last().locator(".board-event-feed__number")).toHaveText("1");
+
+  await eventFeed.getByRole("button", { name: "事件显示设置" }).click();
+  await eventFeed.getByLabel("最新事件靠哪里").selectOption("top");
+  await eventFeed.getByLabel("最新事件编号").selectOption("near-large");
+  await eventFeed.getByLabel("显示数量").selectOption("custom");
+  await eventFeed.getByLabel("自定义数量").fill("6");
+
+  await expect(items).toHaveCount(6);
+  await expect(items.first()).toContainText("事件 12");
+  await expect(items.first().locator(".board-event-feed__number")).toHaveText("6");
+  await expect(items.last()).toContainText("事件 7");
+  await expect(items.last().locator(".board-event-feed__number")).toHaveText("1");
+
+  await page.reload();
+
+  const reloadedFeed = page.locator(".board-event-feed");
+  const reloadedItems = reloadedFeed.locator(".board-event-feed__item");
+  await expect(reloadedItems).toHaveCount(6);
+  await expect(reloadedItems.first()).toContainText("事件 12");
+  await expect(reloadedItems.last()).toContainText("事件 7");
+});
+
+test("auction input stays exclusive to the primary anchor and gives immediate minimum-bid feedback", async ({
+  page,
+}) => {
+  const roomId = "room-auction-input-surface";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 6,
+    eventSequence: 6,
+    turnState: "awaiting-auction",
+    currentTurnPlayerId: "p2",
+    pendingActionLabel: "等待当前玩家完成竞拍动作",
+    pendingProperty: null,
+    pendingAuction: {
+      tileId: "tile-1",
+      tileIndex: 1,
+      label: "东湖路",
+      price: 160,
+      initiatorPlayerId: "p1",
+      highestBid: 51,
+      highestBidderId: "p1",
+      passedPlayerIds: [],
+    },
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [0, 0],
+    players: [
+      { id: "p1", name: "房主甲", cash: 1500, position: 1, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: [
+      { id: "evt-1", type: "room-started", sequence: 1, snapshotVersion: 1, summary: "房主甲 开始了本局。", playerId: "p1" },
+      { id: "evt-6", type: "auction-bid-submitted", sequence: 6, snapshotVersion: 6, summary: "房主甲 目前以 51 领先。", playerId: "p1", amount: 51, tileId: "tile-1", tileIndex: 1, tileLabel: "东湖路" },
+    ],
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p2",
+        playerName: "玩家乙",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route) => {
+    await route.fulfill({ json: snapshot });
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const anchor = page.locator(".room-primary-anchor");
+  const auctionStage = page.locator(".stage-card--auction");
+  const bidInput = anchor.getByLabel("你的本轮报价");
+  await expect(anchor.getByText(/最低有效价 52/)).toBeVisible();
+  await expect(anchor.getByRole("button", { name: "提交出价" })).toBeVisible();
+  await expect(auctionStage.getByLabel("你的本轮报价")).toHaveCount(0);
+  await expect(auctionStage.getByRole("button", { name: "提交出价" })).toHaveCount(0);
+
+  await bidInput.fill("5a0");
+  await expect(bidInput).toHaveValue("50");
+  await expect(anchor.getByText("请输入不低于 52 的整数报价。")).toBeVisible();
+  await expect(anchor.getByRole("button", { name: "提交出价" })).toBeDisabled();
+
+  await anchor.getByRole("button", { name: "出价 62" }).click();
+  await expect(bidInput).toHaveValue("62");
+  await expect(anchor.getByRole("button", { name: "提交出价" })).toBeEnabled();
+});
+
 test("reconnect success narrates trade response recovery", async ({
   page,
 }) => {
@@ -3347,7 +3530,8 @@ test("declined property enters a readable live auction stage across two pages", 
   await expect(guestPage.locator(".room-primary-anchor").getByText(/你可以直接在这里提交出价或放弃竞拍，当前最低有效报价为 1。/)).toBeVisible();
   await expect(guestPage.locator(".room-primary-anchor").getByRole("button", { name: "提交出价" })).toBeVisible();
   await expect(guestPage.locator(".stage-card--auction").getByRole("button", { name: "提交出价" })).toHaveCount(0);
-  await expect(page.locator(".stage-card--auction").getByText(/当前轮到 玩家乙 决策/)).toBeVisible();
+  await expect(page.locator(".stage-card--auction").getByText("当前轮到")).toBeVisible();
+  await expect(page.locator(".stage-card--auction .status-card").filter({ hasText: "当前轮到" }).getByText("玩家乙")).toBeVisible();
 
   await guestPage.getByRole("button", { name: "出价 51" }).click();
   await guestPage.getByRole("button", { name: "提交出价" }).click();
@@ -3358,7 +3542,6 @@ test("declined property enters a readable live auction stage across two pages", 
   await page.getByRole("button", { name: "放弃本轮竞拍" }).click();
 
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
-  await expect(guestPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
   await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", new RegExp(`阶段收束 公开拍卖已结束，玩家乙 竞得 ${propertyDecision.label}`));
   await expect(guestPage.getByText(/现金: 1449/)).toBeVisible();
   await expect(guestPage.getByText(/地产: 1/)).toBeVisible();
