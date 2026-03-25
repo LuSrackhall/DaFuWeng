@@ -6,6 +6,24 @@ function extractRoomId(url: string) {
   return match?.[1] ?? "";
 }
 
+async function createRoomAsHost(page: Page, hostName: string) {
+  await page.goto("/");
+  await page.getByLabel("房主昵称").fill(hostName);
+  await page.getByRole("button", { name: "创建房间" }).click();
+  await expect(page).toHaveURL(/\/room\/room-\d+$/);
+  const roomId = extractRoomId(page.url());
+  expect(roomId).toMatch(/^room-\d+$/);
+  return roomId;
+}
+
+async function joinRoomAsPlayer(page: Page, roomId: string, playerName: string) {
+  await page.goto("/");
+  await page.getByLabel("加入房间").fill(roomId);
+  await page.getByLabel("玩家昵称").fill(playerName);
+  await page.getByRole("button", { name: "加入房间" }).click();
+  await expect(page).toHaveURL(new RegExp(`/room/${roomId}$`));
+}
+
 async function readPendingPropertyDecision(page: Page) {
   const boardHost = page.locator(".board__pixi-host");
   await expect(boardHost).toHaveAttribute("aria-label", /(?:可选择购买|可购买) .*价格 \d+。/, { timeout: 10000 });
@@ -2723,13 +2741,7 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   browser,
   page,
 }) => {
-  await page.goto("/");
-  await page.getByLabel("房主昵称").fill("房主甲");
-  await page.getByRole("button", { name: "创建房间" }).click();
-
-  await expect(page).toHaveURL(/\/room\/room-\d+$/);
-  const roomId = extractRoomId(page.url());
-  expect(roomId).toMatch(/^room-\d+$/);
+  const roomId = await createRoomAsHost(page, "房主甲");
   await expect(page.getByRole("heading", { name: "Da Fu Weng" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "等待开局" })).toBeVisible();
   await expect(page.locator("header").getByRole("link", { name: "返回大厅" })).toBeVisible();
@@ -2738,11 +2750,7 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(page.locator(".board__pixi-host canvas")).toBeVisible();
 
   const guestPage = await browser.newPage();
-  await guestPage.goto("/");
-  await guestPage.getByLabel("加入房间").fill(roomId);
-  await guestPage.getByLabel("玩家昵称").fill("玩家乙");
-  await guestPage.getByRole("button", { name: "加入房间" }).click();
-  await expect(guestPage).toHaveURL(new RegExp(`/room/${roomId}$`));
+  await joinRoomAsPlayer(guestPage, roomId, "玩家乙");
 
   await expect(page.getByText("等待房间开始")).toBeVisible();
   await expect(guestPage.getByText("等待房间开始")).toBeVisible();
@@ -2787,6 +2795,108 @@ test("two real players can create, join, start, buy, pay rent, and refresh the s
   await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible({ timeout: 10000 });
 
   await guestPage.close();
+});
+
+test("three real players stay synchronized across create, join, start, and sequential rent turns", async ({
+  browser,
+  page,
+}) => {
+  test.slow();
+
+  const roomId = await createRoomAsHost(page, "房主甲");
+
+  const secondPage = await browser.newPage();
+  await joinRoomAsPlayer(secondPage, roomId, "玩家乙");
+
+  const thirdPage = await browser.newPage();
+  await joinRoomAsPlayer(thirdPage, roomId, "玩家丙");
+
+  await expect(page.getByText("当前人数: 3")).toBeVisible();
+  await expect(secondPage.getByText("当前人数: 3")).toBeVisible();
+  await expect(thirdPage.getByText("当前人数: 3")).toBeVisible();
+
+  await page.getByRole("button", { name: "房主开始游戏" }).click();
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(secondPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(thirdPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
+  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
+  const propertyDecision = await readPendingPropertyDecision(page);
+  await page.getByRole("button", { name: "购买地产" }).click();
+
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家乙 接过当前回合，现在轮到 玩家乙 掷骰。/);
+  await expect(secondPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家乙 接过当前回合，现在轮到 玩家乙 掷骰。/);
+  await expect(thirdPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家乙 接过当前回合，现在轮到 玩家乙 掷骰。/);
+
+  await secondPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /棋盘后果 玩家乙 向 房主甲 支付租金 22/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丙 接过当前回合，现在轮到 玩家丙 掷骰。/);
+  await expect(secondPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丙 接过当前回合，现在轮到 玩家丙 掷骰。/);
+  await expect(thirdPage.getByRole("button", { name: /以 玩家丙 身份掷骰/ })).toBeVisible();
+
+  await thirdPage.getByRole("button", { name: /以 玩家丙 身份掷骰/ }).click();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /棋盘后果 玩家丙 向 房主甲 支付租金 22/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 房主甲 接过当前回合，现在轮到 房主甲 掷骰。/);
+  await expect(page.getByText(/现金: 1384/).first()).toBeVisible();
+  await expect(secondPage.getByText(/现金: 1478/).first()).toBeVisible();
+  await expect(thirdPage.getByText(/现金: 1478/).first()).toBeVisible();
+  await expect(page.getByText(new RegExp(`${propertyDecision.label}`))).toBeVisible();
+
+  await thirdPage.close();
+  await secondPage.close();
+});
+
+test("four real players can fill a room and reject a fifth joiner", async ({
+  browser,
+  page,
+}) => {
+  test.slow();
+
+  const roomId = await createRoomAsHost(page, "房主甲");
+
+  const secondPage = await browser.newPage();
+  await joinRoomAsPlayer(secondPage, roomId, "玩家乙");
+
+  const thirdPage = await browser.newPage();
+  await joinRoomAsPlayer(thirdPage, roomId, "玩家丙");
+
+  const fourthPage = await browser.newPage();
+  await joinRoomAsPlayer(fourthPage, roomId, "玩家丁");
+
+  await expect(page.getByText("当前人数: 4")).toBeVisible();
+  await expect(secondPage.getByText("当前人数: 4")).toBeVisible();
+  await expect(thirdPage.getByText("当前人数: 4")).toBeVisible();
+  await expect(fourthPage.getByText("当前人数: 4")).toBeVisible();
+
+  const rejectedPage = await browser.newPage();
+  await rejectedPage.goto("/");
+  await rejectedPage.getByLabel("加入房间").fill(roomId);
+  await rejectedPage.getByLabel("玩家昵称").fill("玩家戊");
+  await rejectedPage.getByRole("button", { name: "加入房间" }).click();
+  await expect(rejectedPage.getByText("room is full")).toBeVisible();
+
+  await page.getByRole("button", { name: "房主开始游戏" }).click();
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(secondPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(thirdPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(fourthPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
+  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
+  await page.getByRole("button", { name: "购买地产" }).click();
+
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家乙 接过当前回合，现在轮到 玩家乙 掷骰。/);
+  await expect(fourthPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家乙 接过当前回合，现在轮到 玩家乙 掷骰。/);
+
+  await secondPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
+
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丙 接过当前回合，现在轮到 玩家丙 掷骰。/);
+  await expect(thirdPage.getByRole("button", { name: /以 玩家丙 身份掷骰/ })).toBeVisible();
+  await expect(fourthPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丙 接过当前回合，现在轮到 玩家丙 掷骰。/);
+
+  await rejectedPage.close();
+  await fourthPage.close();
+  await thirdPage.close();
+  await secondPage.close();
 });
 
 test("viewer without a joined room session stays read-only instead of inheriting the current turn", async ({
