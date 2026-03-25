@@ -14,6 +14,7 @@ ALL_ROLES = [
     "Monopoly Tech Lead",
     "Monopoly Pixi Scene Engineer",
     "Monopoly Senior Implementer",
+    "Monopoly Documentation Owner",
     "Monopoly QA Lead",
     "Monopoly Simulated Player",
     "Monopoly Versioning Manager",
@@ -29,6 +30,7 @@ MODE_REQUIRED_ROLES = {
         "Monopoly UI UX Pro Max",
         "Monopoly Rules Expert",
         "Monopoly Tech Lead",
+        "Monopoly Documentation Owner",
     ],
     "implementation": [
         "GitHub Copilot Workflow Expert",
@@ -38,6 +40,7 @@ MODE_REQUIRED_ROLES = {
         "Monopoly Rules Expert",
         "Monopoly Tech Lead",
         "Monopoly Senior Implementer",
+        "Monopoly Documentation Owner",
         "Monopoly QA Lead",
         "Monopoly Simulated Player",
         "Monopoly Versioning Manager",
@@ -50,6 +53,7 @@ MODE_REQUIRED_ROLES = {
         "Monopoly Rules Expert",
         "Monopoly Tech Lead",
         "Monopoly Senior Implementer",
+        "Monopoly Documentation Owner",
         "Monopoly QA Lead",
         "Monopoly Simulated Player",
         "Monopoly Versioning Manager",
@@ -58,6 +62,7 @@ MODE_REQUIRED_ROLES = {
 }
 
 EDIT_DEFERRED_ROLES = {
+    "Monopoly Documentation Owner",
     "Monopoly QA Lead",
     "Monopoly Simulated Player",
     "Monopoly Versioning Manager",

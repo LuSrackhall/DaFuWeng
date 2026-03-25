@@ -58,6 +58,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
 
         self.assertIn("Monopoly Rules Expert", state["requiredRoles"])
         self.assertIn("Monopoly UI UX Pro Max", state["requiredRoles"])
+        self.assertIn("Monopoly Documentation Owner", state["requiredRoles"])
         self.assertIn("Monopoly Versioning Manager", state["requiredRoles"])
         self.assertNotIn("Monopoly Pixi Scene Engineer", state["requiredRoles"])
 
@@ -94,7 +95,42 @@ class RoleRotationWorkflowTests(unittest.TestCase):
         self.assertEqual(state["version"], 2)
         self.assertIn("Monopoly UI UX Pro Max", state["requiredRoles"])
         self.assertIn("Monopoly Rules Expert", state["requiredRoles"])
+        self.assertIn("Monopoly Documentation Owner", state["requiredRoles"])
         self.assertIn("Monopoly Versioning Manager", state["requiredRoles"])
+
+    def test_commit_is_denied_when_documentation_owner_is_missing(self) -> None:
+        state = role_rotation_state.init_state(
+            "implementation",
+            "2026-03-22-enforce-multi-agent-rotation",
+            "test",
+        )
+        for role in [
+            "GitHub Copilot Workflow Expert",
+            "Monopoly Product Manager",
+            "Monopoly UI UX Director",
+            "Monopoly UI UX Pro Max",
+            "Monopoly Rules Expert",
+            "Monopoly Tech Lead",
+            "Monopoly Senior Implementer",
+            "Monopoly QA Lead",
+            "Monopoly Simulated Player",
+            "Monopoly Versioning Manager",
+        ]:
+            state = role_rotation_state.complete_role(role, "ready")
+
+        result = self.run_policy(
+            {"command": 'git commit -m "feat: 完成门禁测试"'},
+            state,
+        )
+
+        self.assertEqual(
+            result["hookSpecificOutput"]["permissionDecision"],
+            "deny",
+        )
+        self.assertIn(
+            "Monopoly Documentation Owner",
+            result["hookSpecificOutput"]["permissionDecisionReason"],
+        )
 
     def test_edit_is_denied_when_workflow_is_uninitialized(self) -> None:
         result = self.run_policy(
@@ -125,6 +161,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
             "Monopoly Senior Implementer",
+            "Monopoly Documentation Owner",
             "Monopoly QA Lead",
             "Monopoly Simulated Player",
         ]:
@@ -158,6 +195,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
             "Monopoly Senior Implementer",
+            "Monopoly Documentation Owner",
             "Monopoly QA Lead",
             "Monopoly Simulated Player",
             "Monopoly Versioning Manager",
@@ -188,6 +226,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
             "Monopoly Senior Implementer",
+            "Monopoly Documentation Owner",
             "Monopoly QA Lead",
             "Monopoly Versioning Manager",
         ]:
@@ -222,6 +261,7 @@ class RoleRotationWorkflowTests(unittest.TestCase):
             "Monopoly Rules Expert",
             "Monopoly Tech Lead",
             "Monopoly Senior Implementer",
+            "Monopoly Documentation Owner",
             "Monopoly QA Lead",
             "Monopoly Simulated Player",
             "Monopoly Versioning Manager",

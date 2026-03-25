@@ -127,11 +127,13 @@ pnpm --filter @dafuweng/frontend test:e2e
 这个仓库已经按多 AI 角色协作的方向落了基础设施：
 
 - `OpenSpec`：重大功能先走 proposal、design、tasks，再实现。
-- `Agents`：产品经理、技术主管、高级实现、QA、模拟玩家、营销、Copilot 专家等角色已配置在 `.github/agents/`。
+- `Agents`：产品经理、技术主管、高级实现、QA、文档负责人、模拟玩家、营销、Copilot 专家等角色已配置在 `.github/agents/`。
 - `Skills`：提供多角色交付、OpenSpec 生命周期、发布自动化等能力，位于 `.github/skills/`。
 - `Instructions`：按前端、后端、测试发布、OpenSpec 分层约束，位于 `.github/instructions/`。
 - `Hooks`：会话启动与工具使用前的策略钩子位于 `.github/hooks/`。
 - `CI/CD`：`.github/workflows/ci.yml` 与 `.github/workflows/release.yml` 负责校验和基于 semantic-release 的自动发版。
+- `Documentation Owner`：每轮重大工作都会显式判断 README 与官方文档是否需要同步更新。
+- `Release Marketer`：该角色仍然存在，但只在发版或外宣场景中强制介入。
 
 ## 目前和最初设想的差距
 

@@ -37,8 +37,10 @@
 - Documentation governance policy:
   - 所有 README 与官方文档默认以中文为主，除非发布营销、外部渠道分发或明确要求双语展示；若保留英文，中文仍应是主叙述。
   - 每一轮工作都必须显式判断是否需要同步更新项目主页 README 与官方文档。
+  - `Monopoly Documentation Owner` 是每一轮重大工作的必经角色；即使本轮无需更新 README 或官方文档，也必须给出明确结论。
   - 若当前切片改变了项目入口、长期架构事实、协作流程、发布方式或用户理解主路径，应在同一轮内更新 README 或官方文档，或在最终汇报中明确说明为何暂不更新。
   - 若判断本轮无需更新 README 或官方文档，也必须在最终汇报中明确说明已完成检查且当前无需改动。
+  - `Monopoly Release Marketer` 没有被移除；它仍然保留为发布与外宣阶段角色，不是每轮实现流程的默认强制角色。
 
 - At the start of every new conversation, check the git working tree before proposing or implementing new work.
 - If previously completed implementation work is still uncommitted and it belongs to the current coding agent, decide proactively whether to commit and push it instead of waiting for the user to ask.
@@ -52,6 +54,7 @@
 - In every conversation, explicitly clarify current progress and provide a role-by-role summary of which AI roles or subagents were used, what each one did, and which work remained with the main coding agent.
 - If no extra AI roles were used in the round, state that explicitly in the progress summary.
 - For Monopoly gameplay changes, prefer the sequence Product Manager -> UI UX Director -> Monopoly UI UX Pro Max -> Monopoly Rules Expert -> Tech Lead -> Senior Implementer -> QA Lead -> Simulated Player, with Monopoly Pixi Scene Engineer added when Pixi scene work is central.
+- For any substantial round, include `Monopoly Documentation Owner` before commit or release handoff so README and official documentation impact is explicitly reviewed.
 - UI and UX work must use `.github/prompts/ui-ux-pro-max/` as a formal workflow asset, either through Monopoly UI UX Pro Max or as a mandatory reference for Monopoly UI UX Director.
 - Before commit or release handoff, use Monopoly Versioning Manager to review semantic version impact, commit classification, and release facts.
 - Every final response must end with a dedicated Closing Guidance block as the absolute last section of the message; no content may appear after this block.
