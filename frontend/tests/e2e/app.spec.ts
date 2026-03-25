@@ -2948,6 +2948,66 @@ test("four real players can refresh a seated page and keep the same authoritativ
   await secondPage.close();
 });
 
+test("four real players can refresh the active player page and continue the same authoritative turn", async ({
+  browser,
+  page,
+}) => {
+  test.slow();
+
+  const roomId = await createRoomAsHost(page, "房主甲");
+
+  const secondPage = await browser.newPage();
+  await joinRoomAsPlayer(secondPage, roomId, "玩家乙");
+
+  const thirdPage = await browser.newPage();
+  await joinRoomAsPlayer(thirdPage, roomId, "玩家丙");
+
+  const fourthPage = await browser.newPage();
+  await joinRoomAsPlayer(fourthPage, roomId, "玩家丁");
+
+  await page.getByRole("button", { name: "房主开始游戏" }).click();
+  await expect(page.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(secondPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(thirdPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+  await expect(fourthPage.getByText("等待当前玩家掷骰").first()).toBeVisible();
+
+  await page.getByRole("button", { name: /以 房主甲 身份掷骰/ }).click();
+  await page.getByRole("button", { name: "购买地产" }).click();
+
+  await secondPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ }).click();
+  await thirdPage.getByRole("button", { name: /以 玩家丙 身份掷骰/ }).click();
+
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丁 接过当前回合，现在轮到 玩家丁 掷骰。/);
+  await expect(secondPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丁 接过当前回合，现在轮到 玩家丁 掷骰。/);
+  await expect(thirdPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丁 接过当前回合，现在轮到 玩家丁 掷骰。/);
+  await expect(fourthPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丁 接过当前回合，现在轮到 玩家丁 掷骰。/);
+  await expect(fourthPage.getByRole("button", { name: /以 玩家丁 身份掷骰/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toHaveCount(0);
+  await expect(secondPage.getByRole("button", { name: /以 玩家乙 身份掷骰/ })).toHaveCount(0);
+  await expect(thirdPage.getByRole("button", { name: /以 玩家丙 身份掷骰/ })).toHaveCount(0);
+
+  await fourthPage.reload();
+
+  await expect(fourthPage.locator(".stage-card--overview").getByText("当前以 玩家丁 身份加入此房间。").first()).toBeVisible({ timeout: 10000 });
+  await expect(fourthPage.getByText("等待当前玩家掷骰").first()).toBeVisible({ timeout: 10000 });
+  await expect(fourthPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 玩家丁 接过当前回合，现在轮到 玩家丁 掷骰。/, { timeout: 10000 });
+  await expect(fourthPage.getByRole("button", { name: /以 玩家丁 身份掷骰/ })).toBeVisible({ timeout: 10000 });
+  await expect(fourthPage.getByText("当前是只读视角。请先从大厅创建或加入房间，才能作为玩家操作。")).toHaveCount(0);
+
+  await fourthPage.getByRole("button", { name: /以 玩家丁 身份掷骰/ }).click();
+
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /棋盘后果 玩家丁 向 房主甲 支付租金 22/);
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 房主甲 接过当前回合，现在轮到 房主甲 掷骰。/);
+  await expect(secondPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 房主甲 接过当前回合，现在轮到 房主甲 掷骰。/);
+  await expect(thirdPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 房主甲 接过当前回合，现在轮到 房主甲 掷骰。/);
+  await expect(fourthPage.locator(".board__pixi-host")).toHaveAttribute("aria-label", /回合接管 房主甲 接过当前回合，现在轮到 房主甲 掷骰。/);
+  await expect(page.getByRole("button", { name: /以 房主甲 身份掷骰/ })).toBeVisible();
+
+  await fourthPage.close();
+  await thirdPage.close();
+  await secondPage.close();
+});
+
 test("viewer without a joined room session stays read-only instead of inheriting the current turn", async ({
   browser,
   page,
