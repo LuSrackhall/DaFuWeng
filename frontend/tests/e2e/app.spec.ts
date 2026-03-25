@@ -2846,6 +2846,7 @@ test("declined property enters a readable live auction stage across two pages", 
   await expect(page.getByText("公开拍卖进行中")).toBeVisible();
   await expect(guestPage.getByText("公开拍卖进行中")).toBeVisible();
   await expect(page.getByText(new RegExp(`房主甲 放弃购买后，${propertyDecision.label} 进入公开拍卖。`))).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", new RegExp(`阶段焦点 公开拍卖，当前轮到 玩家乙 决定 ${propertyDecision.label}`));
   await expect(guestPage.locator(".room-primary-anchor").getByText(/你可以直接在这里提交出价或放弃竞拍，当前最低有效报价为 1。/)).toBeVisible();
   await expect(guestPage.locator(".room-primary-anchor").getByRole("button", { name: "提交出价" })).toBeVisible();
   await expect(guestPage.locator(".stage-card--auction").getByRole("button", { name: "提交出价" })).toHaveCount(0);
@@ -2968,6 +2969,7 @@ test("live trade response uses a dominant stage card and keeps diagnostics colla
 
   await expect(page.getByText("双边交易待响应")).toBeVisible();
   await expect(page.getByText("报价已送达，等待对手回应", { exact: true })).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /阶段焦点 交易回应，当前轮到 玩家乙 回应 房主甲 的报价/);
   await expect(page.getByText(/现在先别操作: 等对方给答复/).first()).toBeVisible();
   await expect(page.locator(".room-primary-anchor").getByText(/你的报价已经送达 玩家乙，当前主动作已转到对方。/)).toBeVisible();
   await expect(page.getByText(/房主甲 交出/)).toBeVisible();
@@ -3230,6 +3232,7 @@ test("deficit recovery panel shows mortgage impact and resolves through the reco
   await page.goto(`/room/${roomId}`);
 
   await expect(page.locator(".room-primary-anchor").getByText("当前轮到你完成欠款恢复")).toBeVisible();
+  await expect(page.locator(".board__pixi-host")).toHaveAttribute("aria-label", /阶段焦点 欠款恢复，当前轮到 房主甲 处理 200 税费欠款/);
   await expect(page.locator(".room-primary-anchor").getByRole("button", { name: /抵押/ })).toBeVisible();
   await expect(page.locator(".room-primary-anchor").getByRole("button", { name: "宣告破产" })).toBeVisible();
   await expect(page.locator(".stage-card--danger").getByRole("button", { name: "宣告破产" })).toHaveCount(0);

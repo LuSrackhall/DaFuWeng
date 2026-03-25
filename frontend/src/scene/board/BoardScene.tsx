@@ -43,6 +43,20 @@ type BoardTurnHandoffCue = {
   ariaSummary: string;
 };
 
+type BoardPhaseFocusCue = {
+  key: string;
+  phaseKind: "auction" | "trade-response" | "deficit";
+  tone: "default" | "warning" | "danger" | "success" | "neutral";
+  phaseLabel: string;
+  headline: string;
+  detail: string;
+  pressureLabel: string;
+  ariaSummary: string;
+  primaryPlayerId: string | null;
+  secondaryPlayerId: string | null;
+  anchorTileId: string | null;
+};
+
 type BoardSceneProps = {
   board: BoardTile[];
   currentTurnPlayerId: string;
@@ -63,6 +77,7 @@ type BoardSceneProps = {
   transitionHint: BoardSceneTransitionHint | null;
   consequenceHint: BoardConsequenceCue | null;
   handoffHint: BoardTurnHandoffCue | null;
+  phaseFocusHint: BoardPhaseFocusCue | null;
 };
 
 type SceneAnimationCue = {
@@ -315,6 +330,7 @@ function drawBoardTiles(
     const ownerColor = ownerIndex >= 0 ? playerTokenPalette[ownerIndex % playerTokenPalette.length] : null;
     const tileSide = getTrackSide(tile);
     const accentColor = getTileAccentColor(tile, ownerColor);
+    const isPhaseAnchorTile = tile.id === props.phaseFocusHint?.anchorTileId;
 
     const tileShadow = new Graphics();
     tileShadow.roundRect(x + 2, y + 4, tileInnerSize, tileInnerSize, Math.max(10, tileSize * 0.16));
@@ -353,6 +369,13 @@ function drawBoardTiles(
         landingPulse.stroke({ color: accentColor, width: 2.4, alpha: 0.38 + (animationState?.landingProgress ?? 0) * 0.2 });
         root.addChild(landingPulse);
       }
+    }
+
+    if (isPhaseAnchorTile) {
+      const phaseFrame = new Graphics();
+      phaseFrame.roundRect(x - 3, y - 3, tileInnerSize + 6, tileInnerSize + 6, Math.max(12, tileSize * 0.18));
+      phaseFrame.stroke({ color: accentColor, width: 2.2, alpha: 0.62 });
+      root.addChild(phaseFrame);
     }
 
     const label = new Text({ text: tile.label, style: boardLabelStyle });
@@ -570,6 +593,7 @@ function drawCenterHud(
   const stageCue = props.stageCue;
   const consequenceHint = props.consequenceHint;
   const handoffHint = props.handoffHint;
+  const phaseFocusHint = props.phaseFocusHint;
   const feedbackAccent = getFeedbackAccent(resultFeedback?.tone ?? "default", currentPlayerColor);
   const stageSize = tileSize * 11;
   const compactHud = stageSize < 620;
@@ -775,6 +799,67 @@ function drawCenterHud(
     root.addChild(handoffStage);
   }
 
+  if (phaseFocusHint) {
+    const phaseAccent = getFeedbackAccent(phaseFocusHint.tone, currentPlayerColor);
+    const focusWidth = compactHud ? 186 : 214;
+    const focusHeight = compactHud ? 94 : 106;
+    const focusX = centerX + centerWidth - focusWidth - 14;
+    const focusY = centerY + 16;
+
+    const focusPanel = new Graphics();
+    focusPanel.roundRect(focusX, focusY, focusWidth, focusHeight, 18);
+    focusPanel.fill({ color: 0x0f221d, alpha: 0.92 });
+    focusPanel.stroke({ color: phaseAccent, width: 1.5, alpha: 0.44 });
+    root.addChild(focusPanel);
+
+    const phaseLabel = new Text({
+      text: phaseFocusHint.phaseLabel,
+      style: createAdaptiveTextStyle(centerChipLabelStyle, {
+        fontSize: compactHud ? 9 : 10,
+        fill: 0xe6c37d,
+      }),
+    });
+    phaseLabel.x = focusX + 14;
+    phaseLabel.y = focusY + 12;
+    root.addChild(phaseLabel);
+
+    const phaseHeadline = new Text({
+      text: phaseFocusHint.headline,
+      style: createAdaptiveTextStyle(centerChipValueStyle, {
+        fontSize: compactHud ? 13 : 15,
+        fill: 0xf8f0dd,
+      }),
+    });
+    phaseHeadline.x = focusX + 14;
+    phaseHeadline.y = focusY + 30;
+    root.addChild(phaseHeadline);
+
+    const phaseDetail = new Text({
+      text: phaseFocusHint.detail,
+      style: createAdaptiveTextStyle(centerBodyStyle, {
+        fontSize: compactHud ? 10 : 11,
+        lineHeight: compactHud ? 13 : 14,
+        wordWrapWidth: focusWidth - 28,
+        fill: 0xf2e5c3,
+        align: "left",
+      }),
+    });
+    phaseDetail.x = focusX + 14;
+    phaseDetail.y = focusY + 48;
+    root.addChild(phaseDetail);
+
+    const pressure = new Text({
+      text: phaseFocusHint.pressureLabel,
+      style: createAdaptiveTextStyle(centerChipLabelStyle, {
+        fontSize: compactHud ? 9 : 10,
+        fill: 0xf8f0dd,
+      }),
+    });
+    pressure.x = focusX + 14;
+    pressure.y = focusY + focusHeight - 20;
+    root.addChild(pressure);
+  }
+
   if (consequenceHint) {
     const consequenceAccent = getFeedbackAccent(consequenceHint.tone, feedbackAccent);
     const ribbonWidth = centerWidth - 20;
@@ -861,20 +946,24 @@ function drawPlayerTokens(
     const isHandoffPlayer = player.id === props.handoffHint?.playerId;
     const isConsequencePrimary = player.id === props.consequenceHint?.primaryPlayerId;
     const isConsequenceSecondary = player.id === props.consequenceHint?.secondaryPlayerId;
+    const isPhasePrimary = player.id === props.phaseFocusHint?.primaryPlayerId;
+    const isPhaseSecondary = player.id === props.phaseFocusHint?.secondaryPlayerId;
     const shadow = new Graphics();
     shadow.circle(tokenX + 1.5, tokenY + 3, tokenRadius + 1);
     shadow.fill({ color: 0x07120f, alpha: 0.28 });
     root.addChild(shadow);
 
-    if (isCurrentTurnPlayer || isMovingPlayer || isConsequencePrimary || isConsequenceSecondary) {
+    if (isCurrentTurnPlayer || isMovingPlayer || isConsequencePrimary || isConsequenceSecondary || isPhasePrimary || isPhaseSecondary) {
       const ring = new Graphics();
       const ringBoost = isMovingPlayer ? (animationState?.pulse ?? 0) * 2 : isHandoffPlayer ? 1.8 : 0;
       ring.circle(tokenX, tokenY, tokenRadius + 7 + ringBoost);
-      const fillAlpha = isConsequenceSecondary ? 0.1 : 0.14 + (isMovingPlayer ? (animationState?.glowAlpha ?? 0) * 0.45 : 0) + (isHandoffPlayer ? 0.06 : 0);
-      const strokeColor = isConsequenceSecondary ? tokenColor : 0xf6e7af;
-      const strokeAlpha = isConsequenceSecondary ? 0.74 : 0.95;
+      const fillAlpha = isConsequenceSecondary || isPhaseSecondary
+        ? 0.1
+        : 0.14 + (isMovingPlayer ? (animationState?.glowAlpha ?? 0) * 0.45 : 0) + (isHandoffPlayer || isPhasePrimary ? 0.06 : 0);
+      const strokeColor = isConsequenceSecondary || isPhaseSecondary ? tokenColor : 0xf6e7af;
+      const strokeAlpha = isConsequenceSecondary || isPhaseSecondary ? 0.74 : 0.95;
       ring.fill({ color: tokenColor, alpha: fillAlpha });
-      ring.stroke({ color: strokeColor, width: isHandoffPlayer ? 3 : 2.5, alpha: strokeAlpha });
+      ring.stroke({ color: strokeColor, width: isHandoffPlayer || isPhasePrimary ? 3 : 2.5, alpha: strokeAlpha });
       root.addChild(ring);
     }
 
@@ -1055,7 +1144,7 @@ function BoardSceneInner(props: BoardSceneProps) {
     if (appRef.current) {
       renderBoardStage(appRef.current, props, animationCueRef.current, resolveSceneAnimationState(animationCueRef.current));
     }
-  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback, props.stageCue, props.transitionHint]);
+  }, [props.board, props.currentTurnPlayerId, props.highlightedTileId, props.players, props.resultFeedback, props.stageCue, props.transitionHint, props.consequenceHint, props.handoffHint, props.phaseFocusHint]);
 
   useEffect(() => {
     const previousProps = previousPropsRef.current;
@@ -1075,7 +1164,7 @@ function BoardSceneInner(props: BoardSceneProps) {
     }
 
     previousPropsRef.current = props;
-  }, [props.players, props.highlightedTileId, props.resultFeedback, props.transitionHint]);
+  }, [props.players, props.highlightedTileId, props.resultFeedback, props.transitionHint, props.phaseFocusHint]);
 
   const currentPlayerName = props.players.find((player) => player.id === props.currentTurnPlayerId)?.name ?? "未知玩家";
   const highlightedTileLabel = props.highlightedTileId
@@ -1091,11 +1180,14 @@ function BoardSceneInner(props: BoardSceneProps) {
   const handoffSummary = props.handoffHint
     ? `，回合接管 ${props.handoffHint.ariaSummary}`
     : "";
+  const phaseSummary = props.phaseFocusHint
+    ? `，阶段焦点 ${props.phaseFocusHint.ariaSummary}`
+    : "";
 
   return (
     <div className="board__surface">
       <div
-        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}${consequenceSummary}${handoffSummary}`}
+        aria-label={`当前回合 ${currentPlayerName}，焦点 ${highlightedTileLabel}，已占领地产 ${occupiedPropertyCount} 处${feedbackSummary}${consequenceSummary}${handoffSummary}${phaseSummary}`}
         className="board__pixi-host"
         ref={hostRef}
       />

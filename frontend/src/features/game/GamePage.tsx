@@ -65,6 +65,20 @@ type BoardTurnHandoffCue = {
   ariaSummary: string;
 };
 
+type BoardPhaseFocusCue = {
+  key: string;
+  phaseKind: "auction" | "trade-response" | "deficit";
+  tone: BoardResultFeedbackTone;
+  phaseLabel: string;
+  headline: string;
+  detail: string;
+  pressureLabel: string;
+  ariaSummary: string;
+  primaryPlayerId: string | null;
+  secondaryPlayerId: string | null;
+  anchorTileId: string | null;
+};
+
 function buildBoardTurnHandoffStage(turnState: string, playerName: string, pendingActionLabel: string) {
   switch (turnState) {
     case "awaiting-roll":
@@ -88,6 +102,19 @@ function buildBoardTurnHandoffStage(turnState: string, playerName: string, pendi
         stageDetail: pendingActionLabel,
       };
   }
+}
+
+function buildPaymentReasonLabel(reason: "tax" | "jail" | "rent" | "card") {
+  if (reason === "tax") {
+    return "税费";
+  }
+  if (reason === "jail") {
+    return "监狱罚金";
+  }
+  if (reason === "rent") {
+    return "租金";
+  }
+  return "卡牌欠款";
 }
 
 type RecoveryRecapSnapshot = {
@@ -1121,6 +1148,92 @@ export function GamePage() {
         };
       })()
     : null;
+  const boardPhaseFocusCue: BoardPhaseFocusCue | null = (() => {
+    if (projection.turnState === "awaiting-auction" && projection.pendingAuction) {
+      const pendingAuction = projection.pendingAuction;
+      const activeBidderId = projection.currentTurnPlayerId;
+      const activeBidderName = projection.players.find((player) => player.id === activeBidderId)?.name ?? projection.currentTurnPlayerName;
+      const highestBidderName = pendingAuction.highestBidderId
+        ? projection.players.find((player) => player.id === pendingAuction.highestBidderId)?.name ?? "领先玩家"
+        : null;
+      const hasLeadingBid = pendingAuction.highestBidderId !== null;
+
+      return {
+        key: `${projection.snapshotVersion}:${projection.eventSequence}:auction-focus`,
+        phaseKind: "auction",
+        tone: "warning",
+        phaseLabel: "公开拍卖",
+        headline: pendingAuction.label,
+        detail: hasLeadingBid
+          ? `当前轮到 ${activeBidderName} 决定是否继续竞拍，${highestBidderName} 以 ${pendingAuction.highestBid} 领先。`
+          : `当前轮到 ${activeBidderName} 为 ${pendingAuction.label} 开出第一口价。`,
+        pressureLabel: hasLeadingBid
+          ? `当前领先 ${highestBidderName} · ${pendingAuction.highestBid}`
+          : "当前最低 1",
+        ariaSummary: hasLeadingBid
+          ? `公开拍卖，当前轮到 ${activeBidderName} 决定 ${pendingAuction.label}，${highestBidderName} 以 ${pendingAuction.highestBid} 领先`
+          : `公开拍卖，当前轮到 ${activeBidderName} 为 ${pendingAuction.label} 开价`,
+        primaryPlayerId: activeBidderId,
+        secondaryPlayerId: pendingAuction.highestBidderId,
+        anchorTileId: pendingAuction.tileId,
+      };
+    }
+
+    if (projection.turnState === "awaiting-trade-response" && projection.pendingTrade) {
+      const responderId = projection.pendingTrade.counterpartyPlayerId;
+      const proposerId = projection.pendingTrade.proposerPlayerId;
+      const responderName = projection.players.find((player) => player.id === responderId)?.name ?? "对手";
+      const proposerName = projection.players.find((player) => player.id === proposerId)?.name ?? "提议方";
+      const offeredAssetCount = projection.pendingTrade.offeredTileIds.length + projection.pendingTrade.offeredCardIds.length;
+      const requestedAssetCount = projection.pendingTrade.requestedTileIds.length + projection.pendingTrade.requestedCardIds.length;
+      const pressureLabel = projection.pendingTrade.offeredCash || projection.pendingTrade.requestedCash
+        ? `现金差 ${projection.pendingTrade.offeredCash} / ${projection.pendingTrade.requestedCash}`
+        : `资产交换 ${offeredAssetCount} / ${requestedAssetCount}`;
+      const anchorTileId = projection.pendingTrade.offeredTileIds[0]
+        ?? projection.pendingTrade.requestedTileIds[0]
+        ?? null;
+
+      return {
+        key: `${projection.snapshotVersion}:${projection.eventSequence}:trade-focus`,
+        phaseKind: "trade-response",
+        tone: "warning",
+        phaseLabel: "交易回应",
+        headline: `${responderName} 等待拍板`,
+        detail: `${responderName} 正在回应 ${proposerName} 的报价，房间暂停等待这一次双边表态。`,
+        pressureLabel,
+        ariaSummary: `交易回应，当前轮到 ${responderName} 回应 ${proposerName} 的报价`,
+        primaryPlayerId: responderId,
+        secondaryPlayerId: proposerId,
+        anchorTileId,
+      };
+    }
+
+    if (projection.turnState === "awaiting-deficit-resolution" && projection.pendingPayment) {
+      const pendingPayment = projection.pendingPayment;
+      const debtorId = projection.currentTurnPlayerId;
+      const debtorName = projection.players.find((player) => player.id === debtorId)?.name ?? projection.currentTurnPlayerName;
+      const creditorName = pendingPayment.creditorKind === "player" && pendingPayment.creditorPlayerId
+        ? projection.players.find((player) => player.id === pendingPayment.creditorPlayerId)?.name ?? "债权方"
+        : "银行";
+      const reasonLabel = buildPaymentReasonLabel(pendingPayment.reason);
+
+      return {
+        key: `${projection.snapshotVersion}:${projection.eventSequence}:deficit-focus`,
+        phaseKind: "deficit",
+        tone: "danger",
+        phaseLabel: "补齐欠款",
+        headline: `${debtorName} 正在补款`,
+        detail: `${debtorName} 需要先向 ${creditorName} 补齐 ${pendingPayment.amount} ${reasonLabel}，当前回合会停在恢复步骤。`,
+        pressureLabel: `仍需 ${pendingPayment.amount}`,
+        ariaSummary: `欠款恢复，当前轮到 ${debtorName} 处理 ${pendingPayment.amount} ${reasonLabel}欠款`,
+        primaryPlayerId: debtorId,
+        secondaryPlayerId: pendingPayment.creditorKind === "player" ? (pendingPayment.creditorPlayerId ?? null) : null,
+        anchorTileId: pendingPayment.sourceTileId ?? null,
+      };
+    }
+
+    return null;
+  })();
   const mobilePrimaryAnchorStyle = isMobileAnchorTray
     ? {
         position: "fixed" as const,
@@ -2158,6 +2271,7 @@ export function GamePage() {
           transitionHint={boardSceneTransitionHint}
           consequenceHint={boardConsequenceCue}
           handoffHint={boardTurnHandoffCue}
+          phaseFocusHint={boardPhaseFocusCue}
         />
       </section>
       <aside className="panel panel--room-state room-shell__rail">
