@@ -19,6 +19,9 @@ applyTo: "frontend/**"
 - Use overlays or side panels for dense management actions instead of shrinking the board until it becomes illegible.
 - Prefer staged animations that explain state transitions over flashy but ambiguous motion.
 - Sound, vibration, and bridge integrations must be adapter-based so Tauri and HarmonyOS shells can evolve independently.
+- For substantial player-visible frontend work, capture Playwright screenshot evidence and review it with image tools before concluding the round.
+- Screenshot review must cover at least one desktop scene and one mobile scene whenever the change affects room readability, hierarchy, or decision surfaces.
+- Treat screenshot review as human-centered evidence for clarity, crowding, reachability, and wrong-focus risk; do not treat it as a substitute for deterministic logic testing.
 
 ## Technical Boundaries
 

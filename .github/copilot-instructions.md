@@ -57,6 +57,7 @@
 - For any substantial round, include `Monopoly Documentation Owner` before commit or release handoff so README and official documentation impact is explicitly reviewed.
 - For substantial gameplay, architecture, or workflow rounds, include `Monopoly Full-Stack Performance Expert` before commit or release handoff so performance and memory risks are explicitly reviewed.
 - UI and UX work must use `.github/prompts/ui-ux-pro-max/` as a formal workflow asset, either through Monopoly UI UX Pro Max or as a mandatory reference for Monopoly UI UX Director.
+- 对任何重要的前端、棋盘、信息层级、交互或响应式变更，默认增加一条 Playwright 截图证据链，并结合图像能力做一次以正常人类玩家为中心的可用性复核；该证据链补充但不替代单元、集成与业务 E2E。
 - Before commit or release handoff, use Monopoly Versioning Manager to review semantic version impact, commit classification, and release facts.
 - Every final response must end with a dedicated Closing Guidance block as the absolute last section of the message; no content may appear after this block.
 - The Closing Guidance block must contain exactly two labeled lines in this fixed order: `Next best prompt:` followed by one concrete next prompt, then `New conversation:` followed by one absolute recommendation.
