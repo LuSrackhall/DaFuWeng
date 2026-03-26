@@ -2584,7 +2584,7 @@ export function GamePage() {
 
   function renderRecentEventFeed() {
     return (
-      <section className={`board-event-feed board-event-feed--${eventFeedPreferences.nearEventPlacement}`}>
+      <section className={`board-event-feed board-event-feed--${eventFeedPreferences.nearEventPlacement}${isEventFeedSettingsOpen ? " board-event-feed--settings-open" : ""}${isMobileAnchorTray ? " board-event-feed--mobile-safe" : ""}`}>
         <div className="board-event-feed__header">
           <div className="board-event-feed__copy">
             <p className="shell__eyebrow">牌局纪事</p>
@@ -2608,11 +2608,13 @@ export function GamePage() {
         </div>
         {isEventFeedSettingsOpen ? (
           <div className="board-event-feed__settings" aria-label="最近事件阅读偏好">
+            <div className="board-event-feed__settings-note">
+              这些只影响你怎么看这条时间线，不会改动房间真正发生的顺序。
+            </div>
             <label className="board-event-feed__field">
-              <strong>我更想先看到</strong>
-              <span className="board-event-feed__field-hint">只会改变你扫读时间线的方向，不会改动真实事件顺序。</span>
+              <strong>先看哪边</strong>
               <select
-                aria-label="我更想先看到"
+                aria-label="先看哪边"
                 value={eventFeedPreferences.nearEventPlacement}
                 onChange={(event) => setEventFeedPreferences((current) => ({
                   ...current,
@@ -2624,10 +2626,9 @@ export function GamePage() {
               </select>
             </label>
             <label className="board-event-feed__field">
-              <strong>我想怎么认序号</strong>
-              <span className="board-event-feed__field-hint">序号只是你的阅读辅助，不是后台的真实事件编号。</span>
+              <strong>序号习惯</strong>
               <select
-                aria-label="我想怎么认序号"
+                aria-label="序号习惯"
                 value={eventFeedPreferences.nearEventNumbering}
                 onChange={(event) => setEventFeedPreferences((current) => ({
                   ...current,
@@ -2639,10 +2640,9 @@ export function GamePage() {
               </select>
             </label>
             <label className="board-event-feed__field">
-              <strong>一次先看多少条</strong>
-              <span className="board-event-feed__field-hint">默认先给你最常用的 8 条，需要时再展开更多。</span>
+              <strong>一次几条</strong>
               <select
-                aria-label="一次先看多少条"
+                aria-label="一次几条"
                 value={eventFeedPreferences.visibleCountMode}
                 onChange={(event) => setEventFeedPreferences((current) => ({
                   ...current,
@@ -2659,11 +2659,10 @@ export function GamePage() {
               </select>
             </label>
             {eventFeedPreferences.visibleCountMode === "custom" ? (
-              <label className="board-event-feed__field">
-                <strong>这次先看几条</strong>
-                <span className="board-event-feed__field-hint">可输入 1 到 10，适合你想看得更紧凑或更完整的时候。</span>
+              <label className="board-event-feed__field board-event-feed__field--wide">
+                <strong>自定条数</strong>
                 <input
-                  aria-label="这次先看几条"
+                  aria-label="自定条数"
                   type="number"
                   min={1}
                   max={10}
@@ -2683,8 +2682,9 @@ export function GamePage() {
               <li className={`board-event-feed__item${item.isNearest ? " board-event-feed__item--nearest" : ""}`} key={item.id}>
                 <span className="board-event-feed__number">{item.displayNumber}</span>
                 <div className="board-event-feed__body">
+                  {item.isNearest ? <span className="board-event-feed__badge">最新</span> : null}
                   <strong>{item.summary}</strong>
-                  <span>事件序列 {item.sequence}</span>
+                  <span>{item.isNearest ? `刚刚发生 · 事件序列 ${item.sequence}` : `事件序列 ${item.sequence}`}</span>
                 </div>
               </li>
             ))}

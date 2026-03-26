@@ -1145,6 +1145,14 @@ body {
   bottom: auto;
 }
 
+.board-event-feed--mobile-safe {
+  bottom: 132px;
+}
+
+.board-event-feed--mobile-safe.board-event-feed--settings-open {
+  bottom: 168px;
+}
+
 .board-event-feed__header,
 .board-event-feed__copy,
 .board-event-feed__settings,
@@ -1177,15 +1185,32 @@ body {
 .board-event-feed__settings {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border-radius: 18px;
-  padding: 12px;
+  padding: 10px;
+  gap: 8px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.board-event-feed__settings-note {
+  grid-column: 1 / -1;
+  color: rgba(246, 236, 212, 0.7);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.board-event-feed__field {
+  gap: 6px;
+}
+
+.board-event-feed__field--wide {
+  grid-column: 1 / -1;
 }
 
 .board-event-feed__field input,
 .board-event-feed__field select {
   width: 100%;
-  padding: 10px 12px;
+  min-height: 42px;
+  padding: 9px 11px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(7, 15, 13, 0.45);
@@ -1221,6 +1246,8 @@ body {
 .board-event-feed__item--nearest {
   background: linear-gradient(135deg, rgba(89, 168, 214, 0.18), rgba(229, 191, 105, 0.12));
   border-color: rgba(229, 191, 105, 0.28);
+  box-shadow: 0 14px 28px rgba(12, 23, 19, 0.2), inset 0 0 0 1px rgba(255, 240, 196, 0.08);
+  transform: translateY(-1px);
 }
 
 .board-event-feed__number {
@@ -1232,6 +1259,23 @@ body {
   background: rgba(229, 191, 105, 0.18);
   color: #f6ecd4;
   font-weight: 700;
+}
+
+.board-event-feed__item--nearest .board-event-feed__number {
+  background: linear-gradient(180deg, rgba(229, 191, 105, 0.42), rgba(89, 168, 214, 0.28));
+  box-shadow: 0 8px 18px rgba(12, 23, 19, 0.22);
+}
+
+.board-event-feed__badge {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(229, 191, 105, 0.18);
+  color: #f6ecd4;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .board__hero {
@@ -1483,7 +1527,7 @@ body {
   .board-event-feed {
     left: 14px;
     right: 14px;
-    bottom: 14px;
+    bottom: 110px;
     max-width: none;
     padding: 14px;
     gap: 10px;
@@ -1492,6 +1536,10 @@ body {
   .board-event-feed--top {
     top: 14px;
     bottom: auto;
+  }
+
+  .board-event-feed--settings-open {
+    bottom: 286px;
   }
 
   .board-event-feed__header,
@@ -1632,6 +1680,10 @@ body {
   .board-event-feed {
     padding: 12px;
     border-radius: 18px;
+  }
+
+  .board-event-feed__settings {
+    padding: 9px;
   }
 
   .board-event-feed__item {

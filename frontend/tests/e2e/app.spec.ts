@@ -1639,10 +1639,10 @@ test("recent event feed defaults to eight items and persists local display setti
   await expect(items.last().locator(".board-event-feed__number")).toHaveText("1");
 
   await eventFeed.getByRole("button", { name: "调整阅读方式" }).click();
-  await eventFeed.getByLabel("我更想先看到").selectOption("top");
-  await eventFeed.getByLabel("我想怎么认序号").selectOption("near-large");
-  await eventFeed.getByLabel("一次先看多少条").selectOption("custom");
-  await eventFeed.getByLabel("这次先看几条").fill("6");
+  await eventFeed.getByLabel("先看哪边").selectOption("top");
+  await eventFeed.getByLabel("序号习惯").selectOption("near-large");
+  await eventFeed.getByLabel("一次几条").selectOption("custom");
+  await eventFeed.getByLabel("自定条数").fill("6");
 
   await expect(items).toHaveCount(6);
   await expect(items.first()).toContainText("事件 12");
@@ -1729,15 +1729,14 @@ test("mobile recent event reading preferences stay readable without horizontal o
   await expect(eventFeed.getByRole("button", { name: "调整阅读方式" })).toBeVisible();
   await eventFeed.getByRole("button", { name: "调整阅读方式" }).click();
 
-  await expect(eventFeed.getByLabel("我更想先看到")).toBeVisible();
-  await expect(eventFeed.getByText("只会改变你扫读时间线的方向，不会改动真实事件顺序。")).toBeVisible();
-  await expect(eventFeed.getByLabel("我想怎么认序号")).toBeVisible();
-  await expect(eventFeed.getByText("序号只是你的阅读辅助，不是后台的真实事件编号。")).toBeVisible();
-  await expect(eventFeed.getByLabel("一次先看多少条")).toBeVisible();
+  await expect(eventFeed.getByText("这些只影响你怎么看这条时间线，不会改动房间真正发生的顺序。")).toBeVisible();
+  await expect(eventFeed.getByLabel("先看哪边")).toBeVisible();
+  await expect(eventFeed.getByLabel("序号习惯")).toBeVisible();
+  await expect(eventFeed.getByLabel("一次几条")).toBeVisible();
 
-  await eventFeed.getByLabel("一次先看多少条").selectOption("custom");
-  await expect(eventFeed.getByLabel("这次先看几条")).toBeVisible();
-  await eventFeed.getByLabel("这次先看几条").fill("5");
+  await eventFeed.getByLabel("一次几条").selectOption("custom");
+  await expect(eventFeed.getByLabel("自定条数")).toBeVisible();
+  await eventFeed.getByLabel("自定条数").fill("5");
 
   const mobileItems = eventFeed.locator(".board-event-feed__item");
   await expect(mobileItems).toHaveCount(5);
@@ -1747,6 +1746,83 @@ test("mobile recent event reading preferences stay readable without horizontal o
 
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(hasHorizontalOverflow).toBe(false);
+});
+
+test("mobile recent event settings stay clear of the primary anchor when expanded", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  const roomId = "room-mobile-event-feed-anchor-spacing";
+  const snapshot = {
+    roomId,
+    roomState: "in-game",
+    hostId: "p1",
+    snapshotVersion: 10,
+    eventSequence: 10,
+    turnState: "awaiting-roll",
+    currentTurnPlayerId: "p1",
+    pendingActionLabel: "等待当前玩家掷骰",
+    pendingProperty: null,
+    pendingAuction: null,
+    pendingPayment: null,
+    pendingTrade: null,
+    chanceDeck: { drawPile: [], discardPile: [] },
+    communityDeck: { drawPile: [], discardPile: [] },
+    lastRoll: [1, 5],
+    players: [
+      { id: "p1", name: "房主甲", cash: 1500, position: 0, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+      { id: "p2", name: "玩家乙", cash: 1500, position: 6, properties: [], mortgagedProperties: [], propertyImprovements: {}, heldCardIds: [], isBankrupt: false },
+    ],
+    recentEvents: Array.from({ length: 10 }, (_, index) => ({
+      id: `evt-anchor-${index + 1}`,
+      type: "turn-advanced",
+      sequence: index + 1,
+      snapshotVersion: index + 1,
+      summary: `锚点事件 ${index + 1}`,
+      nextPlayerId: index % 2 === 0 ? "p1" : "p2",
+    })),
+  };
+
+  await page.addInitScript(({ currentRoomId }) => {
+    window.sessionStorage.setItem(
+      `dafuweng-active-player:${currentRoomId}`,
+      JSON.stringify({
+        playerId: "p1",
+        playerName: "房主甲",
+        playerToken: "test-token",
+      }),
+    );
+
+    class FakeEventSource {
+      onerror: (() => void) | null = null;
+      constructor() {}
+      addEventListener() {}
+      close() {}
+    }
+
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+  }, { currentRoomId: roomId });
+
+  await page.route(`**/api/rooms/${roomId}`, async (route) => {
+    await route.fulfill({ json: snapshot });
+  });
+  await page.route(`**/api/rooms/${roomId}/events?afterSequence=*`, async (route) => {
+    await route.fulfill({ json: { snapshot: null, events: [] } });
+  });
+
+  await page.goto(`/room/${roomId}`);
+
+  const eventFeed = page.locator(".board-event-feed");
+  const mobileAnchor = page.locator(".room-primary-anchor");
+
+  await expect(mobileAnchor).toBeInViewport();
+  await eventFeed.getByRole("button", { name: "调整阅读方式" }).click();
+  await expect(eventFeed.getByLabel("先看哪边")).toBeVisible();
+  await expect(eventFeed).toBeInViewport();
+  await expect(mobileAnchor.getByRole("button", { name: /掷骰/ })).toBeVisible();
+  await mobileAnchor.getByRole("button", { name: /掷骰/ }).click({ trial: true });
+  await eventFeed.getByLabel("先看哪边").click({ trial: true });
 });
 
 test("auction input stays exclusive to the primary anchor and gives immediate minimum-bid feedback", async ({
