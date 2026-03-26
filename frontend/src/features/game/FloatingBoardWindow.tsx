@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
 
 type FloatingFrame = {
@@ -37,48 +38,59 @@ function clampFrame(frame: FloatingFrame, viewportSize: ViewportSize): FloatingF
 
 export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, children }: FloatingBoardWindowProps) {
   const [frame, setFrame] = useState(() => clampFrame(initialFrame, viewportSize));
+  const rndRef = useRef<Rnd | null>(null);
 
   useEffect(() => {
-    setFrame((current) => clampFrame(current, viewportSize));
+    setFrame((current) => {
+      const nextFrame = clampFrame(current, viewportSize);
+      rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
+      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      return nextFrame;
+    });
   }, [viewportSize.height, viewportSize.width]);
 
   useEffect(() => {
     setFrame((current) => {
-      if (current.width > 0 && current.height > 0) {
-        return clampFrame(current, viewportSize);
-      }
-
-      return clampFrame(initialFrame, viewportSize);
+      const nextFrame = current.width > 0 && current.height > 0
+        ? clampFrame(current, viewportSize)
+        : clampFrame(initialFrame, viewportSize);
+      rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
+      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      return nextFrame;
     });
   }, [initialFrame.height, initialFrame.width, initialFrame.x, initialFrame.y, viewportSize]);
 
-  return (
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
     <Rnd
+      ref={rndRef}
       bounds="window"
+      data-testid="floating-board-window"
       className="board-resizable-wrap"
       dragHandleClassName="board-drag-handle"
       enableUserSelectHack={false}
+      enableResizing={{
+        top: true,
+        right: true,
+        bottom: true,
+        left: true,
+        topRight: true,
+        bottomRight: true,
+        bottomLeft: true,
+        topLeft: true,
+      }}
       resizeGrid={[1, 1]}
       dragGrid={[1, 1]}
       minWidth={420}
       minHeight={360}
       maxWidth={Math.max(420, viewportSize.width - 36)}
       maxHeight={Math.max(360, viewportSize.height - 114)}
-      position={{ x: frame.x, y: frame.y }}
-      size={{ width: frame.width, height: frame.height }}
-      onDrag={(_event, data) => {
-        setFrame((current) => ({ ...current, x: data.x, y: data.y }));
-      }}
+      default={{ x: frame.x, y: frame.y, width: frame.width, height: frame.height }}
       onDragStop={(_event, data) => {
         setFrame((current) => ({ ...current, x: data.x, y: data.y }));
-      }}
-      onResize={(_event, _direction, ref, _delta, position) => {
-        setFrame({
-          x: position.x,
-          y: position.y,
-          width: ref.offsetWidth,
-          height: ref.offsetHeight,
-        });
       }}
       onResizeStop={(_event, _direction, ref, _delta, position) => {
         setFrame({
@@ -90,12 +102,13 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
       }}
       style={{ position: "fixed", zIndex: 5 }}
     >
-      <div className="board-window">
-        <div className="board__hero board-window__toolbar board-drag-handle">
+      <div className="board-window" data-testid="board-window-surface">
+        <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
           {toolbar}
         </div>
         <div className="board-window__canvas">{children}</div>
       </div>
-    </Rnd>
+    </Rnd>,
+    document.body,
   );
 }

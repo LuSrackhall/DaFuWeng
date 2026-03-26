@@ -532,12 +532,12 @@ export function GamePage() {
     setBoardFrame((current) => {
       const width = current?.width
         ? Math.min(Math.max(current.width, 420), maxWidth)
-        : Math.min(Math.max(rect.width, 620), maxWidth);
+        : Math.min(Math.max(rect.width * 0.92, 560), maxWidth);
       const height = current?.height
         ? Math.min(Math.max(current.height, 360), maxHeight)
-        : Math.min(Math.max(rect.height, 620), maxHeight);
-      const defaultX = Math.min(Math.max(rect.left, margin), viewportSize.width - width - margin);
-      const defaultY = Math.min(Math.max(rect.top, topOffset), viewportSize.height - height - margin);
+        : Math.min(Math.max(Math.min(rect.height * 0.86, viewportSize.height * 0.62), 480), maxHeight);
+      const defaultX = Math.min(Math.max(rect.left + 12, margin), viewportSize.width - width - margin);
+      const defaultY = Math.min(topOffset + 12, viewportSize.height - height - margin);
       const rawX = current?.x ?? defaultX;
       const rawY = current?.y ?? defaultY;
 
@@ -2804,7 +2804,7 @@ export function GamePage() {
       </header>
 
       {shouldShowGameplayNotice ? (
-        <section className="room-guidance-banner" role="status" aria-live="polite">
+        <section className="room-guidance-banner" data-testid="room-guidance-banner" role="status" aria-live="polite">
           <div className="room-guidance-banner__copy">
             <p className="shell__eyebrow">规则提醒</p>
             <strong>{gameplayNotice.title}</strong>
@@ -2812,10 +2812,10 @@ export function GamePage() {
             <span className="room-guidance-banner__rule">{gameplayNotice.rule}</span>
           </div>
           <div className="room-guidance-banner__actions">
-            <button className="button button--secondary" type="button" onClick={() => setIsRulesGuideOpen(true)}>
+            <button className="button button--secondary" data-testid="open-rules-guide" type="button" onClick={() => setIsRulesGuideOpen(true)}>
               打开玩法说明
             </button>
-            <button className="button button--secondary" type="button" onClick={() => setDismissedGameplayNoticeKey(gameplayNotice.key)}>
+            <button className="button button--secondary" data-testid="dismiss-guidance-banner" type="button" onClick={() => setDismissedGameplayNoticeKey(gameplayNotice.key)}>
               先收起提醒
             </button>
           </div>
@@ -3304,14 +3304,14 @@ export function GamePage() {
       {isMobileAnchorTray ? renderPrimaryActionAnchor() : null}
       <DraggableEventFeed events={projection.recentEvents} preferences={eventFeedPreferences} onPreferencesChange={setEventFeedPreferences} />
       {isRulesGuideOpen ? (
-        <div className="rules-guide-backdrop" onClick={() => setIsRulesGuideOpen(false)}>
-          <section className="rules-guide-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="rules-guide-backdrop" data-testid="rules-guide-backdrop" onClick={() => setIsRulesGuideOpen(false)}>
+          <section className="rules-guide-panel" data-testid="rules-guide-panel" onClick={(event) => event.stopPropagation()}>
             <div className="rules-guide-panel__header">
               <div>
                 <p className="shell__eyebrow">玩法说明</p>
                 <strong>游玩过程中可随时回看这份说明</strong>
               </div>
-              <button className="button button--secondary" type="button" onClick={() => setIsRulesGuideOpen(false)}>
+              <button className="button button--secondary" data-testid="close-rules-guide" type="button" onClick={() => setIsRulesGuideOpen(false)}>
                 关闭说明
               </button>
             </div>

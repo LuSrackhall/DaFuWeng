@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
 import {
   buildRecentEventFeed,
@@ -28,6 +29,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
   const [frameSize, setFrameSize] = useState({ width: 420, height: 420 });
   const [framePosition, setFramePosition] = useState({ x: 24, y: 120 });
   const scrollRef = useRef<HTMLOListElement>(null);
+  const resizeFrameRef = useRef<number | null>(null);
 
   const feed = buildRecentEventFeed(events, preferences);
   const chromeHeight = FEED_HEADER_HEIGHT
@@ -62,7 +64,17 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
     }
   }, [latestSequence, preferences.sortingOrder]);
 
-  return (
+  useEffect(() => () => {
+    if (resizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(resizeFrameRef.current);
+    }
+  }, []);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
     <Rnd
       default={{
         x: framePosition.x,
@@ -73,9 +85,20 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
       minWidth={320}
       minHeight={minimumHeight}
       bounds="window"
+      data-testid="floating-event-feed-window"
       className="floating-event-feed-shell"
       dragHandleClassName="floating-event-feed__handle"
       enableUserSelectHack={false}
+      enableResizing={{
+        top: true,
+        right: true,
+        bottom: true,
+        left: true,
+        topRight: true,
+        bottomRight: true,
+        bottomLeft: true,
+        topLeft: true,
+      }}
       resizeGrid={[1, 1]}
       dragGrid={[1, 1]}
       cancel="button, input, select, option, .floating-scroll-list, .floating-event-feed__settings-wrap, .floating-event-feed__intro"
@@ -83,16 +106,27 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
         setFramePosition({ x: data.x, y: data.y });
       }}
       onResize={(_event, _direction, ref, _delta, position) => {
-        setFrameSize({ width: ref.offsetWidth, height: ref.offsetHeight });
+        if (resizeFrameRef.current !== null) {
+          window.cancelAnimationFrame(resizeFrameRef.current);
+        }
+        resizeFrameRef.current = window.requestAnimationFrame(() => {
+          setFrameSize({ width: ref.offsetWidth, height: ref.offsetHeight });
+          resizeFrameRef.current = null;
+        });
         setFramePosition({ x: position.x, y: position.y });
       }}
       onResizeStop={(_event, _direction, ref, _delta, position) => {
+        if (resizeFrameRef.current !== null) {
+          window.cancelAnimationFrame(resizeFrameRef.current);
+          resizeFrameRef.current = null;
+        }
         setFrameSize({ width: ref.offsetWidth, height: ref.offsetHeight });
         setFramePosition({ x: position.x, y: position.y });
       }}
+      style={{ position: "fixed", zIndex: 8 }}
     >
-      <section className={`floating-event-feed__surface floating-event-feed__surface--${styleDensity}`}>
-        <div className="floating-event-feed__handle">
+      <section className={`floating-event-feed__surface floating-event-feed__surface--${styleDensity}`} data-testid="floating-event-feed-surface" data-density={styleDensity}>
+        <div className="floating-event-feed__handle" data-testid="floating-event-feed-handle">
           <div className="floating-event-feed__title-group">
             <p className="shell__eyebrow">牌局纪事</p>
             <strong>拖拽标题栏，或通过边框与四角缩放</strong>
@@ -101,6 +135,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
           <div className="floating-event-feed__toolbar-actions">
             <button
               className="floating-event-feed__settings-toggle"
+              data-testid="floating-event-feed-intro-toggle"
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => setIsIntroOpen((current) => !current)}
@@ -109,6 +144,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
             </button>
             <button
               className="floating-event-feed__settings-toggle"
+              data-testid="floating-event-feed-settings-toggle"
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => setIsSettingsOpen((current) => !current)}
@@ -118,14 +154,14 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
           </div>
         </div>
         {isIntroOpen ? (
-          <div className="floating-event-feed__intro" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="floating-event-feed__intro" data-testid="floating-event-feed-intro" onPointerDown={(e) => e.stopPropagation()}>
             <strong>如何阅读这份纪事</strong>
             <span>它会保留全部历史事件。你可以决定序号方向、列表正反序，以及当前窗口至少要能看到多少条记录。</span>
             <span>缩小窗口时，列表会按 Compact / Normal / Large 三档自动切换；当已经到达最小档且最小条数仍满足时，窗口才会停止继续缩小。</span>
           </div>
         ) : null}
         {isSettingsOpen ? (
-          <div className="floating-event-feed__settings-wrap" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="floating-event-feed__settings-wrap" data-testid="floating-event-feed-settings" onPointerDown={(e) => e.stopPropagation()}>
             <div className="floating-event-feed__settings">
               <label className="floating-event-feed__field">
                 <strong>序号顺序</strong>
@@ -187,6 +223,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
           </div>
         )}
       </section>
-    </Rnd>
+    </Rnd>,
+    document.body,
   );
 }

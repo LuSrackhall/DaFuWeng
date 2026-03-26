@@ -1179,7 +1179,7 @@ body {
 .board {
   position: relative;
   min-height: 620px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .board__stage-shell {

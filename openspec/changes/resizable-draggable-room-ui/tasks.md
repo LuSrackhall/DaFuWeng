@@ -29,7 +29,7 @@
 ## 5. Polish and Verification
 
 - [x] 5.1 QA validation of drag clipping, bounding boxes, text breaking, and layout stability.
-- [ ] 5.2 Execute visual review cycle.
+- [x] 5.2 Execute visual review cycle.
 
 ## 6. Iteration Fixes
 
@@ -39,3 +39,5 @@
 - [x] 6.4 Split the board drag-resize runtime into an isolated floating window component so pointer updates no longer force `GamePage` to rerender every frame.
 - [x] 6.5 Add collapsible introduction content to the event feed so the title bar can collapse down to the top-left identity area only.
 - [x] 6.6 Add a scenario-aware top guidance banner and an in-session gameplay guide panel.
+- [x] 6.7 Portal the board and event-feed floating surfaces to `document.body` so they are no longer clipped by room layout containers.
+- [x] 6.8 Add Playwright interaction and screenshot evidence for board drag/resize, event-feed drag/resize, event-feed collapse, top guidance banner, and rules guide panel.
