@@ -12,7 +12,7 @@ import { usePresentationState } from "../../state/presentation/gamePresentation"
 import { getAuctionBidValidation, getDeficitControlMode, sanitizeAuctionBidInput } from "./gameActionState";
 import { Rnd } from "react-rnd";
 import useMeasure from "react-use-measure";
-import { buildRecentEventFeed, defaultEventFeedPreferences, EVENT_FEED_PREFERENCES_STORAGE_KEY, sanitizeEventFeedMinCount, sanitizeEventFeedPreferences } from "./roomEventFeed";
+import { defaultEventFeedPreferences, EVENT_FEED_PREFERENCES_STORAGE_KEY, sanitizeEventFeedPreferences } from "./roomEventFeed";
 import { DraggableEventFeed } from "./DraggableEventFeed";
 
 type TradeComposerStep = "counterparty" | "offered" | "requested" | "review";
@@ -37,6 +37,13 @@ type BoardStageCue = {
   detail: string;
   diceLabel: string | null;
   accentTone: BoardResultFeedbackTone;
+};
+
+type FloatingFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 type BoardSceneTransitionHint = {
@@ -335,13 +342,14 @@ export function GamePage() {
   const [tradeRequestedCardIds, setTradeRequestedCardIds] = useState<string[]>([]);
   const [tradeComposerStep, setTradeComposerStep] = useState<TradeComposerStep>("counterparty");
   const [eventFeedPreferences, setEventFeedPreferences] = useState(defaultEventFeedPreferences);
-  const [isEventFeedSettingsOpen, setIsEventFeedSettingsOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isTurnToolsOpen, setIsTurnToolsOpen] = useState(false);
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const [lastRecoveryRecap, setLastRecoveryRecap] = useState<RecoveryRecapSnapshot | null>(null);
   const [dismissingRecoveryRecapToken, setDismissingRecoveryRecapToken] = useState<number | null>(null);
+  const [boardShellRef, boardShellBounds] = useMeasure();
+  const [boardFrame, setBoardFrame] = useState<FloatingFrame | null>(null);
   const recoveryRecapDismissTimerRef = useRef<number | null>(null);
   const presentation = usePresentationState(
     projection.currentTurnPlayerId,
@@ -447,6 +455,34 @@ export function GamePage() {
       mediaQuery.removeListener(updateMobileAnchorTray);
     };
   }, []);
+
+  useEffect(() => {
+    if (boardShellBounds.width <= 0 || boardShellBounds.height <= 0) {
+      return;
+    }
+
+    setBoardFrame((current) => {
+      const minimumWidth = Math.max(220, Math.min(360, boardShellBounds.width));
+      const minimumHeight = Math.max(220, Math.min(320, boardShellBounds.height));
+      const width = current?.width && current.width > 0
+        ? Math.min(Math.max(current.width, minimumWidth), boardShellBounds.width)
+        : boardShellBounds.width;
+      const height = current?.height && current.height > 0
+        ? Math.min(Math.max(current.height, minimumHeight), boardShellBounds.height)
+        : boardShellBounds.height;
+      const nextX = current?.x ?? 0;
+      const nextY = current?.y ?? 0;
+      const maxX = Math.max(0, boardShellBounds.width - width);
+      const maxY = Math.max(0, boardShellBounds.height - height);
+
+      return {
+        x: Math.min(nextX, maxX),
+        y: Math.min(nextY, maxY),
+        width,
+        height,
+      };
+    });
+  }, [boardShellBounds.height, boardShellBounds.width]);
 
   const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
   const boardTileById = new Map(sampleBoard.map((tile) => [tile.id, tile]));
@@ -612,21 +648,9 @@ export function GamePage() {
       : "如果对方点头，这笔交换会立刻生效；如果对方摇头，就会轮到你继续这一回合。"
     : null;
   const diagnosticsEventLines = [...projection.recentEvents].sort((left, right) => right.sequence - left.sequence);
-  const recentEventFeed = buildRecentEventFeed(projection.recentEvents, eventFeedPreferences);
-  const nearestEventFeedItem = recentEventFeed.items.find((item) => item.isNearest) ?? null;
   const isPrimaryActionStage = projection.roomState === "in-game"
     && (projection.turnState === "awaiting-roll" || projection.turnState === "awaiting-property-decision");
-  const shouldCompactEventFeed = !isEventFeedSettingsOpen
-    && ((!isMobileAnchorTray && isPrimaryActionStage) || (isMobileAnchorTray && isSpectator && projection.roomState === "in-game"));
   const shouldMuteCenterBoardCue = !isMobileAnchorTray && isPrimaryActionStage;
-  const displayedEventFeedItems = shouldCompactEventFeed && nearestEventFeedItem
-    ? [nearestEventFeedItem]
-    : recentEventFeed.items;
-  const eventFeedSettingsToggleLabel = isEventFeedSettingsOpen
-    ? "收起阅读偏好"
-    : shouldCompactEventFeed
-      ? "展开时间线"
-      : "调整阅读方式";
   const isMobileSpectatorLayout = isMobileAnchorTray && isSpectator && projection.roomState === "in-game";
   const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
   const currentTurnProjectionPlayer = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
@@ -2699,55 +2723,69 @@ export function GamePage() {
 
       <div className={`room-shell__layout${isMobileSpectatorLayout ? " room-shell__layout--mobile-spectator" : ""}`}>
       <section className={`panel panel--board board room-shell__board${projection.turnState === "awaiting-roll" ? " room-shell__board--roll-ready" : ""}`}>
-        <div className="board__hero board-drag-handle">
-          <div className="board__hero-copy">
-            <p className="shell__eyebrow">当前棋盘</p>
-            <strong>{roomPhaseLabel}</strong>
-            <span>
-              {presentation.highlightedTileId
-                ? `焦点地块：${boardTileLabels.get(presentation.highlightedTileId) ?? presentation.highlightedTileId}`
-                : "棋盘会在这里突出当前地块与玩家位置。"}
-            </span>
-          </div>
-          <div className="board__hero-copy">
-            <strong>{projection.currentTurnPlayerName}</strong>
-            <span>{isSpectator ? "当前只读观战" : `当前身份：${activePlayerName}`}</span>
-          </div>
-        </div>
-        <div className="board__stage-shell">
-          <Rnd
-            disableDragging={false}
-            dragHandleClassName="board-drag-handle"
-            enableResizing={{
-              top: true, right: true, bottom: true, left: true,
-              topRight: true, bottomRight: true, bottomLeft: true, topLeft: true
-            }}
-            default={{
-              x: 0,
-              y: 0,
-              width: "100%",
-              height: 520,
-            }}
-            style={{ position: 'relative', margin: '0 auto', maxWidth: '100%' }}
-            className="board-resizable-wrap"
-          >
-            <BoardScene
-            board={sampleBoard}
-            currentTurnPlayerId={projection.currentTurnPlayerId}
-            players={projection.players}
-            highlightedTileId={presentation.highlightedTileId}
-            deEmphasizeCenterCue={shouldMuteCenterBoardCue}
-            resultFeedback={boardResultFeedback}
-            stageCue={boardStageCue}
-            transitionHint={boardSceneTransitionHint}
-            consequenceHint={boardConsequenceCue}
-            handoffHint={boardTurnHandoffCue}
-            actorTakeoverHint={boardActorTakeoverCue}
-            phaseFocusHint={boardPhaseFocusCue}
-            phaseClosureHint={boardPhaseClosureCue}
-          />
-          </Rnd>
-
+        <div className="board__stage-shell" ref={boardShellRef}>
+          {boardFrame ? (
+            <Rnd
+              bounds="parent"
+              className="board-resizable-wrap"
+              dragHandleClassName="board-drag-handle"
+              enableUserSelectHack={false}
+              resizeGrid={[1, 1]}
+              dragGrid={[1, 1]}
+              minWidth={Math.max(220, Math.min(360, boardShellBounds.width))}
+              minHeight={Math.max(220, Math.min(320, boardShellBounds.height))}
+              maxWidth={boardShellBounds.width}
+              maxHeight={boardShellBounds.height}
+              position={{ x: boardFrame.x, y: boardFrame.y }}
+              size={{ width: boardFrame.width, height: boardFrame.height }}
+              onDragStop={(_event, data) => {
+                setBoardFrame((current) => current ? { ...current, x: data.x, y: data.y } : current);
+              }}
+              onResizeStop={(_event, _direction, ref, _delta, position) => {
+                setBoardFrame({
+                  x: position.x,
+                  y: position.y,
+                  width: ref.offsetWidth,
+                  height: ref.offsetHeight,
+                });
+              }}
+            >
+              <div className="board-window">
+                <div className="board__hero board-window__toolbar board-drag-handle">
+                  <div className="board__hero-copy">
+                    <p className="shell__eyebrow">当前棋盘</p>
+                    <strong>{roomPhaseLabel}</strong>
+                    <span>
+                      {presentation.highlightedTileId
+                        ? `焦点地块：${boardTileLabels.get(presentation.highlightedTileId) ?? presentation.highlightedTileId}`
+                        : "棋盘会在这里突出当前地块与玩家位置。"}
+                    </span>
+                  </div>
+                  <div className="board__hero-copy">
+                    <strong>{projection.currentTurnPlayerName}</strong>
+                    <span>{isSpectator ? "当前只读观战" : `当前身份：${activePlayerName}`}</span>
+                  </div>
+                </div>
+                <div className="board-window__canvas">
+                  <BoardScene
+                    board={sampleBoard}
+                    currentTurnPlayerId={projection.currentTurnPlayerId}
+                    players={projection.players}
+                    highlightedTileId={presentation.highlightedTileId}
+                    deEmphasizeCenterCue={shouldMuteCenterBoardCue}
+                    resultFeedback={boardResultFeedback}
+                    stageCue={boardStageCue}
+                    transitionHint={boardSceneTransitionHint}
+                    consequenceHint={boardConsequenceCue}
+                    handoffHint={boardTurnHandoffCue}
+                    actorTakeoverHint={boardActorTakeoverCue}
+                    phaseFocusHint={boardPhaseFocusCue}
+                    phaseClosureHint={boardPhaseClosureCue}
+                  />
+                </div>
+              </div>
+            </Rnd>
+          ) : null}
         </div>
       </section>
       <aside className="panel panel--room-state room-shell__rail">
@@ -3044,7 +3082,7 @@ export function GamePage() {
           </article>
           <article className="status-card">
             <strong>事件窗口</strong>
-            <span>{`当前保留 ${recentEventFeed.retainedCount} 条 · 当前显示 ${recentEventFeed.visibleCount} 条`}</span>
+            <span>{`当前累计 ${projection.recentEvents.length} 条历史事件`}</span>
           </article>
         </div>
 
