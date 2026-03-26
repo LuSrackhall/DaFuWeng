@@ -2699,7 +2699,7 @@ export function GamePage() {
 
       <div className={`room-shell__layout${isMobileSpectatorLayout ? " room-shell__layout--mobile-spectator" : ""}`}>
       <section className={`panel panel--board board room-shell__board${projection.turnState === "awaiting-roll" ? " room-shell__board--roll-ready" : ""}`}>
-        <div className="board__hero">
+        <div className="board__hero board-drag-handle">
           <div className="board__hero-copy">
             <p className="shell__eyebrow">当前棋盘</p>
             <strong>{roomPhaseLabel}</strong>
@@ -2716,7 +2716,8 @@ export function GamePage() {
         </div>
         <div className="board__stage-shell">
           <Rnd
-            disableDragging={true}
+            disableDragging={false}
+            dragHandleClassName="board-drag-handle"
             enableResizing={{
               top: true, right: true, bottom: true, left: true,
               topRight: true, bottomRight: true, bottomLeft: true, topLeft: true
