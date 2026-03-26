@@ -8,6 +8,10 @@ import {
 } from "./roomEventFeed";
 import type { ProjectionEvent } from "@dafuweng/contracts";
 
+const FLOATING_EVENT_FEED_STORAGE_KEY = "dafuweng-floating-event-feed-frame-v2";
+const FEED_MARGIN = 18;
+const FEED_TOP_OFFSET = 110;
+const FEED_MIN_WIDTH = 340;
 const FEED_HEADER_HEIGHT = 76;
 const FEED_SETTINGS_HEIGHT = 176;
 const FEED_INTRO_HEIGHT = 86;
@@ -16,6 +20,7 @@ const FEED_ITEM_GAP = 8;
 const FEED_COMPACT_ROW_HEIGHT = 42;
 const FEED_NORMAL_ROW_HEIGHT = 58;
 const FEED_LARGE_ROW_HEIGHT = 76;
+const FEED_RESIZE_STEP = 12;
 
 type DraggableEventFeedProps = {
   events: ProjectionEvent[];
@@ -23,22 +28,102 @@ type DraggableEventFeedProps = {
   onPreferencesChange: (updater: (prev: EventFeedPreferences) => EventFeedPreferences) => void;
 };
 
+function renderResizeHandle(prefix: string, direction: string) {
+  return <span className={`floating-resize-handle floating-resize-handle--${direction}`} data-testid={`${prefix}-resize-${direction}`} />;
+}
+
+function clampEventFeedFrame(
+  frame: { x: number; y: number; width: number; height: number },
+  viewportSize: { width: number; height: number },
+  minimumHeight: number,
+) {
+  const width = Math.min(Math.max(frame.width, FEED_MIN_WIDTH), Math.max(FEED_MIN_WIDTH, viewportSize.width - FEED_MARGIN * 2));
+  const height = Math.min(Math.max(frame.height, minimumHeight), Math.max(minimumHeight, viewportSize.height - FEED_TOP_OFFSET - FEED_MARGIN));
+
+  return {
+    x: Math.min(Math.max(frame.x, FEED_MARGIN), Math.max(FEED_MARGIN, viewportSize.width - width - FEED_MARGIN)),
+    y: Math.min(Math.max(frame.y, FEED_TOP_OFFSET), Math.max(FEED_TOP_OFFSET, viewportSize.height - height - FEED_MARGIN)),
+    width,
+    height,
+  };
+}
+
+function readPersistedEventFeedFrame(
+  viewportSize: { width: number; height: number },
+  minimumHeight: number,
+) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(FLOATING_EVENT_FEED_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<{ x: number; y: number; width: number; height: number }>;
+    if (
+      typeof parsed.x !== "number"
+      || typeof parsed.y !== "number"
+      || typeof parsed.width !== "number"
+      || typeof parsed.height !== "number"
+    ) {
+      return null;
+    }
+
+    return clampEventFeedFrame(parsed as { x: number; y: number; width: number; height: number }, viewportSize, minimumHeight);
+  } catch {
+    return null;
+  }
+}
+
+function persistEventFeedFrame(frame: { x: number; y: number; width: number; height: number }) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(FLOATING_EVENT_FEED_STORAGE_KEY, JSON.stringify(frame));
+}
+
+function snapSize(value: number) {
+  return Math.round(value / FEED_RESIZE_STEP) * FEED_RESIZE_STEP;
+}
+
 export function DraggableEventFeed({ events, preferences, onPreferencesChange }: DraggableEventFeedProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIntroOpen, setIsIntroOpen] = useState(false);
-  const [frameSize, setFrameSize] = useState({ width: 420, height: 420 });
-  const [framePosition, setFramePosition] = useState({ x: 24, y: 120 });
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window === "undefined" ? 1440 : window.innerWidth,
+    height: typeof window === "undefined" ? 900 : window.innerHeight,
+  }));
   const scrollRef = useRef<HTMLOListElement>(null);
   const resizeFrameRef = useRef<number | null>(null);
+  const [isInteracting, setIsInteracting] = useState(false);
 
   const feed = buildRecentEventFeed(events, preferences);
   const chromeHeight = FEED_HEADER_HEIGHT
     + (isIntroOpen ? FEED_INTRO_HEIGHT : 0)
     + (isSettingsOpen ? FEED_SETTINGS_HEIGHT : 0)
     + FEED_LIST_PADDING;
+  const minimumHeight = FEED_HEADER_HEIGHT
+    + (isIntroOpen ? FEED_INTRO_HEIGHT : 0)
+    + (isSettingsOpen ? FEED_SETTINGS_HEIGHT : 0)
+    + FEED_LIST_PADDING
+    + preferences.minItemsCount * FEED_COMPACT_ROW_HEIGHT
+    + Math.max(0, preferences.minItemsCount - 1) * FEED_ITEM_GAP;
+  const [frame, setFrame] = useState(() => {
+    const defaultFrame = {
+      x: Math.max(FEED_MARGIN, viewportSize.width - 460),
+      y: FEED_TOP_OFFSET,
+      width: 420,
+      height: Math.max(minimumHeight + 60, 420),
+    };
+    return readPersistedEventFeedFrame(viewportSize, minimumHeight) ?? clampEventFeedFrame(defaultFrame, viewportSize, minimumHeight);
+  });
   const availableItemHeight = Math.max(
     0,
-    frameSize.height - chromeHeight - Math.max(0, preferences.minItemsCount - 1) * FEED_ITEM_GAP,
+    frame.height - chromeHeight - Math.max(0, preferences.minItemsCount - 1) * FEED_ITEM_GAP,
   );
   const exactItemHeight = availableItemHeight / Math.max(1, preferences.minItemsCount);
   const styleDensity = exactItemHeight >= FEED_LARGE_ROW_HEIGHT
@@ -46,13 +131,22 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
     : exactItemHeight >= FEED_NORMAL_ROW_HEIGHT
       ? "normal"
       : "compact";
-  const minimumHeight = FEED_HEADER_HEIGHT
-    + (isIntroOpen ? FEED_INTRO_HEIGHT : 0)
-    + (isSettingsOpen ? FEED_SETTINGS_HEIGHT : 0)
-    + FEED_LIST_PADDING
-    + preferences.minItemsCount * FEED_COMPACT_ROW_HEIGHT
-    + Math.max(0, preferences.minItemsCount - 1) * FEED_ITEM_GAP;
   const latestSequence = events.at(-1)?.sequence ?? 0;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const updateViewportSize = () => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    window.addEventListener("resize", updateViewportSize);
+    return () => {
+      window.removeEventListener("resize", updateViewportSize);
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -70,6 +164,14 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
     }
   }, []);
 
+  useEffect(() => {
+    setFrame((current) => {
+      const nextFrame = clampEventFeedFrame(current, viewportSize, minimumHeight);
+      persistEventFeedFrame(nextFrame);
+      return nextFrame;
+    });
+  }, [minimumHeight, viewportSize.height, viewportSize.width]);
+
   if (typeof document === "undefined") {
     return null;
   }
@@ -77,16 +179,16 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
   return createPortal(
     <Rnd
       default={{
-        x: framePosition.x,
-        y: framePosition.y,
-        width: frameSize.width,
-        height: frameSize.height,
+        x: frame.x,
+        y: frame.y,
+        width: frame.width,
+        height: frame.height,
       }}
-      minWidth={320}
+      className={`floating-event-feed-shell${isInteracting ? " floating-event-feed-shell--interacting" : ""}`}
+      minWidth={FEED_MIN_WIDTH}
       minHeight={minimumHeight}
       bounds="window"
       data-testid="floating-event-feed-window"
-      className="floating-event-feed-shell"
       dragHandleClassName="floating-event-feed__handle"
       enableUserSelectHack={false}
       enableResizing={{
@@ -99,29 +201,65 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
         bottomLeft: true,
         topLeft: true,
       }}
-      resizeGrid={[1, 1]}
+      resizeHandleComponent={{
+        top: renderResizeHandle("event-feed", "top"),
+        right: renderResizeHandle("event-feed", "right"),
+        bottom: renderResizeHandle("event-feed", "bottom"),
+        left: renderResizeHandle("event-feed", "left"),
+        topRight: renderResizeHandle("event-feed", "top-right"),
+        bottomRight: renderResizeHandle("event-feed", "bottom-right"),
+        bottomLeft: renderResizeHandle("event-feed", "bottom-left"),
+        topLeft: renderResizeHandle("event-feed", "top-left"),
+      }}
+      resizeGrid={[FEED_RESIZE_STEP, FEED_RESIZE_STEP]}
       dragGrid={[1, 1]}
       cancel="button, input, select, option, .floating-scroll-list, .floating-event-feed__settings-wrap, .floating-event-feed__intro"
+      onDragStart={() => {
+        setIsInteracting(true);
+      }}
       onDragStop={(_event, data) => {
-        setFramePosition({ x: data.x, y: data.y });
+        const nextFrame = clampEventFeedFrame({ ...frame, x: data.x, y: data.y }, viewportSize, minimumHeight);
+        setFrame(nextFrame);
+        persistEventFeedFrame(nextFrame);
+        setIsInteracting(false);
+      }}
+      onResizeStart={() => {
+        setIsInteracting(true);
       }}
       onResize={(_event, _direction, ref, _delta, position) => {
         if (resizeFrameRef.current !== null) {
           window.cancelAnimationFrame(resizeFrameRef.current);
         }
         resizeFrameRef.current = window.requestAnimationFrame(() => {
-          setFrameSize({ width: ref.offsetWidth, height: ref.offsetHeight });
+          setFrame((current) => {
+            const nextFrame = clampEventFeedFrame({
+              ...current,
+              width: snapSize(ref.offsetWidth),
+              height: snapSize(ref.offsetHeight),
+              x: current.x,
+              y: current.y,
+            }, viewportSize, minimumHeight);
+            return nextFrame.width === current.width && nextFrame.height === current.height
+              ? current
+              : nextFrame;
+          });
           resizeFrameRef.current = null;
         });
-        setFramePosition({ x: position.x, y: position.y });
       }}
       onResizeStop={(_event, _direction, ref, _delta, position) => {
         if (resizeFrameRef.current !== null) {
           window.cancelAnimationFrame(resizeFrameRef.current);
           resizeFrameRef.current = null;
         }
-        setFrameSize({ width: ref.offsetWidth, height: ref.offsetHeight });
-        setFramePosition({ x: position.x, y: position.y });
+        const nextFrame = clampEventFeedFrame({
+          x: position.x,
+          y: position.y,
+          width: snapSize(ref.offsetWidth),
+          height: snapSize(ref.offsetHeight),
+        }, viewportSize, minimumHeight);
+        setFrame(nextFrame);
+        persistEventFeedFrame(nextFrame);
+        setIsInteracting(false);
       }}
       style={{ position: "fixed", zIndex: 8 }}
     >
@@ -199,7 +337,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
               <div className="floating-event-feed__metrics">
                 <span>{`当前自动档位：${styleDensity === "large" ? "Large" : styleDensity === "normal" ? "Normal" : "Compact"}`}</span>
                 <span>{`推导单条高度：${Math.round(exactItemHeight)}px`}</span>
-                <span>{`当前窗口：${Math.round(frameSize.width)} × ${Math.round(frameSize.height)}`}</span>
+                <span>{`当前窗口：${Math.round(frame.width)} × ${Math.round(frame.height)}`}</span>
               </div>
             </div>
           </div>

@@ -101,9 +101,11 @@ async function dragLocator(page: Page, selector: string, deltaX: number, deltaY:
     return;
   }
 
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const startX = box.x + Math.min(72, box.width * 0.26);
+  const startY = box.y + Math.min(28, box.height * 0.5);
+  await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + deltaX, box.y + box.height / 2 + deltaY, { steps: 18 });
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 18 });
   await page.mouse.up();
 }
 
@@ -152,9 +154,11 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   const placeholderBefore = await page.locator(".board__stage-placeholder").boundingBox();
   expect(boardBefore).not.toBeNull();
   expect(placeholderBefore).not.toBeNull();
+  expect(boardBefore?.x ?? 0).toBeLessThan(120);
+  expect(boardBefore?.y ?? 0).toBeLessThan(160);
 
   await dragLocator(page, '.board-window__toolbar', 180, 96);
-  await dragBottomRightCorner(page, '.board-resizable-wrap', 120, 140);
+  await dragBottomRightCorner(page, '[data-testid="board-window-resize-bottom-right"]', 120, 140);
 
   const boardAfter = await boardWindow.boundingBox();
   expect(boardAfter).not.toBeNull();
@@ -172,16 +176,28 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
     ),
   );
   expect(boardEscapesDockBounds).toBe(true);
+  await dragBottomRightCorner(page, '[data-testid="board-window-resize-bottom-right"]', -2000, -2000);
+  const boardAfterShrink = await boardWindow.boundingBox();
+  expect(boardAfterShrink).not.toBeNull();
+  expect(boardAfterShrink ? boardAfterShrink.width : 0).toBeGreaterThanOrEqual(520);
+  expect(boardAfterShrink ? boardAfterShrink.height : 0).toBeGreaterThanOrEqual(420);
 
   const feedBefore = await eventFeedWindow.boundingBox();
-  await dragLocator(page, '[data-testid="floating-event-feed-handle"]', 140, 72);
-  await dragBottomRightCorner(page, '.floating-event-feed-shell', 120, 120);
+  expect(feedBefore?.x ?? 0).toBeGreaterThan(760);
+  expect(feedBefore?.y ?? 0).toBeLessThan(180);
+  await dragLocator(page, '[data-testid="floating-event-feed-handle"]', -220, 72);
+  await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', 120, 120);
   const feedAfterResize = await eventFeedWindow.boundingBox();
   expect(feedAfterResize).not.toBeNull();
-  expect(feedAfterResize && feedBefore ? feedAfterResize.x - feedBefore.x : 0).toBeGreaterThan(100);
+  expect(feedAfterResize && feedBefore ? feedAfterResize.x - feedBefore.x : 0).toBeLessThan(-150);
   expect(feedAfterResize && feedBefore ? feedAfterResize.y - feedBefore.y : 0).toBeGreaterThan(40);
   expect(feedAfterResize && feedBefore ? feedAfterResize.width - feedBefore.width : 0).toBeGreaterThan(80);
   expect(feedAfterResize && feedBefore ? feedAfterResize.height - feedBefore.height : 0).toBeGreaterThan(80);
+  await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', -2000, -2000);
+  const feedAfterShrink = await eventFeedWindow.boundingBox();
+  expect(feedAfterShrink).not.toBeNull();
+  expect(feedAfterShrink ? feedAfterShrink.width : 0).toBeGreaterThanOrEqual(340);
+  expect(feedAfterShrink ? feedAfterShrink.height : 0).toBeGreaterThanOrEqual(390);
 
   await page.getByTestId("floating-event-feed-intro-toggle").click();
   await expect(page.getByTestId("floating-event-feed-intro")).toBeVisible();
@@ -195,7 +211,7 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   const listCollapsed = await page.locator(".floating-scroll-list").boundingBox();
   expect(listExpanded).not.toBeNull();
   expect(listCollapsed).not.toBeNull();
-  expect(listCollapsed && listExpanded ? listCollapsed.height - listExpanded.height : 0).toBeGreaterThan(40);
+  expect(listCollapsed && listExpanded ? listExpanded.y - listCollapsed.y : 0).toBeGreaterThan(20);
 
   await expect(eventFeedSurface).toHaveAttribute("data-density", /compact|normal|large/);
 

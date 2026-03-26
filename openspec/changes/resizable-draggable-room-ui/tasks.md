@@ -41,3 +41,5 @@
 - [x] 6.6 Add a scenario-aware top guidance banner and an in-session gameplay guide panel.
 - [x] 6.7 Portal the board and event-feed floating surfaces to `document.body` so they are no longer clipped by room layout containers.
 - [x] 6.8 Add Playwright interaction and screenshot evidence for board drag/resize, event-feed drag/resize, event-feed collapse, top guidance banner, and rules guide panel.
+- [x] 6.9 Add persisted docking presets, safer initial placement, and stronger minimum usable-size calibration for the floating board and event-feed windows.
+- [x] 6.10 Add an interaction-lightweight mode during drag/resize and strengthen Playwright assertions for initial docking, growth, and minimum-size clamping.

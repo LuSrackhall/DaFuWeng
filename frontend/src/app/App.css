@@ -1962,12 +1962,88 @@ body {
   background: linear-gradient(180deg, rgba(10, 22, 18, 0.52), rgba(10, 22, 18, 0.36));
   box-shadow: 0 24px 48px rgba(3, 10, 8, 0.28);
   backdrop-filter: blur(16px) saturate(145%);
+  contain: layout paint style;
+  transform: translateZ(0);
   will-change: transform, width, height;
+}
+
+.board-resizable-wrap--interacting {
+  box-shadow: 0 12px 24px rgba(3, 10, 8, 0.18);
+  backdrop-filter: none;
 }
 
 .board-resizable-wrap .react-resizable-handle,
 .floating-event-feed-shell .react-resizable-handle {
   opacity: 1;
+}
+
+.floating-resize-handle {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  background: rgba(246, 236, 212, 0.88);
+  box-shadow: 0 0 0 1px rgba(7, 15, 13, 0.22), 0 6px 12px rgba(7, 15, 13, 0.12);
+  pointer-events: auto;
+}
+
+.floating-resize-handle--top,
+.floating-resize-handle--bottom {
+  left: 50%;
+  width: 48px;
+  height: 12px;
+  transform: translateX(-50%);
+}
+
+.floating-resize-handle--left,
+.floating-resize-handle--right {
+  top: 50%;
+  width: 12px;
+  height: 48px;
+  transform: translateY(-50%);
+}
+
+.floating-resize-handle--top-left,
+.floating-resize-handle--top-right,
+.floating-resize-handle--bottom-left,
+.floating-resize-handle--bottom-right {
+  width: 18px;
+  height: 18px;
+}
+
+.floating-resize-handle--top {
+  top: 6px;
+}
+
+.floating-resize-handle--bottom {
+  bottom: 6px;
+}
+
+.floating-resize-handle--left {
+  left: 6px;
+}
+
+.floating-resize-handle--right {
+  right: 6px;
+}
+
+.floating-resize-handle--top-left {
+  top: 6px;
+  left: 6px;
+}
+
+.floating-resize-handle--top-right {
+  top: 6px;
+  right: 6px;
+}
+
+.floating-resize-handle--bottom-left {
+  bottom: 6px;
+  left: 6px;
+}
+
+.floating-resize-handle--bottom-right {
+  right: 6px;
+  bottom: 6px;
 }
 
 .board-resizable-wrap .react-resizable-handle::after,
@@ -1994,6 +2070,7 @@ body {
   background: linear-gradient(180deg, rgba(18, 34, 28, 0.66), rgba(18, 34, 28, 0.42));
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   user-select: none;
+  touch-action: none;
 }
 
 .board-window__canvas {
@@ -2015,7 +2092,14 @@ body {
 
 .floating-event-feed-shell {
   z-index: 8 !important;
+  contain: layout paint style;
+  transform: translateZ(0);
   will-change: transform, width, height;
+}
+
+.floating-event-feed-shell--interacting .floating-event-feed__surface {
+  box-shadow: 0 10px 20px rgba(8, 16, 20, 0.18);
+  backdrop-filter: none;
 }
 
 .floating-event-feed__surface {
@@ -2040,6 +2124,7 @@ body {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   cursor: grab;
   user-select: none;
+  touch-action: none;
 }
 
 .floating-event-feed__handle:active {
