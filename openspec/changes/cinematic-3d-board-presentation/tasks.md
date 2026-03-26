@@ -2,9 +2,9 @@
 
 ## 1. Planning And Boundaries
 
-- [ ] 1.1 Translate the planning decisions into a web-game-client delta spec before implementation begins.
-- [ ] 1.2 Define the board presentation adapter contract that separates projection truth, local settings, capability tiers, and renderer-only animation state.
-- [ ] 1.3 Define the user-facing presentation choices and reduced-motion behavior without exposing raw graphics jargon as the primary UX.
+- [x] 1.1 Translate the planning decisions into a web-game-client delta spec before implementation begins.
+- [x] 1.2 Define the board presentation adapter contract that separates projection truth, local settings, capability tiers, and renderer-only animation state.
+- [x] 1.3 Define the user-facing presentation choices and reduced-motion behavior without exposing raw graphics jargon as the primary UX.
 
 ## 2. Renderer Strategy
 
@@ -12,6 +12,14 @@
 - [ ] 2.2 Adopt `three.js` plus `react-three-fiber` as the cinematic 3D renderer path without changing authoritative board semantics.
 - [ ] 2.3 Keep DOM room actions, recent events, diagnostics, and accessibility summaries outside the 3D renderer so dense management flows remain stable.
 - [ ] 2.4 Define how the 2D Pixi renderer and the 3D `react-three-fiber` renderer share the same presentation adapter and fallback contract.
+
+## 2A. First Implementation Slice
+
+- [ ] 2A.1 Add the minimum 3D dependencies: `three`, `@react-three/fiber`, and `@react-three/drei`.
+- [ ] 2A.2 Introduce board presentation settings and capability-tier helpers without changing authoritative room state.
+- [ ] 2A.3 Introduce a board presentation adapter that can select `pixi-2d` or `r3f-3d` from the same interpreted board cues.
+- [ ] 2A.4 Add a minimal `CinematicBoardScene` shell with a stable tabletop camera and placeholder board geometry.
+- [ ] 2A.5 Keep the first 3D slice intentionally narrow: no production asset pipeline, no heavy post-processing, and no long scripted camera choreography.
 
 ## 3. Authority-Safe Cinematic Cues
 

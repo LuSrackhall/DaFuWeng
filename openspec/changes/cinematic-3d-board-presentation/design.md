@@ -336,3 +336,92 @@ Current automated coverage is strong for projection semantics and room-shell con
 4. Implement a low-risk baseline 3D path only after unit and integration seams are in place.
 5. Validate reconnect, reduced-motion, low-end, and long-session behavior before broadening cinematic scope.
 6. Expand fidelity only after the baseline 2D fallback remains stable and testable.
+
+## First Implementation Slice
+
+The first implementation slice should stay intentionally narrow. It should prove that the repository can host an optional `three.js` + `react-three-fiber` board renderer without disturbing the existing room shell or authoritative board contracts.
+
+### Slice Goal
+
+Ship the smallest usable cinematic foundation that can:
+
+- keep the current Pixi board fully intact
+- select between 2D and 3D board renderers through a shared presentation adapter
+- mount a minimal 3D board scene with a stable tabletop camera and simple token or dice placeholder geometry
+- preserve all existing room actions, board summaries, and fallback semantics
+
+This first slice should not attempt full production visuals.
+
+### Slice Exclusions
+
+The first slice must explicitly avoid:
+
+- full 3D dice choreography
+- production-grade token animation
+- complex lighting or post-processing
+- imported model pipelines
+- long camera moves or event-specific scene scripts
+- replacing the current Pixi board as the default path for every device
+
+### Dependencies To Add
+
+The first implementation slice should add only the minimum 3D dependencies:
+
+- `three`
+- `@react-three/fiber`
+- `@react-three/drei`
+
+`@react-three/drei` should be treated as a helper toolkit for a small controlled subset of scene scaffolding rather than as a license to expand scope.
+
+### Presentation Adapter Boundary
+
+The first slice should introduce a dedicated adapter that receives:
+
+- authoritative board props already consumed by `BoardScene`
+- semantic scene cues already interpreted by `GamePage`
+- local board presentation settings
+- resolved capability tier
+
+The adapter should output:
+
+- active renderer kind: `pixi-2d` or `r3f-3d`
+- reduced or enhanced presentation tier metadata
+- a renderer-safe presentation model shared across both renderers
+
+This keeps the first slice from coupling the new 3D scene directly to raw room projection or local storage.
+
+### First File Set
+
+The first implementation slice should be expected to add or modify a file set close to the following:
+
+- `frontend/package.json`
+- `frontend/src/features/game/GamePage.tsx`
+- `frontend/src/scene/board/BoardScene.tsx`
+- `frontend/src/scene/board/boardPresentationAdapter.ts`
+- `frontend/src/scene/board/boardPresentationSettings.ts`
+- `frontend/src/scene/board/boardCapabilityTier.ts`
+- `frontend/src/scene/board/CinematicBoardScene.tsx`
+- `frontend/src/scene/board/CinematicBoardScene.test.ts`
+- `frontend/src/scene/board/boardPresentationAdapter.test.ts`
+
+The exact filenames may change, but the boundary should not: settings, capability resolution, adapter logic, and renderer implementation must remain separate concerns.
+
+### Acceptance Criteria For The First Slice
+
+The first implementation slice is acceptable only if all of the following are true:
+
+- the current Pixi board still works as before when cinematic mode is disabled or unsupported
+- the room shell, primary action anchor, event feed, and board host summary do not regress
+- the new 3D renderer can mount and unmount safely without leaking room-level state ownership
+- local settings and capability tiers can force a fallback to Pixi without breaking the room page
+- at least one simple 3D board presentation path is visible and testable without claiming final cinematic quality
+
+### Validation Focus For The First Slice
+
+Validation for this slice should emphasize architecture safety over visual ambition:
+
+- dependency installation and type safety
+- adapter unit tests
+- 2D versus 3D selection behavior
+- fallback correctness under reduced-motion and unsupported conditions
+- safe mount and teardown behavior for the new 3D scene shell
