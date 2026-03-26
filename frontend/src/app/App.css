@@ -1140,6 +1140,34 @@ body {
   backdrop-filter: blur(14px);
 }
 
+.board-event-feed--compact {
+  right: auto;
+  bottom: 18px;
+  max-width: 392px;
+  padding: 12px 14px;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(8, 18, 22, 0.84), rgba(8, 18, 22, 0.76));
+  border-color: rgba(150, 189, 212, 0.14);
+  box-shadow: 0 12px 24px rgba(8, 16, 20, 0.24);
+}
+
+.board-event-feed--compact .board-event-feed__copy {
+  gap: 6px;
+}
+
+.board-event-feed--compact .board-event-feed__copy span:last-child {
+  display: none;
+}
+
+.board-event-feed--compact .board-event-feed__list,
+.board-event-feed--compact .board-event-feed__body {
+  gap: 6px;
+}
+
+.board-event-feed--compact .board-event-feed__item {
+  padding: 10px 12px;
+}
+
 .board-event-feed--top {
   top: 20px;
   bottom: auto;
@@ -1531,6 +1559,33 @@ body {
     max-width: none;
     padding: 14px;
     gap: 10px;
+  }
+
+  .room-shell__layout--mobile-spectator > .panel--board {
+    order: 1;
+  }
+
+  .room-shell__layout--mobile-spectator > .panel--room-state {
+    order: 2;
+  }
+
+  .room-shell__layout--mobile-spectator > .panel--room-state .stage-card--overview {
+    order: 1;
+  }
+
+  .room-shell__layout--mobile-spectator > .panel--room-state .stage-card:not(.stage-card--overview) {
+    order: 2;
+  }
+
+  .room-shell__layout--mobile-spectator > .panel--room-state .room-overview__grid {
+    display: none;
+  }
+
+  .board-event-feed--compact.board-event-feed--mobile-safe {
+    left: 14px;
+    right: 14px;
+    bottom: 110px;
+    max-width: none;
   }
 
   .board-event-feed--top {

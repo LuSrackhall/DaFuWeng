@@ -611,6 +611,19 @@ export function GamePage() {
   const diagnosticsEventLines = [...projection.recentEvents].sort((left, right) => right.sequence - left.sequence);
   const recentEventFeed = buildRecentEventFeed(projection.recentEvents, eventFeedPreferences);
   const nearestEventFeedItem = recentEventFeed.items.find((item) => item.isNearest) ?? null;
+  const isPrimaryActionStage = projection.roomState === "in-game"
+    && (projection.turnState === "awaiting-roll" || projection.turnState === "awaiting-property-decision");
+  const shouldCompactEventFeed = !isEventFeedSettingsOpen
+    && ((!isMobileAnchorTray && isPrimaryActionStage) || (isMobileAnchorTray && isSpectator && projection.roomState === "in-game"));
+  const displayedEventFeedItems = shouldCompactEventFeed && nearestEventFeedItem
+    ? [nearestEventFeedItem]
+    : recentEventFeed.items;
+  const eventFeedSettingsToggleLabel = isEventFeedSettingsOpen
+    ? "收起阅读偏好"
+    : shouldCompactEventFeed
+      ? "展开时间线"
+      : "调整阅读方式";
+  const isMobileSpectatorLayout = isMobileAnchorTray && isSpectator && projection.roomState === "in-game";
   const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
   const currentTurnProjectionPlayer = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
   const resolutionActor = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
@@ -2584,18 +2597,22 @@ export function GamePage() {
 
   function renderRecentEventFeed() {
     return (
-      <section className={`board-event-feed board-event-feed--${eventFeedPreferences.nearEventPlacement}${isEventFeedSettingsOpen ? " board-event-feed--settings-open" : ""}${isMobileAnchorTray ? " board-event-feed--mobile-safe" : ""}`}>
+      <section className={`board-event-feed board-event-feed--${eventFeedPreferences.nearEventPlacement}${isEventFeedSettingsOpen ? " board-event-feed--settings-open" : ""}${isMobileAnchorTray ? " board-event-feed--mobile-safe" : ""}${shouldCompactEventFeed ? " board-event-feed--compact" : ""}`}>
         <div className="board-event-feed__header">
           <div className="board-event-feed__copy">
             <p className="shell__eyebrow">牌局纪事</p>
             <strong>最近事件</strong>
             <span>
               {nearestEventFeedItem
-                ? `当前显示 ${recentEventFeed.visibleCount} / ${recentEventFeed.retainedCount} 条，最新一条是：${nearestEventFeedItem.summary}`
+                ? shouldCompactEventFeed
+                  ? `当前先看最近 1 / ${recentEventFeed.retainedCount} 条：${nearestEventFeedItem.summary}`
+                  : `当前显示 ${recentEventFeed.visibleCount} / ${recentEventFeed.retainedCount} 条，最新一条是：${nearestEventFeedItem.summary}`
                 : "当前还没有可回看的房间事件。"}
             </span>
             <span>
-              这里用来回看刚刚发生了什么。你可以把最新动静放在更顺眼的位置，也能决定一次先看几条。
+              {shouldCompactEventFeed
+                ? "需要时再展开完整时间线和阅读偏好。"
+                : "这里用来回看刚刚发生了什么。你可以把最新动静放在更顺眼的位置，也能决定一次先看几条。"}
             </span>
           </div>
           <button
@@ -2603,7 +2620,7 @@ export function GamePage() {
             type="button"
             onClick={() => setIsEventFeedSettingsOpen((current) => !current)}
           >
-            {isEventFeedSettingsOpen ? "收起阅读偏好" : "调整阅读方式"}
+            {eventFeedSettingsToggleLabel}
           </button>
         </div>
         {isEventFeedSettingsOpen ? (
@@ -2676,9 +2693,9 @@ export function GamePage() {
             ) : null}
           </div>
         ) : null}
-        {recentEventFeed.items.length > 0 ? (
+        {displayedEventFeedItems.length > 0 ? (
           <ol className="board-event-feed__list">
-            {recentEventFeed.items.map((item) => (
+            {displayedEventFeedItems.map((item) => (
               <li className={`board-event-feed__item${item.isNearest ? " board-event-feed__item--nearest" : ""}`} key={item.id}>
                 <span className="board-event-feed__number">{item.displayNumber}</span>
                 <div className="board-event-feed__body">
@@ -2697,7 +2714,7 @@ export function GamePage() {
   }
 
   return (
-    <main className="room-shell">
+    <main className={`room-shell${isMobileSpectatorLayout ? " room-shell--mobile-spectator" : ""}`}>
       <header className="room-shell__topbar">
         <div className="room-shell__identity">
           <div className="room-shell__title-group">
@@ -2794,7 +2811,7 @@ export function GamePage() {
         </section>
       ) : null}
 
-      <div className="room-shell__layout">
+      <div className={`room-shell__layout${isMobileSpectatorLayout ? " room-shell__layout--mobile-spectator" : ""}`}>
       <section className={`panel panel--board board room-shell__board${projection.turnState === "awaiting-roll" ? " room-shell__board--roll-ready" : ""}`}>
         <div className="board__hero">
           <div className="board__hero-copy">
