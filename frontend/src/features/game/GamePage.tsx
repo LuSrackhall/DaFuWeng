@@ -10,10 +10,9 @@ import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
 import { usePresentationState } from "../../state/presentation/gamePresentation";
 import { getAuctionBidValidation, getDeficitControlMode, sanitizeAuctionBidInput } from "./gameActionState";
-import { Rnd } from "react-rnd";
-import useMeasure from "react-use-measure";
 import { defaultEventFeedPreferences, EVENT_FEED_PREFERENCES_STORAGE_KEY, sanitizeEventFeedPreferences } from "./roomEventFeed";
 import { DraggableEventFeed } from "./DraggableEventFeed";
+import { FloatingBoardWindow } from "./FloatingBoardWindow";
 
 type TradeComposerStep = "counterparty" | "offered" | "requested" | "review";
 type PrimaryAnchorTone = "default" | "warning" | "danger" | "success";
@@ -45,6 +44,45 @@ type FloatingFrame = {
   width: number;
   height: number;
 };
+
+type GameplayNotice = {
+  key: string;
+  title: string;
+  detail: string;
+  rule: string;
+};
+
+const RULE_GUIDE_SECTIONS = [
+  {
+    title: "基础回合",
+    items: [
+      "轮到你时，先看顶部提醒和右侧“现在该做什么”，它们会告诉你这一步是否该掷骰、买地、回应交易或处理欠款。",
+      "掷骰后，棋盘中央负责解释结果，牌局纪事负责保留完整历史。",
+    ],
+  },
+  {
+    title: "牌局纪事",
+    items: [
+      "牌局纪事保留全部事件历史。可以切换序号正反序、列表正反序，并设置窗口最少要容纳多少条记录。",
+      "缩放纪事窗口时，列表项会按 Compact / Normal / Large 自动切换；当达到最小条数且已是最小档位后，窗口会停止继续缩小。",
+    ],
+  },
+  {
+    title: "交易、拍卖与欠款",
+    items: [
+      "拍卖阶段先看当前轮到谁、下一口最低价和领跑者。",
+      "交易阶段先看双方给出与索取，再决定接受或拒绝。",
+      "若进入欠款处理，优先按顶部和右侧建议抵押资产，直到补齐短缺或宣布破产。",
+    ],
+  },
+  {
+    title: "自由布局",
+    items: [
+      "棋盘和牌局纪事都可以拖拽与缩放。棋盘现在是浮动层，不再被左栏的固定高度限制。",
+      "如果界面拥挤，先收起牌局纪事说明或设置，再调整棋盘和纪事窗口大小。",
+    ],
+  },
+] as const;
 
 type BoardSceneTransitionHint = {
   transitionKey: string;
@@ -344,12 +382,18 @@ export function GamePage() {
   const [eventFeedPreferences, setEventFeedPreferences] = useState(defaultEventFeedPreferences);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isTurnToolsOpen, setIsTurnToolsOpen] = useState(false);
+  const [isRulesGuideOpen, setIsRulesGuideOpen] = useState(false);
+  const [dismissedGameplayNoticeKey, setDismissedGameplayNoticeKey] = useState<string | null>(null);
   const [mortgageBusyTileId, setMortgageBusyTileId] = useState<string | null>(null);
   const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
   const [lastRecoveryRecap, setLastRecoveryRecap] = useState<RecoveryRecapSnapshot | null>(null);
   const [dismissingRecoveryRecapToken, setDismissingRecoveryRecapToken] = useState<number | null>(null);
-  const [boardShellRef, boardShellBounds] = useMeasure();
+  const boardShellRef = useRef<HTMLDivElement | null>(null);
   const [boardFrame, setBoardFrame] = useState<FloatingFrame | null>(null);
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window === "undefined" ? 1440 : window.innerWidth,
+    height: typeof window === "undefined" ? 900 : window.innerHeight,
+  }));
   const recoveryRecapDismissTimerRef = useRef<number | null>(null);
   const presentation = usePresentationState(
     projection.currentTurnPlayerId,
@@ -457,32 +501,54 @@ export function GamePage() {
   }, []);
 
   useEffect(() => {
-    if (boardShellBounds.width <= 0 || boardShellBounds.height <= 0) {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const updateViewportSize = () => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    updateViewportSize();
+    window.addEventListener("resize", updateViewportSize);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportSize);
+    };
+  }, []);
+
+  useEffect(() => {
+    const shell = boardShellRef.current;
+    if (!shell) {
       return;
     }
 
+    const rect = shell.getBoundingClientRect();
+    const margin = 18;
+    const topOffset = 96;
+    const maxWidth = Math.max(420, viewportSize.width - margin * 2);
+    const maxHeight = Math.max(360, viewportSize.height - topOffset - margin);
+
     setBoardFrame((current) => {
-      const minimumWidth = Math.max(220, Math.min(360, boardShellBounds.width));
-      const minimumHeight = Math.max(220, Math.min(320, boardShellBounds.height));
-      const width = current?.width && current.width > 0
-        ? Math.min(Math.max(current.width, minimumWidth), boardShellBounds.width)
-        : boardShellBounds.width;
-      const height = current?.height && current.height > 0
-        ? Math.min(Math.max(current.height, minimumHeight), boardShellBounds.height)
-        : boardShellBounds.height;
-      const nextX = current?.x ?? 0;
-      const nextY = current?.y ?? 0;
-      const maxX = Math.max(0, boardShellBounds.width - width);
-      const maxY = Math.max(0, boardShellBounds.height - height);
+      const width = current?.width
+        ? Math.min(Math.max(current.width, 420), maxWidth)
+        : Math.min(Math.max(rect.width, 620), maxWidth);
+      const height = current?.height
+        ? Math.min(Math.max(current.height, 360), maxHeight)
+        : Math.min(Math.max(rect.height, 620), maxHeight);
+      const defaultX = Math.min(Math.max(rect.left, margin), viewportSize.width - width - margin);
+      const defaultY = Math.min(Math.max(rect.top, topOffset), viewportSize.height - height - margin);
+      const rawX = current?.x ?? defaultX;
+      const rawY = current?.y ?? defaultY;
 
       return {
-        x: Math.min(nextX, maxX),
-        y: Math.min(nextY, maxY),
+        x: Math.min(Math.max(rawX, margin), Math.max(margin, viewportSize.width - width - margin)),
+        y: Math.min(Math.max(rawY, topOffset), Math.max(topOffset, viewportSize.height - height - margin)),
         width,
         height,
       };
     });
-  }, [boardShellBounds.height, boardShellBounds.width]);
+  }, [viewportSize.height, viewportSize.width]);
 
   const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
   const boardTileById = new Map(sampleBoard.map((tile) => [tile.id, tile]));
@@ -652,6 +718,88 @@ export function GamePage() {
     && (projection.turnState === "awaiting-roll" || projection.turnState === "awaiting-property-decision");
   const shouldMuteCenterBoardCue = !isMobileAnchorTray && isPrimaryActionStage;
   const isMobileSpectatorLayout = isMobileAnchorTray && isSpectator && projection.roomState === "in-game";
+  const gameplayNotice = (() => {
+    if (projection.roomState === "lobby") {
+      return {
+        key: `lobby-${projection.players.length}`,
+        title: "开局前提醒",
+        detail: "房主需要等待至少两名玩家就位后才能开始牌局。进入对局前，所有人都能在这里确认身份、房主与人数。",
+        rule: "大厅阶段不会推进回合；只有房主能点击开始。",
+      } satisfies GameplayNotice;
+    }
+
+    if (projection.roomState === "finished") {
+      return {
+        key: `finished-${projection.eventSequence}`,
+        title: "牌局已结束",
+        detail: latestProjectionEvent?.summary ?? "本局已经决出结果，你可以继续回看历史事件或返回大厅。",
+        rule: "结束后不再产生新的可执行回合动作，但纪事与资产信息仍可回看。",
+      } satisfies GameplayNotice;
+    }
+
+    switch (projection.turnState) {
+      case "awaiting-roll":
+        return {
+          key: `roll-${projection.eventSequence}-${projection.currentTurnPlayerId}`,
+          title: isSpectator ? "观战提示：等待当前玩家掷骰" : canRoll ? "轮到你掷骰" : `等待 ${projection.currentTurnPlayerName} 掷骰`,
+          detail: canRoll
+            ? "先看右侧“现在该做什么”，然后掷骰推进这一回合。掷完后顶部提示与棋盘中央结果会同步更新。"
+            : `当前主动作属于 ${projection.currentTurnPlayerName}。你可以先整理棋盘和纪事窗口，观察本回合即将落点。`,
+          rule: "标准回合从掷骰开始；玩家移动后，才会触发买地、收租、税费、入狱或卡牌结算。",
+        } satisfies GameplayNotice;
+      case "awaiting-property-decision":
+        return {
+          key: `property-${projection.eventSequence}-${projection.pendingProperty?.tileId ?? "none"}`,
+          title: canResolveProperty ? "地块购买决策" : "等待买地结果",
+          detail: canResolveProperty
+            ? `你已到达 ${projection.pendingProperty?.label ?? "目标地块"}，现在需要决定购买还是放弃。`
+            : `${projection.currentTurnPlayerName} 正在决定是否购买 ${projection.pendingProperty?.label ?? "当前地块"}。`,
+          rule: "未持有地块落点后，当前玩家先获得购买权；若放弃，才会进入公开拍卖。",
+        } satisfies GameplayNotice;
+      case "awaiting-auction":
+        return {
+          key: `auction-${projection.eventSequence}-${projection.pendingAuction?.tileId ?? "none"}`,
+          title: "公开拍卖进行中",
+          detail: auctionSummary
+            ? `当前轮到 ${auctionSummary.actingBidderName}，下一口至少 ${auctionSummary.nextMinimumBid}。`
+            : "当前房间正在处理一次公开拍卖。",
+          rule: "拍卖从最低可接受报价开始，轮流决定加价或放弃，直到只剩最后一名有效竞拍者。",
+        } satisfies GameplayNotice;
+      case "awaiting-trade-response":
+        return {
+          key: `trade-${projection.eventSequence}-${projection.pendingTrade?.snapshotVersion ?? "none"}`,
+          title: canResolveTrade ? "交易等待你回应" : "交易正在等待答复",
+          detail: tradeWaitingPrimarySummary ?? "当前有一笔报价正在等待回应。",
+          rule: "交易只有在接收方明确接受后才会生效；拒绝则不发生任何现金、地产或卡牌转移。",
+        } satisfies GameplayNotice;
+      case "awaiting-jail-decision":
+        return {
+          key: `jail-${projection.eventSequence}-${projection.currentTurnPlayerId}`,
+          title: canResolveJail ? "监狱回合决策" : "等待监狱回合处理",
+          detail: canResolveJail
+            ? "你可以选择掷骰尝试出狱、支付罚金，或使用出狱卡。"
+            : `${projection.currentTurnPlayerName} 正在决定本次监狱回合如何处理。`,
+          rule: "监狱阶段不会正常推进普通落点流程，必须先完成出狱判定或支付相关代价。",
+        } satisfies GameplayNotice;
+      case "awaiting-deficit-resolution":
+        return {
+          key: `deficit-${projection.eventSequence}-${projection.resolutionSummary?.actorPlayerId ?? "none"}`,
+          title: canResolveDeficit ? "请先补齐欠款" : "等待欠款处理结束",
+          detail: projection.resolutionSummary
+            ? `${projection.resolutionSummary.actorName} 当前仍差 ${projection.resolutionSummary.shortfall}，需要先通过抵押或破产结算补齐。`
+            : "当前房间正在处理一次现金短缺。",
+          rule: "任何欠款都必须先被清算，牌局才会继续推进到下一步。",
+        } satisfies GameplayNotice;
+      default:
+        return {
+          key: `general-${projection.eventSequence}-${projection.turnState}`,
+          title: "牌局进行中",
+          detail: projection.pendingActionLabel,
+          rule: "优先看顶部提醒和右侧主操作模块，它们会随着阶段切换而改变。",
+        } satisfies GameplayNotice;
+    }
+  })();
+  const shouldShowGameplayNotice = dismissedGameplayNoticeKey !== gameplayNotice.key;
   const activeProjectionPlayer = projection.players.find((player) => player.id === activePlayerId);
   const currentTurnProjectionPlayer = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
   const resolutionActor = projection.players.find((player) => player.id === projection.currentTurnPlayerId);
@@ -747,6 +895,9 @@ export function GamePage() {
       window.clearTimeout(recoveryRecapDismissTimerRef.current);
     }
   }, []);
+  useEffect(() => {
+    setDismissedGameplayNoticeKey(null);
+  }, [gameplayNotice.key]);
   const tradeNetCash = Number(tradeOfferedCash) - Number(tradeRequestedCash);
   const tradeNetCashLabel = tradeNetCash === 0
     ? "现金净流向: 无净变化"
@@ -2652,6 +2803,25 @@ export function GamePage() {
         </div>
       </header>
 
+      {shouldShowGameplayNotice ? (
+        <section className="room-guidance-banner" role="status" aria-live="polite">
+          <div className="room-guidance-banner__copy">
+            <p className="shell__eyebrow">规则提醒</p>
+            <strong>{gameplayNotice.title}</strong>
+            <span>{gameplayNotice.detail}</span>
+            <span className="room-guidance-banner__rule">{gameplayNotice.rule}</span>
+          </div>
+          <div className="room-guidance-banner__actions">
+            <button className="button button--secondary" type="button" onClick={() => setIsRulesGuideOpen(true)}>
+              打开玩法说明
+            </button>
+            <button className="button button--secondary" type="button" onClick={() => setDismissedGameplayNoticeKey(gameplayNotice.key)}>
+              先收起提醒
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {reconnectSuccessMessage ? (
         <section
           key={recoveryNotice?.token}
@@ -2723,68 +2893,51 @@ export function GamePage() {
 
       <div className={`room-shell__layout${isMobileSpectatorLayout ? " room-shell__layout--mobile-spectator" : ""}`}>
       <section className={`panel panel--board board room-shell__board${projection.turnState === "awaiting-roll" ? " room-shell__board--roll-ready" : ""}`}>
+        <div className="board__dock-note">
+          <p className="shell__eyebrow">棋盘工作台</p>
+          <strong>棋盘现在可自由拖拽与缩放</strong>
+          <span>它已经从左栏固定框中解耦。你可以把它移动到更顺手的位置，再通过边框和四角重新定义大小。</span>
+        </div>
         <div className="board__stage-shell" ref={boardShellRef}>
+          <div className="board__stage-placeholder">
+            <span>浮动棋盘已启用。此区域只保留初始停靠位，真正的棋盘窗口可以在整个视口内自由移动。</span>
+          </div>
           {boardFrame ? (
-            <Rnd
-              bounds="parent"
-              className="board-resizable-wrap"
-              dragHandleClassName="board-drag-handle"
-              enableUserSelectHack={false}
-              resizeGrid={[1, 1]}
-              dragGrid={[1, 1]}
-              minWidth={Math.max(220, Math.min(360, boardShellBounds.width))}
-              minHeight={Math.max(220, Math.min(320, boardShellBounds.height))}
-              maxWidth={boardShellBounds.width}
-              maxHeight={boardShellBounds.height}
-              position={{ x: boardFrame.x, y: boardFrame.y }}
-              size={{ width: boardFrame.width, height: boardFrame.height }}
-              onDragStop={(_event, data) => {
-                setBoardFrame((current) => current ? { ...current, x: data.x, y: data.y } : current);
-              }}
-              onResizeStop={(_event, _direction, ref, _delta, position) => {
-                setBoardFrame({
-                  x: position.x,
-                  y: position.y,
-                  width: ref.offsetWidth,
-                  height: ref.offsetHeight,
-                });
-              }}
+            <FloatingBoardWindow
+              initialFrame={boardFrame}
+              viewportSize={viewportSize}
+              toolbar={[
+                <div className="board__hero-copy" key="phase">
+                  <p className="shell__eyebrow">当前棋盘</p>
+                  <strong>{roomPhaseLabel}</strong>
+                  <span>
+                    {presentation.highlightedTileId
+                      ? `焦点地块：${boardTileLabels.get(presentation.highlightedTileId) ?? presentation.highlightedTileId}`
+                      : "棋盘会在这里突出当前地块与玩家位置。"}
+                  </span>
+                </div>,
+                <div className="board__hero-copy" key="actor">
+                  <strong>{projection.currentTurnPlayerName}</strong>
+                  <span>{isSpectator ? "当前只读观战" : `当前身份：${activePlayerName}`}</span>
+                </div>,
+              ]}
             >
-              <div className="board-window">
-                <div className="board__hero board-window__toolbar board-drag-handle">
-                  <div className="board__hero-copy">
-                    <p className="shell__eyebrow">当前棋盘</p>
-                    <strong>{roomPhaseLabel}</strong>
-                    <span>
-                      {presentation.highlightedTileId
-                        ? `焦点地块：${boardTileLabels.get(presentation.highlightedTileId) ?? presentation.highlightedTileId}`
-                        : "棋盘会在这里突出当前地块与玩家位置。"}
-                    </span>
-                  </div>
-                  <div className="board__hero-copy">
-                    <strong>{projection.currentTurnPlayerName}</strong>
-                    <span>{isSpectator ? "当前只读观战" : `当前身份：${activePlayerName}`}</span>
-                  </div>
-                </div>
-                <div className="board-window__canvas">
-                  <BoardScene
-                    board={sampleBoard}
-                    currentTurnPlayerId={projection.currentTurnPlayerId}
-                    players={projection.players}
-                    highlightedTileId={presentation.highlightedTileId}
-                    deEmphasizeCenterCue={shouldMuteCenterBoardCue}
-                    resultFeedback={boardResultFeedback}
-                    stageCue={boardStageCue}
-                    transitionHint={boardSceneTransitionHint}
-                    consequenceHint={boardConsequenceCue}
-                    handoffHint={boardTurnHandoffCue}
-                    actorTakeoverHint={boardActorTakeoverCue}
-                    phaseFocusHint={boardPhaseFocusCue}
-                    phaseClosureHint={boardPhaseClosureCue}
-                  />
-                </div>
-              </div>
-            </Rnd>
+              <BoardScene
+                board={sampleBoard}
+                currentTurnPlayerId={projection.currentTurnPlayerId}
+                players={projection.players}
+                highlightedTileId={presentation.highlightedTileId}
+                deEmphasizeCenterCue={shouldMuteCenterBoardCue}
+                resultFeedback={boardResultFeedback}
+                stageCue={boardStageCue}
+                transitionHint={boardSceneTransitionHint}
+                consequenceHint={boardConsequenceCue}
+                handoffHint={boardTurnHandoffCue}
+                actorTakeoverHint={boardActorTakeoverCue}
+                phaseFocusHint={boardPhaseFocusCue}
+                phaseClosureHint={boardPhaseClosureCue}
+              />
+            </FloatingBoardWindow>
           ) : null}
         </div>
       </section>
@@ -3150,6 +3303,31 @@ export function GamePage() {
       </div>
       {isMobileAnchorTray ? renderPrimaryActionAnchor() : null}
       <DraggableEventFeed events={projection.recentEvents} preferences={eventFeedPreferences} onPreferencesChange={setEventFeedPreferences} />
+      {isRulesGuideOpen ? (
+        <div className="rules-guide-backdrop" onClick={() => setIsRulesGuideOpen(false)}>
+          <section className="rules-guide-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="rules-guide-panel__header">
+              <div>
+                <p className="shell__eyebrow">玩法说明</p>
+                <strong>游玩过程中可随时回看这份说明</strong>
+              </div>
+              <button className="button button--secondary" type="button" onClick={() => setIsRulesGuideOpen(false)}>
+                关闭说明
+              </button>
+            </div>
+            <div className="rules-guide-panel__body">
+              {RULE_GUIDE_SECTIONS.map((section) => (
+                <article className="rules-guide-panel__section" key={section.title}>
+                  <strong>{section.title}</strong>
+                  {section.items.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

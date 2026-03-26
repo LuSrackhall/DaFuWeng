@@ -36,3 +36,6 @@
 - [x] 6.1 Remove legacy `board-event-feed` absolute-layout coupling so Rnd controls the event window exclusively.
 - [x] 6.2 Convert the board into a controlled draggable-resizable frame bounded by the board stage shell.
 - [x] 6.3 Add frosted-glass treatment to the event window and the "现在该做什么" primary action module.
+- [x] 6.4 Split the board drag-resize runtime into an isolated floating window component so pointer updates no longer force `GamePage` to rerender every frame.
+- [x] 6.5 Add collapsible introduction content to the event feed so the title bar can collapse down to the top-left identity area only.
+- [x] 6.6 Add a scenario-aware top guidance banner and an in-session gameplay guide panel.
