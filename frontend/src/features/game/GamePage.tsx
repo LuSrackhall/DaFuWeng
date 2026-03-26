@@ -615,6 +615,7 @@ export function GamePage() {
     && (projection.turnState === "awaiting-roll" || projection.turnState === "awaiting-property-decision");
   const shouldCompactEventFeed = !isEventFeedSettingsOpen
     && ((!isMobileAnchorTray && isPrimaryActionStage) || (isMobileAnchorTray && isSpectator && projection.roomState === "in-game"));
+  const shouldMuteCenterBoardCue = !isMobileAnchorTray && isPrimaryActionStage;
   const displayedEventFeedItems = shouldCompactEventFeed && nearestEventFeedItem
     ? [nearestEventFeedItem]
     : recentEventFeed.items;
@@ -2834,6 +2835,7 @@ export function GamePage() {
             currentTurnPlayerId={projection.currentTurnPlayerId}
             players={projection.players}
             highlightedTileId={presentation.highlightedTileId}
+            deEmphasizeCenterCue={shouldMuteCenterBoardCue}
             resultFeedback={boardResultFeedback}
             stageCue={boardStageCue}
             transitionHint={boardSceneTransitionHint}
@@ -3150,16 +3152,18 @@ export function GamePage() {
         <h4 className="panel__title panel__title--assets">玩家资产</h4>
         <div className="asset-grid">
           {projection.players.map((player) => (
-            <article className="tile-card" key={player.id}>
+            <article className="tile-card asset-card" key={player.id}>
               <strong>{player.name}</strong>
-              <span>现金: {player.cash}</span>
-              <span>位置: {player.position}</span>
-              <span>地产: {player.properties.length}</span>
-              <span>抵押: {player.mortgagedProperties?.length ?? 0}</span>
-              <span>建筑: {Object.values(player.propertyImprovements ?? {}).reduce((total, level) => total + level, 0)}</span>
-              <span>出狱卡: {player.heldCardIds?.length ?? 0}</span>
-              <span>监狱尝试: {player.jailTurnsServed ?? 0}</span>
-              <span>{player.isBankrupt ? "状态: 已破产" : player.inJail ? "状态: 监狱中" : "状态: 自由"}</span>
+              <div className="asset-card__stats">
+                <span>现金 {player.cash}</span>
+                <span>位置 {player.position}</span>
+                <span>地产 {player.properties.length}</span>
+                <span>抵押 {player.mortgagedProperties?.length ?? 0}</span>
+                <span>建筑 {Object.values(player.propertyImprovements ?? {}).reduce((total, level) => total + level, 0)}</span>
+                <span>出狱卡 {player.heldCardIds?.length ?? 0}</span>
+                <span>监狱尝试 {player.jailTurnsServed ?? 0}</span>
+                <span className="asset-card__status">{player.isBankrupt ? "状态 已破产" : player.inJail ? "状态 监狱中" : "状态 自由"}</span>
+              </div>
             </article>
           ))}
         </div>

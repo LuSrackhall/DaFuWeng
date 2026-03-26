@@ -89,6 +89,7 @@ type BoardSceneProps = {
   currentTurnPlayerId: string;
   highlightedTileId: string | null;
   players: PlayerState[];
+  deEmphasizeCenterCue?: boolean;
   resultFeedback: {
     eyebrowLabel: string;
     title: string;
@@ -620,6 +621,7 @@ function drawCenterHud(
   const availablePropertyCount = props.board.filter((tile) => tile.type === "property").length - ownedPropertyCount;
   const resultFeedback = props.resultFeedback;
   const stageCue = props.stageCue;
+  const shouldMuteCenterCue = Boolean(props.deEmphasizeCenterCue && (resultFeedback || stageCue));
   const consequenceHint = props.consequenceHint;
   const handoffHint = props.handoffHint;
   const actorTakeoverHint = props.actorTakeoverHint;
@@ -638,21 +640,23 @@ function drawCenterHud(
   const ribbonHeight = crampedHud ? 80 : 94;
   const cardHeight = compactHud ? centerHeight - 20 : centerHeight - 10;
   const titleStyle = createAdaptiveTextStyle(resultFeedback ? centerResultTitleStyle : centerTitleStyle, {
-    fontSize: resultFeedback ? (crampedHud ? 19 : compactHud ? 22 : 26) : (crampedHud ? 21 : compactHud ? 25 : 30),
-    wordWrapWidth: centerWidth - cardInset * 2 - 24,
-    lineHeight: crampedHud ? 22 : compactHud ? 25 : 29,
+    fontSize: resultFeedback
+      ? (shouldMuteCenterCue ? (crampedHud ? 17 : compactHud ? 20 : 23) : (crampedHud ? 19 : compactHud ? 22 : 26))
+      : (shouldMuteCenterCue ? (crampedHud ? 19 : compactHud ? 22 : 26) : (crampedHud ? 21 : compactHud ? 25 : 30)),
+    wordWrapWidth: centerWidth - cardInset * 2 - (shouldMuteCenterCue ? 44 : 24),
+    lineHeight: shouldMuteCenterCue ? (crampedHud ? 20 : compactHud ? 23 : 26) : (crampedHud ? 22 : compactHud ? 25 : 29),
   });
   const eyebrowStyle = createAdaptiveTextStyle(centerEyebrowStyle, {
     fontSize: crampedHud ? 10 : 11,
     letterSpacing: crampedHud ? 1.1 : 1.7,
   });
   const bodyStyle = createAdaptiveTextStyle(centerBodyStyle, {
-    fontSize: crampedHud ? 11 : compactHud ? 12 : 13,
-    lineHeight: crampedHud ? 14 : compactHud ? 16 : 17,
-    wordWrapWidth: centerWidth - cardInset * 2 - 18,
+    fontSize: shouldMuteCenterCue ? (crampedHud ? 10 : compactHud ? 11 : 12) : (crampedHud ? 11 : compactHud ? 12 : 13),
+    lineHeight: shouldMuteCenterCue ? (crampedHud ? 13 : compactHud ? 15 : 16) : (crampedHud ? 14 : compactHud ? 16 : 17),
+    wordWrapWidth: centerWidth - cardInset * 2 - (shouldMuteCenterCue ? 34 : 18),
   });
   const metaStyle = createAdaptiveTextStyle(centerResultMetaStyle, {
-    fontSize: crampedHud ? 9 : 10,
+    fontSize: shouldMuteCenterCue ? (crampedHud ? 8 : 9) : (crampedHud ? 9 : 10),
     letterSpacing: crampedHud ? 0.8 : 1,
   });
 
@@ -663,13 +667,13 @@ function drawCenterHud(
 
   const centerPanel = new Graphics();
   centerPanel.roundRect(centerX, centerY, centerWidth, cardHeight, 32);
-  centerPanel.fill({ color: 0x10261f, alpha: 0.96 });
-  centerPanel.stroke({ color: feedbackAccent, width: 2, alpha: 0.58 });
+  centerPanel.fill({ color: 0x10261f, alpha: shouldMuteCenterCue ? 0.84 : 0.96 });
+  centerPanel.stroke({ color: feedbackAccent, width: 2, alpha: shouldMuteCenterCue ? 0.32 : 0.58 });
   root.addChild(centerPanel);
 
   const currentGlow = new Graphics();
   currentGlow.roundRect(centerX + 18, centerY + 18, centerWidth - 36, ribbonHeight, 24);
-  currentGlow.fill({ color: feedbackAccent, alpha: 0.08 + (animationState?.glowAlpha ?? 0) });
+  currentGlow.fill({ color: feedbackAccent, alpha: (shouldMuteCenterCue ? 0.03 : 0.08) + (animationState?.glowAlpha ?? 0) * (shouldMuteCenterCue ? 0.42 : 1) });
   root.addChild(currentGlow);
 
   if (animationState?.diceLabel && animationState.revealProgress < 1) {
@@ -711,12 +715,12 @@ function drawCenterHud(
     const resultBanner = new Graphics();
     const bannerInset = 22 - (animationState?.pulse ?? 0) * 2;
     resultBanner.roundRect(centerX + bannerInset, centerY + bannerInset, centerWidth - bannerInset * 2, ribbonHeight + 22, 24);
-    const resultAlpha = (getFeedbackBannerAlpha(resultFeedback.tone) + (animationState?.glowAlpha ?? 0) * 0.5) * (handoffHint ? 0.54 : 1);
+    const resultAlpha = (getFeedbackBannerAlpha(resultFeedback.tone) + (animationState?.glowAlpha ?? 0) * 0.5) * (handoffHint ? 0.54 : 1) * (shouldMuteCenterCue ? 0.64 : 1);
     resultBanner.fill({ color: feedbackAccent, alpha: resultAlpha });
-    resultBanner.stroke({ color: feedbackAccent, width: 1.5, alpha: 0.38 });
+    resultBanner.stroke({ color: feedbackAccent, width: 1.5, alpha: shouldMuteCenterCue ? 0.2 : 0.38 });
     root.addChild(resultBanner);
 
-    if (animationState) {
+    if (animationState && !shouldMuteCenterCue) {
       const burst = new Graphics();
       burst.circle(centerX + centerWidth - 86, centerY + cardHeight - 66, 26 + animationState.pulse * 18);
       burst.fill({ color: feedbackAccent, alpha: animationState.glowAlpha });

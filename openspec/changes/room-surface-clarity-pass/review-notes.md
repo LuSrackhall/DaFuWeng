@@ -34,3 +34,17 @@ The second screenshot pass reused the UI review workflow and produced refreshed 
 - Major: resolved for the original mobile spectator ordering issue.
 - Medium: desktop still keeps a noticeable center cue plus rail dual-focus, but no longer reads as three equal focal panels.
 - Minor: spectator support sections remain dense after the board, which can be refined in a later polish slice.
+
+## Third Human-Centered Review
+
+### Desktop Focus Follow-Up
+
+- Improvement: the center board cue now reads more like supporting stage atmosphere than a co-equal command card.
+- Improvement: the right rail remains the clearest operational focus during both roll and property-decision states.
+- Residual risk: the center cue is still visible enough to preserve scene drama, so this is a controlled dual-focus layout rather than a single-focus layout.
+
+### Mobile Asset Density Follow-Up
+
+- Improvement: player asset cards now compress better on mobile because the stats are grouped into a denser grid.
+- Improvement: the mobile spectator rail keeps the same facts while reducing per-card scan cost.
+- Residual risk: support information still occupies meaningful vertical space after the board, but it is no longer as text-heavy as before.

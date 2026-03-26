@@ -18,3 +18,12 @@
 
 - [x] 4.1 Re-run the screenshot evidence lane.
 - [x] 4.2 Review the refreshed desktop and mobile screenshots.
+
+## 5. Polish Pass (Third Round)
+
+- [x] 5.1 Add `deEmphasizeCenterCue` to BoardScene so center HUD retreats when primary action is present.
+- [x] 5.2 Wire `shouldMuteCenterBoardCue` in GamePage for awaiting-roll and awaiting-property-decision states.
+- [x] 5.3 Restructure player asset cards into a tighter two-column stats grid (`asset-card__stats`).
+- [x] 5.4 Add responsive overrides for asset-card density at tablet and phone breakpoints.
+- [x] 5.5 Run third screenshot pass and confirm all 3 scenarios pass.
+- [x] 5.6 Update review-notes with third-round human-centered review conclusions.
