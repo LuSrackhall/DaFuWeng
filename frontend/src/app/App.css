@@ -1168,6 +1168,12 @@ body {
   line-height: 1.45;
 }
 
+.board-event-feed__field-hint {
+  color: rgba(246, 236, 212, 0.64);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
 .board-event-feed__settings {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border-radius: 18px;

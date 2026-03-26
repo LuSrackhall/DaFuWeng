@@ -2594,46 +2594,55 @@ export function GamePage() {
                 ? `当前显示 ${recentEventFeed.visibleCount} / ${recentEventFeed.retainedCount} 条，最新一条是：${nearestEventFeedItem.summary}`
                 : "当前还没有可回看的房间事件。"}
             </span>
+            <span>
+              这里用来回看刚刚发生了什么。你可以把最新动静放在更顺眼的位置，也能决定一次先看几条。
+            </span>
           </div>
           <button
             className="board-event-feed__settings-toggle"
             type="button"
             onClick={() => setIsEventFeedSettingsOpen((current) => !current)}
           >
-            {isEventFeedSettingsOpen ? "收起事件设置" : "事件显示设置"}
+            {isEventFeedSettingsOpen ? "收起阅读偏好" : "调整阅读方式"}
           </button>
         </div>
         {isEventFeedSettingsOpen ? (
-          <div className="board-event-feed__settings" aria-label="最近事件显示设置">
+          <div className="board-event-feed__settings" aria-label="最近事件阅读偏好">
             <label className="board-event-feed__field">
-              <strong>最新事件靠哪里</strong>
+              <strong>我更想先看到</strong>
+              <span className="board-event-feed__field-hint">只会改变你扫读时间线的方向，不会改动真实事件顺序。</span>
               <select
+                aria-label="我更想先看到"
                 value={eventFeedPreferences.nearEventPlacement}
                 onChange={(event) => setEventFeedPreferences((current) => ({
                   ...current,
                   nearEventPlacement: event.target.value === "top" ? "top" : "bottom",
                 }))}
               >
-                <option value="bottom">靠下（默认）</option>
-                <option value="top">靠上</option>
+                <option value="bottom">越新的越靠下，像一路往后翻（默认）</option>
+                <option value="top">越新的越靠上，一眼先看最新</option>
               </select>
             </label>
             <label className="board-event-feed__field">
-              <strong>最新事件编号</strong>
+              <strong>我想怎么认序号</strong>
+              <span className="board-event-feed__field-hint">序号只是你的阅读辅助，不是后台的真实事件编号。</span>
               <select
+                aria-label="我想怎么认序号"
                 value={eventFeedPreferences.nearEventNumbering}
                 onChange={(event) => setEventFeedPreferences((current) => ({
                   ...current,
                   nearEventNumbering: event.target.value === "near-large" ? "near-large" : "near-small",
                 }))}
               >
-                <option value="near-small">更小（默认）</option>
-                <option value="near-large">更大</option>
+                <option value="near-small">离现在越近，序号越小（默认）</option>
+                <option value="near-large">离现在越近，序号越大</option>
               </select>
             </label>
             <label className="board-event-feed__field">
-              <strong>显示数量</strong>
+              <strong>一次先看多少条</strong>
+              <span className="board-event-feed__field-hint">默认先给你最常用的 8 条，需要时再展开更多。</span>
               <select
+                aria-label="一次先看多少条"
                 value={eventFeedPreferences.visibleCountMode}
                 onChange={(event) => setEventFeedPreferences((current) => ({
                   ...current,
@@ -2644,15 +2653,17 @@ export function GamePage() {
                       : "default",
                 }))}
               >
-                <option value="default">默认 8 条</option>
-                <option value="all">全部（当前最多保留 {recentEventFeed.retainedCount} 条）</option>
-                <option value="custom">自定义</option>
+                <option value="default">先看最近 8 条（默认）</option>
+                <option value="all">把当前保留的 {recentEventFeed.retainedCount} 条都展开</option>
+                <option value="custom">我自己定数量</option>
               </select>
             </label>
             {eventFeedPreferences.visibleCountMode === "custom" ? (
               <label className="board-event-feed__field">
-                <strong>自定义数量</strong>
+                <strong>这次先看几条</strong>
+                <span className="board-event-feed__field-hint">可输入 1 到 10，适合你想看得更紧凑或更完整的时候。</span>
                 <input
+                  aria-label="这次先看几条"
                   type="number"
                   min={1}
                   max={10}
