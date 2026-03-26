@@ -2,18 +2,16 @@ import type { ProjectionEvent } from "@dafuweng/contracts";
 
 export const EVENT_FEED_PREFERENCES_STORAGE_KEY =
   "dafuweng-room-event-feed-preferences";
-export const DEFAULT_EVENT_FEED_VISIBLE_COUNT = 8;
-export const MAX_EVENT_FEED_VISIBLE_COUNT = 10;
+export const DEFAULT_EVENT_FEED_MIN_ITEMS = 6;
+export const MAX_EVENT_FEED_MIN_ITEMS = 20;
 
-export type EventFeedPlacement = "top" | "bottom";
-export type EventFeedNumbering = "near-small" | "near-large";
-export type EventFeedVisibleCountMode = "default" | "all" | "custom";
+export type EventFeedNumbering = "asc" | "desc";
+export type EventFeedSorting = "asc" | "desc";
 
 export type EventFeedPreferences = {
-  nearEventPlacement: EventFeedPlacement;
-  nearEventNumbering: EventFeedNumbering;
-  visibleCountMode: EventFeedVisibleCountMode;
-  customVisibleCount: number;
+  numberingOrder: EventFeedNumbering;
+  sortingOrder: EventFeedSorting;
+  minItemsCount: number;
 };
 
 export type EventFeedItem = {
@@ -25,14 +23,13 @@ export type EventFeedItem = {
 };
 
 export const defaultEventFeedPreferences: EventFeedPreferences = {
-  nearEventPlacement: "bottom",
-  nearEventNumbering: "near-small",
-  visibleCountMode: "default",
-  customVisibleCount: DEFAULT_EVENT_FEED_VISIBLE_COUNT,
+  numberingOrder: "asc",
+  sortingOrder: "asc",
+  minItemsCount: DEFAULT_EVENT_FEED_MIN_ITEMS,
 };
 
-function clampEventFeedVisibleCount(value: number) {
-  return Math.max(1, Math.min(MAX_EVENT_FEED_VISIBLE_COUNT, value));
+function clampEventFeedMinItems(value: number) {
+  return Math.max(1, Math.min(MAX_EVENT_FEED_MIN_ITEMS, value));
 }
 
 function isPreferenceRecord(value: unknown): value is Record<string, unknown> {
@@ -46,90 +43,61 @@ export function sanitizeEventFeedPreferences(
     return defaultEventFeedPreferences;
   }
 
-  const nearEventPlacement =
-    raw.nearEventPlacement === "top" ? "top" : "bottom";
-  const nearEventNumbering =
-    raw.nearEventNumbering === "near-large" ? "near-large" : "near-small";
-  const visibleCountMode: EventFeedVisibleCountMode =
-    raw.visibleCountMode === "all"
-      ? "all"
-      : raw.visibleCountMode === "custom"
-        ? "custom"
-        : "default";
-  const parsedCustomVisibleCount = Number.parseInt(
-    String(raw.customVisibleCount ?? DEFAULT_EVENT_FEED_VISIBLE_COUNT),
+  const numberingOrder =
+    raw.numberingOrder === "desc" ? "desc" : "asc";
+  const sortingOrder =
+    raw.sortingOrder === "desc" ? "desc" : "asc";
+  
+  const parsedMinItemsCount = Number.parseInt(
+    String(raw.minItemsCount ?? DEFAULT_EVENT_FEED_MIN_ITEMS),
     10,
   );
 
   return {
-    nearEventPlacement,
-    nearEventNumbering,
-    visibleCountMode,
-    customVisibleCount: Number.isFinite(parsedCustomVisibleCount)
-      ? clampEventFeedVisibleCount(parsedCustomVisibleCount)
-      : DEFAULT_EVENT_FEED_VISIBLE_COUNT,
+    numberingOrder,
+    sortingOrder,
+    minItemsCount: Number.isFinite(parsedMinItemsCount)
+      ? clampEventFeedMinItems(parsedMinItemsCount)
+      : DEFAULT_EVENT_FEED_MIN_ITEMS,
   };
 }
 
-export function sanitizeEventFeedCustomCount(value: number) {
+export function sanitizeEventFeedMinCount(value: number) {
   if (!Number.isFinite(value)) {
-    return DEFAULT_EVENT_FEED_VISIBLE_COUNT;
+    return DEFAULT_EVENT_FEED_MIN_ITEMS;
   }
 
-  return clampEventFeedVisibleCount(Math.trunc(value));
-}
-
-export function getEventFeedVisibleCount(
-  totalRetainedEvents: number,
-  preferences: EventFeedPreferences,
-) {
-  if (totalRetainedEvents <= 0) {
-    return 0;
-  }
-
-  if (preferences.visibleCountMode === "all") {
-    return totalRetainedEvents;
-  }
-
-  if (preferences.visibleCountMode === "custom") {
-    return Math.min(totalRetainedEvents, preferences.customVisibleCount);
-  }
-
-  return Math.min(totalRetainedEvents, DEFAULT_EVENT_FEED_VISIBLE_COUNT);
+  return clampEventFeedMinItems(Math.trunc(value));
 }
 
 export function buildRecentEventFeed(
   events: ProjectionEvent[],
   preferences: EventFeedPreferences,
 ) {
-  const retainedEvents = [...events].sort((left, right) => left.sequence - right.sequence);
-  const visibleCount = getEventFeedVisibleCount(retainedEvents.length, preferences);
-  const visibleEvents = visibleCount > 0
-    ? retainedEvents.slice(-visibleCount)
-    : [];
-  const orderedEvents = preferences.nearEventPlacement === "bottom"
-    ? visibleEvents
-    : [...visibleEvents].reverse();
+  // Always include all events
+  const chronoEvents = [...events].sort((left, right) => left.sequence - right.sequence);
+  const total = chronoEvents.length;
 
-  const items: EventFeedItem[] = orderedEvents.map((event, index, collection) => {
-    const distanceFromNearest = preferences.nearEventPlacement === "bottom"
-      ? collection.length - index - 1
-      : index;
+  // We assign displayNumber based on numberingOrder BEFORE actual sorting to ensure absolute labels
+  const annotatedEvents = chronoEvents.map((event, index) => {
     return {
       id: event.id,
       sequence: event.sequence,
       summary: event.summary,
-      displayNumber: preferences.nearEventNumbering === "near-small"
-        ? distanceFromNearest + 1
-        : collection.length - distanceFromNearest,
-      isNearest: distanceFromNearest === 0,
+      displayNumber: preferences.numberingOrder === "asc" ? index + 1 : total - index,
+      isNearest: index === total - 1,
     };
   });
 
+  // Now apply visual sorting
+  const items: EventFeedItem[] = preferences.sortingOrder === "asc"
+    ? annotatedEvents
+    : annotatedEvents.reverse();
+
   return {
     items,
-    retainedCount: retainedEvents.length,
-    visibleCount,
-    hasHiddenEvents: retainedEvents.length > visibleCount,
+    retainedCount: total,
+    visibleCount: total,
+    hasHiddenEvents: false,
   };
 }
