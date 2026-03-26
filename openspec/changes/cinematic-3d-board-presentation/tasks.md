@@ -1,3 +1,5 @@
+# Tasks
+
 ## 1. Planning And Boundaries
 
 - [ ] 1.1 Translate the planning decisions into a web-game-client delta spec before implementation begins.
@@ -7,8 +9,9 @@
 ## 2. Renderer Strategy
 
 - [ ] 2.1 Keep the current Pixi board as the permanent baseline and low-end fallback renderer.
-- [ ] 2.2 Introduce a cinematic 3D renderer path that can be selected by the presentation adapter without changing authoritative board semantics.
+- [ ] 2.2 Adopt `three.js` plus `react-three-fiber` as the cinematic 3D renderer path without changing authoritative board semantics.
 - [ ] 2.3 Keep DOM room actions, recent events, diagnostics, and accessibility summaries outside the 3D renderer so dense management flows remain stable.
+- [ ] 2.4 Define how the 2D Pixi renderer and the 3D `react-three-fiber` renderer share the same presentation adapter and fallback contract.
 
 ## 3. Authority-Safe Cinematic Cues
 

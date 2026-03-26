@@ -1,3 +1,5 @@
+# Proposal
+
 ## Why
 
 The current room board already explains authoritative dice results, safe movement, landing consequences, and turn handoff through a 2D Pixi stage. That baseline is readable and trustworthy, but it still presents the main emotional loop of Monopoly too abruptly.
@@ -15,6 +17,7 @@ This slice should define a 3D-capable board presentation path without changing r
 
 - Introduce a new presentation-focused change for a cinematic 3D board, 3D dice reveal, and 3D token movement.
 - Define a dual-renderer direction where the existing Pixi board remains the stable baseline and fallback path.
+- Lock the 3D stack direction to `three.js` with `react-three-fiber`, while keeping Pixi as the permanent 2D baseline.
 - Add user-controlled presentation settings and device-aware performance tiers so 3D remains optional and bounded.
 - Clarify that 3D presentation is a replay layer for confirmed authoritative results rather than a gameplay authority.
 - Define validation and fallback expectations before implementation starts.
@@ -22,20 +25,24 @@ This slice should define a 3D-capable board presentation path without changing r
 ## Capabilities
 
 ### New Capabilities
+
 - None.
 
 ### Modified Capabilities
+
 - `web-game-client`: The room board will gain an optional cinematic presentation mode for authoritative roll reveal, token movement, and landing emphasis while keeping a stable non-3D fallback.
 
 ## Impact
 
 - Affected code: frontend board presentation, board-scene adapter boundaries, local presentation settings, and validation assets.
+- Dependencies: the planning direction assumes `three.js` plus `react-three-fiber` for the optional 3D renderer path.
 - APIs and persistence: no backend protocol or PocketBase schema changes are part of this planning slice.
 - Systems: room readability, turn spectacle, spectator comprehension, device capability fallback, and long-session render stability.
 
 ## Scope
 
 ### In Scope For The Planned Change
+
 - a 3D-capable board presentation path for the room board
 - 3D dice reveal that only plays after authoritative dice results are known
 - 3D token movement when the authoritative path is provably safe
@@ -44,6 +51,7 @@ This slice should define a 3D-capable board presentation path without changing r
 - formal low-end and reduced-motion fallback expectations
 
 ### Explicitly Out Of Scope
+
 - no gameplay rule changes
 - no backend dice, movement, jail, card, or auction contract changes
 - no protocol changes for rooms, reconnect, or event streams

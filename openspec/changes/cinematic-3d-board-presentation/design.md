@@ -1,3 +1,5 @@
+# Design
+
 ## Context
 
 The current board stack is already organized around a healthy authority boundary:
@@ -70,18 +72,28 @@ Why:
 
 - this preserves the current proven board path while allowing a separate 3D implementation to mature without destabilizing the room shell
 
-### 3. Prefer a React-first 3D route
+### 3. Standardize on `three.js` plus `react-three-fiber` for the 3D path
 
-The 3D path should use a React-compatible renderer strategy, with the current planning assumption being:
+The 3D path will use `three.js` with `react-three-fiber` as the primary 3D renderer stack.
+
+The planned structure is:
 
 - React shell remains the room container
 - DOM remains the decision and management surface
 - Pixi remains the permanent 2D board renderer and fallback path
-- the 3D board path may use a dedicated 3D scene stack such as `three.js` through a React-oriented integration layer
+- the 3D board path uses `three.js` through `react-three-fiber`
 
 Why:
 
-- the current room shell is already React-first, and the new 3D path should fit the existing state and layout model rather than fight it
+- the current room shell is already React-first, and `react-three-fiber` fits the existing state and layout model better than a purely imperative Three integration
+- `three.js` has the ecosystem depth needed for future camera work, material control, lighting, and asset handling without forcing Pixi into pseudo-3D duties
+- this route keeps Pixi focused on the 2D board baseline instead of creating a hybrid renderer that is harder to reason about and harder to downgrade safely
+
+Rejected alternatives for this change:
+
+- mutating Pixi into a pseudo-3D renderer: rejected because it increases visual compromise and renderer complexity at the same time
+- pure imperative `three.js` without a React integration layer: rejected for the first implementation slices because it fights the current React-first ownership model
+- Babylon.js or heavier scene stacks: rejected for now because the current room shell and task scope benefit more from a smaller, React-native integration path
 
 ### 4. Add a board presentation adapter layer
 
