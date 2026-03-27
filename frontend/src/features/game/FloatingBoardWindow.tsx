@@ -196,8 +196,11 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
   useEffect(() => {
     setFrame((current: FloatingFrame) => {
       const nextFrame = normalizeFrame(current);
-      rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
-      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      // Defer rndRef imperative update to avoid setState+updatePosition race.
+      window.setTimeout(() => {
+        rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
+        rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      }, 0);
       persistFrame(nextFrame);
       return nextFrame;
     });
@@ -209,8 +212,11 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
       const nextFrame = current.width > 0 && current.height > 0
         ? normalizeFrame(current)
         : readPersistedFrame(viewportSize) ?? normalizeFrame(initialFrame);
-      rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
-      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      // Defer rndRef imperative update to avoid setState+updatePosition race.
+      window.setTimeout(() => {
+        rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
+        rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      }, 0);
       persistFrame(nextFrame);
       return nextFrame;
     });
@@ -277,7 +283,11 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
           const snapped = snapBoardFrame(normalizeFrame({ ...frame, x: data.x, y: data.y }), viewportSize, dockFrameRef.current);
           setFrame(snapped.frame);
           persistFrame(snapped.frame);
-          rndRef.current?.updatePosition({ x: snapped.frame.x, y: snapped.frame.y });
+          // Only apply snap correction imperatively if snap changed the position;
+          // without this, Rnd (uncontrolled) stays at the raw drag-stop position.
+          if (snapped.guides.length > 0) {
+            rndRef.current?.updatePosition({ x: snapped.frame.x, y: snapped.frame.y });
+          }
           setIsInteracting(false);
           setPreviewFrame(null);
           setActiveGuides([]);
@@ -307,8 +317,12 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
           }), viewportSize, dockFrameRef.current);
           setFrame(snapped.frame);
           persistFrame(snapped.frame);
-          rndRef.current?.updateSize({ width: snapped.frame.width, height: snapped.frame.height });
-          rndRef.current?.updatePosition({ x: snapped.frame.x, y: snapped.frame.y });
+          // Only apply snap correction imperatively if snap changed size or position;
+          // without this, Rnd (uncontrolled) stays at the raw resize-stop dimensions.
+          if (snapped.guides.length > 0) {
+            rndRef.current?.updateSize({ width: snapped.frame.width, height: snapped.frame.height });
+            rndRef.current?.updatePosition({ x: snapped.frame.x, y: snapped.frame.y });
+          }
           setIsInteracting(false);
           setPreviewFrame(null);
           setActiveGuides([]);

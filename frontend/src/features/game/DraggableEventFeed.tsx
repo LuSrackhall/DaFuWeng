@@ -251,8 +251,11 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
   useEffect(() => {
     setFrame((current) => {
       const nextFrame = clampEventFeedFrame(current, minimumHeight);
-      rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
-      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      // Defer rndRef imperative update to avoid setState+updatePosition race.
+      window.setTimeout(() => {
+        rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
+        rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      }, 0);
       persistEventFeedFrame(nextFrame);
       return nextFrame;
     });
