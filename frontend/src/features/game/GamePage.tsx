@@ -45,6 +45,8 @@ type FloatingFrame = {
   height: number;
 };
 
+type FloatingSurfaceKey = "board" | "event-feed";
+
 type GameplayNotice = {
   key: string;
   title: string;
@@ -390,6 +392,12 @@ export function GamePage() {
   const [dismissingRecoveryRecapToken, setDismissingRecoveryRecapToken] = useState<number | null>(null);
   const boardShellRef = useRef<HTMLDivElement | null>(null);
   const [boardFrame, setBoardFrame] = useState<FloatingFrame | null>(null);
+  const [floatingFocus, setFloatingFocus] = useState<FloatingSurfaceKey>("event-feed");
+  const [floatingZOrder, setFloatingZOrder] = useState<Record<FloatingSurfaceKey, number>>({
+    board: 18,
+    "event-feed": 24,
+  });
+  const floatingZSeedRef = useRef(24);
   const [viewportSize, setViewportSize] = useState(() => ({
     width: typeof window === "undefined" ? 1440 : window.innerWidth,
     height: typeof window === "undefined" ? 900 : window.innerHeight,
@@ -537,6 +545,17 @@ export function GamePage() {
       };
     });
   }, [viewportSize.height, viewportSize.width]);
+
+  const focusFloatingSurface = (surface: FloatingSurfaceKey) => {
+    setFloatingFocus(surface);
+    setFloatingZOrder((current) => {
+      floatingZSeedRef.current += 1;
+      return {
+        ...current,
+        [surface]: floatingZSeedRef.current,
+      };
+    });
+  };
 
   const otherPlayers = projection.players.filter((player) => player.id !== activePlayerId && !player.isBankrupt);
   const boardTileById = new Map(sampleBoard.map((tile) => [tile.id, tile]));
@@ -2894,6 +2913,9 @@ export function GamePage() {
             <FloatingBoardWindow
               initialFrame={boardFrame}
               viewportSize={viewportSize}
+              isFocused={floatingFocus === "board"}
+              zIndex={floatingZOrder.board}
+              onFocus={() => focusFloatingSurface("board")}
               toolbar={[
                 <div className="board__hero-copy" key="phase">
                   <p className="shell__eyebrow">当前棋盘</p>
@@ -3290,7 +3312,14 @@ export function GamePage() {
       </aside>
       </div>
       {isMobileAnchorTray ? renderPrimaryActionAnchor() : null}
-      <DraggableEventFeed events={projection.recentEvents} preferences={eventFeedPreferences} onPreferencesChange={setEventFeedPreferences} />
+      <DraggableEventFeed
+        events={projection.recentEvents}
+        preferences={eventFeedPreferences}
+        onPreferencesChange={setEventFeedPreferences}
+        isFocused={floatingFocus === "event-feed"}
+        zIndex={floatingZOrder["event-feed"]}
+        onFocus={() => focusFloatingSurface("event-feed")}
+      />
       {isRulesGuideOpen ? (
         <div className="rules-guide-backdrop" data-testid="rules-guide-backdrop" onClick={() => setIsRulesGuideOpen(false)}>
           <section className="rules-guide-panel" data-testid="rules-guide-panel" onClick={(event) => event.stopPropagation()}>

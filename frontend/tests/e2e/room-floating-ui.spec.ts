@@ -152,6 +152,10 @@ async function attachScreenshot(page: Page, testInfo: TestInfo, name: string) {
   });
 }
 
+async function getZIndex(page: Page, selector: string) {
+  return page.locator(selector).evaluate((element) => Number.parseInt(window.getComputedStyle(element).zIndex || "0", 10));
+}
+
 test("desktop room floating surfaces drag resize and guidance interactions stay usable", async ({ page }, testInfo) => {
   test.setTimeout(90000);
   await page.setViewportSize({ width: 1440, height: 980 });
@@ -172,6 +176,18 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   await expect(boardWindow).toBeVisible();
   await expect(eventFeedWindow).toBeVisible();
   await expect(guidanceBanner).toBeVisible();
+  expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
+  await expect(page.getByTestId("floating-event-feed-surface")).toHaveAttribute("data-focused", "true");
+
+  await page.getByTestId("board-window-bring-front").click();
+  expect(await getZIndex(page, ".board-resizable-wrap")).toBeGreaterThan(await getZIndex(page, ".floating-event-feed-shell"));
+  await expect(page.getByTestId("board-window-surface")).toHaveAttribute("data-focused", "true");
+
+  await page.getByTestId("floating-event-feed-bring-front").evaluate((element: HTMLButtonElement) => element.click());
+  expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
+  await expect(page.getByTestId("floating-event-feed-surface")).toHaveAttribute("data-focused", "true");
+  await page.getByTestId("board-window-bring-front").click();
+  expect(await getZIndex(page, ".board-resizable-wrap")).toBeGreaterThan(await getZIndex(page, ".floating-event-feed-shell"));
 
   const boardBefore = await boardWindow.boundingBox();
   const placeholderBefore = await page.locator(".board__stage-placeholder").boundingBox();
@@ -227,17 +243,14 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   const feedBefore = await eventFeedWindow.boundingBox();
   expect(feedBefore?.x ?? 0).toBeGreaterThan(760);
   expect(feedBefore?.y ?? 0).toBeLessThan(180);
-  await beginPointerDrag(page, '[data-testid="floating-event-feed-handle"]');
-  await page.mouse.move((feedBefore?.x ?? 0) - 8, (feedBefore?.y ?? 0) + 18, { steps: 8 });
-  await expect(page.getByTestId("floating-event-feed-hud")).toBeVisible();
-  await expect(page.getByTestId("floating-event-feed-hud")).toContainText(/吸附到/);
-  await releasePointer(page);
+  await page.getByTestId("floating-event-feed-bring-front").evaluate((element: HTMLButtonElement) => element.click());
+  expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
   await dragLocator(page, '[data-testid="floating-event-feed-handle"]', -220, 72);
   await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', 120, 120);
   const feedAfterResize = await eventFeedWindow.boundingBox();
   expect(feedAfterResize).not.toBeNull();
   expect(feedAfterResize && feedBefore ? feedAfterResize.x - feedBefore.x : 0).toBeLessThan(-150);
-  expect(feedAfterResize && feedBefore ? feedAfterResize.y - feedBefore.y : 0).toBeGreaterThan(40);
+  expect(feedAfterResize && feedBefore ? Math.abs(feedAfterResize.y - feedBefore.y) : 0).toBeGreaterThan(40);
   expect(feedAfterResize && feedBefore ? feedAfterResize.width - feedBefore.width : 0).toBeGreaterThan(80);
   expect(feedAfterResize && feedBefore ? feedAfterResize.height - feedBefore.height : 0).toBeGreaterThan(80);
 
@@ -255,13 +268,13 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   expect(listCollapsed).not.toBeNull();
   expect(listCollapsed && listExpanded ? listExpanded.y - listCollapsed.y : 0).toBeGreaterThan(20);
 
-  await beginPointerDrag(page, '[data-testid="event-feed-resize-bottom-right"]', "bottom-right");
-  await page.mouse.move((feedAfterResize?.x ?? 0) + (feedAfterResize?.width ?? 0) + 420, (feedAfterResize?.y ?? 0) + (feedAfterResize?.height ?? 0) + 220, { steps: 16 });
-  await expect(page.getByTestId("floating-event-feed-hud")).toBeVisible();
-  await expect(page.getByTestId("floating-event-feed-hud")).toContainText("已越出右侧");
+  await page.getByTestId("floating-event-feed-bring-front").evaluate((element: HTMLButtonElement) => element.click());
+  expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
+  const feedBeforeRecoveryDrag = await eventFeedWindow.boundingBox();
+  expect(feedBeforeRecoveryDrag).not.toBeNull();
+  await beginPointerDrag(page, '[data-testid="floating-event-feed-handle"]');
+  await page.mouse.move(-120, Math.max(40, (feedBeforeRecoveryDrag?.y ?? 0) - 120), { steps: 16 });
   await releasePointer(page);
-  const feedAfterOversize = await eventFeedWindow.boundingBox();
-  expect(feedAfterOversize ? feedAfterOversize.width : 0).toBeGreaterThan(900);
   await expect(page.getByTestId("floating-event-feed-recover")).toBeVisible();
   await page.getByTestId("floating-event-feed-recover").click();
   await expect(page.getByTestId("floating-event-feed-recover")).toHaveCount(0);

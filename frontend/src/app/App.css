@@ -1967,6 +1967,11 @@ body {
   will-change: transform, width, height;
 }
 
+.board-resizable-wrap--focused {
+  border-color: rgba(229, 191, 105, 0.42);
+  box-shadow: 0 0 0 2px rgba(229, 191, 105, 0.2), 0 28px 56px rgba(3, 10, 8, 0.3);
+}
+
 .board-resizable-wrap--interacting {
   box-shadow: 0 12px 24px rgba(3, 10, 8, 0.18);
   backdrop-filter: none;
@@ -2088,7 +2093,7 @@ body {
   position: fixed;
   right: 22px;
   bottom: 22px;
-  z-index: 21;
+  z-index: 120;
   border: 0;
   border-radius: 999px;
   padding: 12px 16px;
@@ -2189,10 +2194,14 @@ body {
 }
 
 .floating-event-feed-shell {
-  z-index: 8 !important;
   contain: layout paint style;
   transform: translateZ(0);
   will-change: transform, width, height;
+}
+
+.floating-event-feed-shell--focused .floating-event-feed__surface {
+  border-color: rgba(150, 189, 212, 0.34);
+  box-shadow: 0 0 0 2px rgba(150, 189, 212, 0.16), 0 20px 40px rgba(8, 16, 20, 0.3);
 }
 
 .floating-event-feed-shell--interacting .floating-event-feed__surface {
@@ -2239,6 +2248,12 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.floating-surface__action:focus-visible,
+.floating-window-recovery-chip:focus-visible {
+  outline: 2px solid rgba(229, 191, 105, 0.72);
+  outline-offset: 2px;
 }
 
 .floating-event-feed__title-group {

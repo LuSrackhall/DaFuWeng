@@ -30,6 +30,9 @@ type FloatingBoardWindowProps = {
   viewportSize: ViewportSize;
   toolbar: ReactNode;
   children: ReactNode;
+  isFocused: boolean;
+  zIndex: number;
+  onFocus: () => void;
 };
 
 type SnapGuide = {
@@ -137,7 +140,7 @@ function persistFrame(frame: FloatingFrame) {
   window.localStorage.setItem(FLOATING_BOARD_STORAGE_KEY, JSON.stringify(frame));
 }
 
-export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, children }: FloatingBoardWindowProps) {
+export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, children, isFocused, zIndex, onFocus }: FloatingBoardWindowProps) {
   const [frame, setFrame] = useState(() => readPersistedFrame(viewportSize) ?? normalizeFrame(initialFrame));
   const [previewFrame, setPreviewFrame] = useState<FloatingFrame | null>(null);
   const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
@@ -231,7 +234,7 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
       <Rnd
         ref={rndRef}
         data-testid="floating-board-window"
-        className={`board-resizable-wrap${isInteracting ? " board-resizable-wrap--interacting" : ""}${feedbackKind ? ` board-resizable-wrap--feedback-${feedbackKind}` : ""}`}
+        className={`board-resizable-wrap${isFocused ? " board-resizable-wrap--focused" : ""}${isInteracting ? " board-resizable-wrap--interacting" : ""}${feedbackKind ? ` board-resizable-wrap--feedback-${feedbackKind}` : ""}`}
         dragHandleClassName="board-drag-handle"
         enableUserSelectHack={false}
         enableResizing={{
@@ -259,7 +262,10 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
         minWidth={BOARD_MIN_WIDTH}
         minHeight={BOARD_MIN_HEIGHT}
         default={{ x: frame.x, y: frame.y, width: frame.width, height: frame.height }}
+        onMouseDown={onFocus}
+        onTouchStart={onFocus}
         onDragStart={() => {
+          onFocus();
           setIsInteracting(true);
         }}
         onDrag={(_event, data) => {
@@ -310,9 +316,9 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
             triggerFeedback("snap");
           }
         }}
-        style={{ position: "fixed", zIndex: 5 }}
+        style={{ position: "fixed", zIndex }}
       >
-        <div className="board-window" data-testid="board-window-surface">
+        <div className="board-window" data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
           {isInteracting ? (
             <div className="floating-window-hud" data-testid="board-window-hud">
               <strong>{`${Math.round(currentFrame.width)} × ${Math.round(currentFrame.height)}`}</strong>
@@ -326,6 +332,9 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
             <div className="board-window__toolbar-actions">
               <button className="floating-surface__action" data-testid="board-window-reset" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => resetToDock()}>
                 重置停靠位
+              </button>
+              <button className="floating-surface__action" data-testid="board-window-bring-front" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => onFocus()}>
+                置顶
               </button>
             </div>
           </div>

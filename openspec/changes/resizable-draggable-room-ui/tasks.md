@@ -47,3 +47,5 @@
 - [x] 6.12 Add in-interaction size HUD, snap feedback, and boundary overflow hints, then verify them in Playwright during live drag/resize gestures.
 - [x] 6.13 Add explicit reset-to-dock affordances, overflow recovery chips, and light snap or reset rebound feedback for both floating surfaces.
 - [x] 6.14 Extend Playwright to validate recovery after dragging or resizing beyond the viewport, including the restore path back to a manageable on-screen state.
+- [x] 6.15 Add room-level floating-surface focus management so the board and event feed can be explicitly brought to front without fighting stale per-component z-index rules.
+- [x] 6.16 Add focus highlight, bring-to-front controls, and Playwright assertions for default stacking order plus focus-driven z-index changes.

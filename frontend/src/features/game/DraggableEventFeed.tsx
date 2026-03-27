@@ -27,6 +27,9 @@ type DraggableEventFeedProps = {
   events: ProjectionEvent[];
   preferences: EventFeedPreferences;
   onPreferencesChange: (updater: (prev: EventFeedPreferences) => EventFeedPreferences) => void;
+  isFocused: boolean;
+  zIndex: number;
+  onFocus: () => void;
 };
 
 type SnapGuide = {
@@ -155,7 +158,7 @@ function snapSize(value: number) {
   return Math.round(value / FEED_RESIZE_STEP) * FEED_RESIZE_STEP;
 }
 
-export function DraggableEventFeed({ events, preferences, onPreferencesChange }: DraggableEventFeedProps) {
+export function DraggableEventFeed({ events, preferences, onPreferencesChange, isFocused, zIndex, onFocus }: DraggableEventFeedProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIntroOpen, setIsIntroOpen] = useState(false);
   const [viewportSize, setViewportSize] = useState(() => ({
@@ -316,7 +319,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
           width: frame.width,
           height: frame.height,
         }}
-        className={`floating-event-feed-shell${isInteracting ? " floating-event-feed-shell--interacting" : ""}${feedbackKind ? ` floating-event-feed-shell--feedback-${feedbackKind}` : ""}`}
+        className={`floating-event-feed-shell${isFocused ? " floating-event-feed-shell--focused" : ""}${isInteracting ? " floating-event-feed-shell--interacting" : ""}${feedbackKind ? ` floating-event-feed-shell--feedback-${feedbackKind}` : ""}`}
         minWidth={FEED_MIN_WIDTH}
         minHeight={minimumHeight}
         data-testid="floating-event-feed-window"
@@ -345,7 +348,10 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
         resizeGrid={[FEED_RESIZE_STEP, FEED_RESIZE_STEP]}
         dragGrid={[1, 1]}
         cancel="button, input, select, option, .floating-scroll-list, .floating-event-feed__settings-wrap, .floating-event-feed__intro"
+        onMouseDown={onFocus}
+        onTouchStart={onFocus}
         onDragStart={() => {
+          onFocus();
           setIsInteracting(true);
         }}
         onDrag={(_event, data) => {
@@ -403,9 +409,9 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
             triggerFeedback("snap");
           }
         }}
-        style={{ position: "fixed", zIndex: 8 }}
+        style={{ position: "fixed", zIndex }}
       >
-        <section className={`floating-event-feed__surface floating-event-feed__surface--${styleDensity}`} data-testid="floating-event-feed-surface" data-density={styleDensity}>
+        <section className={`floating-event-feed__surface floating-event-feed__surface--${styleDensity}`} data-testid="floating-event-feed-surface" data-density={styleDensity} data-focused={isFocused ? "true" : "false"}>
           {isInteracting ? (
             <div className="floating-window-hud" data-testid="floating-event-feed-hud">
               <strong>{`${Math.round(currentFrame.width)} × ${Math.round(currentFrame.height)}`}</strong>
@@ -447,6 +453,15 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
                 onClick={() => resetToDock()}
               >
                 重置停靠位
+              </button>
+              <button
+                className="floating-surface__action"
+                data-testid="floating-event-feed-bring-front"
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onFocus()}
+              >
+                置顶
               </button>
             </div>
           </div>
