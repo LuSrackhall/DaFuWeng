@@ -12,10 +12,10 @@ const FLOATING_EVENT_FEED_STORAGE_KEY = "dafuweng-floating-event-feed-frame-v3";
 const FEED_MARGIN = 18;
 const FEED_TOP_OFFSET = 110;
 const FEED_MIN_WIDTH = 340;
-const FEED_HEADER_HEIGHT = 48; // reduced
+const FEED_HEADER_HEIGHT = 48;
 const FEED_SETTINGS_HEIGHT = 120;
 const FEED_INTRO_HEIGHT = 60;
-const FEED_LIST_PADDING = 0; // highly compacted
+const FEED_LIST_PADDING = 0;
 const FEED_ITEM_GAP = 8;
 const FEED_COMPACT_ROW_HEIGHT = 42;
 const FEED_NORMAL_ROW_HEIGHT = 58;
@@ -48,7 +48,6 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
 
   const feed = buildRecentEventFeed(events, preferences);
   
-  // Recalculating minimum bounds
   const chromeHeight = FEED_HEADER_HEIGHT
     + (isIntroOpen ? FEED_INTRO_HEIGHT : 0)
     + (isSettingsOpen ? FEED_SETTINGS_HEIGHT : 0)
@@ -61,7 +60,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
     const defaultFrame = {
       x: Math.max(FEED_MARGIN, viewportSize.width - 460),
       y: FEED_TOP_OFFSET,
-      width: 380, // slightly narrower to look better on free canvas
+      width: 380,
       height: Math.max(minimumHeight + 60, 420),
     };
 
@@ -158,7 +157,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
       minHeight={minimumHeight}
       data-testid="floating-event-feed-window"
       dragHandleClassName="floating-event-feed__handle"
-      enableUserSelectHack={false}
+      enableUserSelectHack={true}
       enableResizing={{
         top: true, right: true, bottom: true, left: true,
         topRight: true, bottomRight: true, bottomLeft: true, topLeft: true,
@@ -207,7 +206,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
         data-testid="floating-event-feed-surface" 
         data-density={styleDensity} 
         data-focused={isFocused ? "true" : "false"} 
-        style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }} // Flex layout for maximum utilization
+        style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}
       >
         <div 
           className="floating-event-feed__handle" 
@@ -274,23 +273,25 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
           </div>
         ) : null}
 
-        {feed.items.length > 0 ? (
-          <ol className="floating-scroll-list" ref={scrollRef} onPointerDown={(e) => e.stopPropagation()} style={{ padding: '0 16px 16px', margin: 0, flex: 1, overflowY: 'auto' }}>
-            {feed.items.map((item) => (
-              <li className={`floating-event-feed__item${item.isNearest ? " floating-event-feed__item--nearest" : ""}`} key={item.id}>
-                <span className="floating-event-feed__number">{item.displayNumber}</span>
-                <div className="floating-event-feed__body">
-                  <strong>{item.summary}</strong>
-                  <span>{item.isNearest ? `最新事件 · 序列 ${item.sequence}` : `事件序列 ${item.sequence}`}</span>
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <div className="floating-event-feed__empty-wrap" onPointerDown={(e) => e.stopPropagation()} style={{ padding: '16px', flex: 1 }}>
-            <p className="floating-event-feed__empty">暂无事件</p>
-          </div>
-        )}
+        <div style={{ padding: '0 16px 16px', margin: 0, flex: 1, overflowY: 'auto', pointerEvents: isInteracting ? "none" : "auto" }}>
+          {feed.items.length > 0 ? (
+            <ol className="floating-scroll-list" ref={scrollRef} onPointerDown={(e) => e.stopPropagation()} style={{ padding: 0, margin: 0, height: '100%' }}>
+              {feed.items.map((item) => (
+                <li className={`floating-event-feed__item${item.isNearest ? " floating-event-feed__item--nearest" : ""}`} key={item.id}>
+                  <span className="floating-event-feed__number">{item.displayNumber}</span>
+                  <div className="floating-event-feed__body">
+                    <strong>{item.summary}</strong>
+                    <span>{item.isNearest ? `最新事件 · 序列 ${item.sequence}` : `事件序列 ${item.sequence}`}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="floating-event-feed__empty-wrap" onPointerDown={(e) => e.stopPropagation()} style={{ padding: '16px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <p className="floating-event-feed__empty">暂无事件</p>
+            </div>
+          )}
+        </div>
       </section>
     </Rnd>,
     document.body,
