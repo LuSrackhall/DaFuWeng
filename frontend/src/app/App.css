@@ -1972,6 +1972,16 @@ body {
   backdrop-filter: none;
 }
 
+.board-resizable-wrap--feedback-snap,
+.floating-event-feed-shell--feedback-snap {
+  animation: floating-surface-snap-bounce 280ms ease-out;
+}
+
+.board-resizable-wrap--feedback-reset,
+.floating-event-feed-shell--feedback-reset {
+  animation: floating-surface-reset-bounce 320ms ease-out;
+}
+
 .board-resizable-wrap .react-resizable-handle,
 .floating-event-feed-shell .react-resizable-handle {
   opacity: 1;
@@ -2074,6 +2084,33 @@ body {
   line-height: 1.25;
 }
 
+.floating-window-recovery-chip {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 21;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 16px;
+  background: rgba(7, 15, 13, 0.92);
+  color: #f6ecd4;
+  box-shadow: 0 16px 28px rgba(7, 15, 13, 0.22);
+  cursor: pointer;
+}
+
+.floating-window-recovery-chip--event-feed {
+  bottom: 72px;
+}
+
+.floating-surface__action {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: rgba(229, 191, 105, 0.16);
+  color: #f6ecd4;
+  cursor: pointer;
+}
+
 .floating-snap-guide {
   position: fixed;
   z-index: 20;
@@ -2112,13 +2149,26 @@ body {
 
 .board-window__toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   padding: 14px;
   background: linear-gradient(180deg, rgba(18, 34, 28, 0.66), rgba(18, 34, 28, 0.42));
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   user-select: none;
   touch-action: none;
+}
+
+.board-window__toolbar-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.board-window__toolbar-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
 }
 
 .board-window__canvas {
@@ -2220,6 +2270,34 @@ body {
   background: rgba(255, 255, 255, 0.08);
   color: #f6ecd4;
   cursor: pointer;
+}
+
+@keyframes floating-surface-snap-bounce {
+  0% {
+    transform: scale(1);
+  }
+
+  35% {
+    transform: scale(1.015);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes floating-surface-reset-bounce {
+  0% {
+    transform: scale(0.985);
+  }
+
+  55% {
+    transform: scale(1.018);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .floating-event-feed__intro {

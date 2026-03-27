@@ -38,6 +38,8 @@ type SnapGuide = {
   label: string;
 };
 
+type FeedbackKind = "snap" | "reset";
+
 function renderResizeHandle(prefix: string, direction: string) {
   return <span className={`floating-resize-handle floating-resize-handle--${direction}`} data-testid={`${prefix}-resize-${direction}`} />;
 }
@@ -140,12 +142,41 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
   const [previewFrame, setPreviewFrame] = useState<FloatingFrame | null>(null);
   const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
   const [isInteracting, setIsInteracting] = useState(false);
+  const [feedbackKind, setFeedbackKind] = useState<FeedbackKind | null>(null);
   const rndRef = useRef<Rnd | null>(null);
   const previewRafRef = useRef<number | null>(null);
+  const feedbackTimeoutRef = useRef<number | null>(null);
   const dockFrameRef = useRef(normalizeFrame(initialFrame));
 
   const currentFrame = previewFrame ?? frame;
   const boundaryHints = buildBoundaryHints(currentFrame, viewportSize);
+  const showRecoveryChip = !isInteracting && boundaryHints.length > 0;
+
+  function triggerFeedback(nextKind: FeedbackKind) {
+    if (feedbackTimeoutRef.current !== null) {
+      window.clearTimeout(feedbackTimeoutRef.current);
+    }
+
+    setFeedbackKind(nextKind);
+    feedbackTimeoutRef.current = window.setTimeout(() => {
+      setFeedbackKind(null);
+      feedbackTimeoutRef.current = null;
+    }, 340);
+  }
+
+  function resetToDock() {
+    const nextFrame = normalizeFrame(dockFrameRef.current);
+    setFrame(nextFrame);
+    setPreviewFrame(null);
+    setActiveGuides([
+      { axis: "x", value: nextFrame.x, label: "已重置到默认停靠位" },
+      { axis: "y", value: nextFrame.y, label: "已重置到默认停靠位" },
+    ]);
+    persistFrame(nextFrame);
+    rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
+    rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+    triggerFeedback("reset");
+  }
 
   function flushPreview(nextFrame: FloatingFrame, guides: SnapGuide[]) {
     if (previewRafRef.current !== null) {
@@ -186,6 +217,9 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
     if (previewRafRef.current !== null) {
       window.cancelAnimationFrame(previewRafRef.current);
     }
+    if (feedbackTimeoutRef.current !== null) {
+      window.clearTimeout(feedbackTimeoutRef.current);
+    }
   }, []);
 
   if (typeof document === "undefined") {
@@ -197,7 +231,7 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
       <Rnd
         ref={rndRef}
         data-testid="floating-board-window"
-        className={`board-resizable-wrap${isInteracting ? " board-resizable-wrap--interacting" : ""}`}
+        className={`board-resizable-wrap${isInteracting ? " board-resizable-wrap--interacting" : ""}${feedbackKind ? ` board-resizable-wrap--feedback-${feedbackKind}` : ""}`}
         dragHandleClassName="board-drag-handle"
         enableUserSelectHack={false}
         enableResizing={{
@@ -241,6 +275,9 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
           setIsInteracting(false);
           setPreviewFrame(null);
           setActiveGuides([]);
+          if (snapped.guides.length > 0) {
+            triggerFeedback("snap");
+          }
         }}
         onResizeStart={() => {
           setIsInteracting(true);
@@ -269,6 +306,9 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
           setIsInteracting(false);
           setPreviewFrame(null);
           setActiveGuides([]);
+          if (snapped.guides.length > 0) {
+            triggerFeedback("snap");
+          }
         }}
         style={{ position: "fixed", zIndex: 5 }}
       >
@@ -282,11 +322,21 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
             </div>
           ) : null}
           <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
-            {toolbar}
+            <div className="board-window__toolbar-content">{toolbar}</div>
+            <div className="board-window__toolbar-actions">
+              <button className="floating-surface__action" data-testid="board-window-reset" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => resetToDock()}>
+                重置停靠位
+              </button>
+            </div>
           </div>
           <div className="board-window__canvas">{children}</div>
         </div>
       </Rnd>
+      {showRecoveryChip ? (
+        <button className="floating-window-recovery-chip" data-testid="board-window-recover" type="button" onClick={() => resetToDock()}>
+          {`棋盘已越界 · ${boundaryHints[0]} · 一键找回`}
+        </button>
+      ) : null}
       {activeGuides.map((guide) => (
         <div
           aria-hidden="true"

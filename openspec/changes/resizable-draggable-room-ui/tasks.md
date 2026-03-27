@@ -45,3 +45,5 @@
 - [x] 6.10 Add an interaction-lightweight mode during drag/resize and strengthen Playwright assertions for initial docking, growth, and minimum-size clamping.
 - [x] 6.11 Remove viewport bounds for the floating board and event-feed windows so they can be dragged and resized beyond the current screen while still enforcing minimum size.
 - [x] 6.12 Add in-interaction size HUD, snap feedback, and boundary overflow hints, then verify them in Playwright during live drag/resize gestures.
+- [x] 6.13 Add explicit reset-to-dock affordances, overflow recovery chips, and light snap or reset rebound feedback for both floating surfaces.
+- [x] 6.14 Extend Playwright to validate recovery after dragging or resizing beyond the viewport, including the restore path back to a manageable on-screen state.

@@ -35,6 +35,8 @@ type SnapGuide = {
   label: string;
 };
 
+type FeedbackKind = "snap" | "reset";
+
 function renderResizeHandle(prefix: string, direction: string) {
   return <span className={`floating-resize-handle floating-resize-handle--${direction}`} data-testid={`${prefix}-resize-${direction}`} />;
 }
@@ -160,10 +162,13 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
     width: typeof window === "undefined" ? 1440 : window.innerWidth,
     height: typeof window === "undefined" ? 900 : window.innerHeight,
   }));
+  const rndRef = useRef<Rnd | null>(null);
   const scrollRef = useRef<HTMLOListElement>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const previewRafRef = useRef<number | null>(null);
   const [isInteracting, setIsInteracting] = useState(false);
+  const [feedbackKind, setFeedbackKind] = useState<FeedbackKind | null>(null);
+  const feedbackTimeoutRef = useRef<number | null>(null);
 
   const feed = buildRecentEventFeed(events, preferences);
   const chromeHeight = FEED_HEADER_HEIGHT
@@ -190,6 +195,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
   const dockFrameRef = useRef(frame);
   const currentFrame = previewFrame ?? frame;
   const boundaryHints = buildBoundaryHints(currentFrame, viewportSize);
+  const showRecoveryChip = !isInteracting && boundaryHints.length > 0;
   const availableItemHeight = Math.max(
     0,
     currentFrame.height - chromeHeight - Math.max(0, preferences.minItemsCount - 1) * FEED_ITEM_GAP,
@@ -234,11 +240,16 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
     if (previewRafRef.current !== null) {
       window.cancelAnimationFrame(previewRafRef.current);
     }
+    if (feedbackTimeoutRef.current !== null) {
+      window.clearTimeout(feedbackTimeoutRef.current);
+    }
   }, []);
 
   useEffect(() => {
     setFrame((current) => {
       const nextFrame = clampEventFeedFrame(current, minimumHeight);
+      rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
+      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
       persistEventFeedFrame(nextFrame);
       return nextFrame;
     });
@@ -265,6 +276,32 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
     });
   }
 
+  function triggerFeedback(nextKind: FeedbackKind) {
+    if (feedbackTimeoutRef.current !== null) {
+      window.clearTimeout(feedbackTimeoutRef.current);
+    }
+
+    setFeedbackKind(nextKind);
+    feedbackTimeoutRef.current = window.setTimeout(() => {
+      setFeedbackKind(null);
+      feedbackTimeoutRef.current = null;
+    }, 340);
+  }
+
+  function resetToDock() {
+    const nextFrame = clampEventFeedFrame(dockFrameRef.current, minimumHeight);
+    setFrame(nextFrame);
+    setPreviewFrame(null);
+    setActiveGuides([
+      { axis: "x", value: nextFrame.x, label: "已重置到默认停靠位" },
+      { axis: "y", value: nextFrame.y, label: "已重置到默认停靠位" },
+    ]);
+    persistEventFeedFrame(nextFrame);
+    rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
+    rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+    triggerFeedback("reset");
+  }
+
   if (typeof document === "undefined") {
     return null;
   }
@@ -272,13 +309,14 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
   return createPortal(
     <>
       <Rnd
+        ref={rndRef}
         default={{
           x: frame.x,
           y: frame.y,
           width: frame.width,
           height: frame.height,
         }}
-        className={`floating-event-feed-shell${isInteracting ? " floating-event-feed-shell--interacting" : ""}`}
+        className={`floating-event-feed-shell${isInteracting ? " floating-event-feed-shell--interacting" : ""}${feedbackKind ? ` floating-event-feed-shell--feedback-${feedbackKind}` : ""}`}
         minWidth={FEED_MIN_WIDTH}
         minHeight={minimumHeight}
         data-testid="floating-event-feed-window"
@@ -322,6 +360,9 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
           setIsInteracting(false);
           setPreviewFrame(null);
           setActiveGuides([]);
+          if (snapped.guides.length > 0) {
+            triggerFeedback("snap");
+          }
         }}
         onResizeStart={() => {
           setIsInteracting(true);
@@ -358,6 +399,9 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
           setIsInteracting(false);
           setPreviewFrame(null);
           setActiveGuides([]);
+          if (snapped.guides.length > 0) {
+            triggerFeedback("snap");
+          }
         }}
         style={{ position: "fixed", zIndex: 8 }}
       >
@@ -394,6 +438,15 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
                 onClick={() => setIsSettingsOpen((current) => !current)}
               >
                 {isSettingsOpen ? "收起设置" : "展开设置"}
+              </button>
+              <button
+                className="floating-surface__action"
+                data-testid="floating-event-feed-reset"
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => resetToDock()}
+              >
+                重置停靠位
               </button>
             </div>
           </div>
@@ -468,6 +521,11 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange }:
           )}
         </section>
       </Rnd>
+      {showRecoveryChip ? (
+        <button className="floating-window-recovery-chip floating-window-recovery-chip--event-feed" data-testid="floating-event-feed-recover" type="button" onClick={() => resetToDock()}>
+          {`纪事已越界 · ${boundaryHints[0]} · 一键找回`}
+        </button>
+      ) : null}
       {activeGuides.map((guide) => (
         <div
           aria-hidden="true"

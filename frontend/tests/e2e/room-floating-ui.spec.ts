@@ -212,6 +212,12 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   await releasePointer(page);
   const boardAfterOversize = await boardWindow.boundingBox();
   expect(boardAfterOversize ? boardAfterOversize.width : 0).toBeGreaterThan(1440);
+  await expect(page.getByTestId("board-window-recover")).toBeVisible();
+  await page.getByTestId("board-window-recover").click();
+  const boardAfterRecover = await boardWindow.boundingBox();
+  expect(boardAfterRecover).not.toBeNull();
+  expect(boardAfterRecover ? boardAfterRecover.x : 0).toBeLessThan(140);
+  expect(boardAfterRecover ? boardAfterRecover.y : 0).toBeLessThan(220);
   await dragBottomRightCorner(page, '[data-testid="board-window-resize-bottom-right"]', -2000, -2000);
   const boardAfterShrink = await boardWindow.boundingBox();
   expect(boardAfterShrink).not.toBeNull();
@@ -256,6 +262,15 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   await releasePointer(page);
   const feedAfterOversize = await eventFeedWindow.boundingBox();
   expect(feedAfterOversize ? feedAfterOversize.width : 0).toBeGreaterThan(900);
+  await expect(page.getByTestId("floating-event-feed-recover")).toBeVisible();
+  await page.getByTestId("floating-event-feed-recover").click();
+  await expect(page.getByTestId("floating-event-feed-recover")).toHaveCount(0);
+  const feedAfterRecover = await eventFeedWindow.boundingBox();
+  expect(feedAfterRecover).not.toBeNull();
+  expect(feedAfterRecover ? feedAfterRecover.x : 0).toBeGreaterThanOrEqual(0);
+  expect(feedAfterRecover ? feedAfterRecover.y : 0).toBeLessThan(220);
+  expect(feedAfterRecover ? feedAfterRecover.width : 0).toBeLessThan(600);
+  expect(feedAfterRecover ? feedAfterRecover.height : 0).toBeLessThan(560);
   await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', -2000, -2000);
   const feedAfterShrink = await eventFeedWindow.boundingBox();
   expect(feedAfterShrink).not.toBeNull();
