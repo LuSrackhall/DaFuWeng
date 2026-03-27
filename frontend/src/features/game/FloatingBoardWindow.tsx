@@ -10,6 +10,8 @@ const BOARD_MIN_WIDTH = 520;
 const BOARD_MIN_HEIGHT = 420;
 const BOARD_MAX_WIDTH_PADDING = 36;
 const BOARD_MAX_HEIGHT_PADDING = 114;
+const BOARD_SNAP_THRESHOLD = 26;
+const BOARD_RESIZE_STEP = 12;
 
 type FloatingFrame = {
   x: number;
@@ -30,20 +32,72 @@ type FloatingBoardWindowProps = {
   children: ReactNode;
 };
 
+type SnapGuide = {
+  axis: "x" | "y";
+  value: number;
+  label: string;
+};
+
 function renderResizeHandle(prefix: string, direction: string) {
   return <span className={`floating-resize-handle floating-resize-handle--${direction}`} data-testid={`${prefix}-resize-${direction}`} />;
 }
 
-function clampFrame(frame: FloatingFrame, viewportSize: ViewportSize): FloatingFrame {
-  const width = Math.min(Math.max(frame.width, BOARD_MIN_WIDTH), Math.max(BOARD_MIN_WIDTH, viewportSize.width - BOARD_MARGIN * 2));
-  const height = Math.min(Math.max(frame.height, BOARD_MIN_HEIGHT), Math.max(BOARD_MIN_HEIGHT, viewportSize.height - BOARD_TOP_OFFSET - BOARD_MARGIN));
-
+function normalizeFrame(frame: FloatingFrame): FloatingFrame {
   return {
-    x: Math.min(Math.max(frame.x, BOARD_MARGIN), Math.max(BOARD_MARGIN, viewportSize.width - width - BOARD_MARGIN)),
-    y: Math.min(Math.max(frame.y, BOARD_TOP_OFFSET), Math.max(BOARD_TOP_OFFSET, viewportSize.height - height - BOARD_MARGIN)),
-    width,
-    height,
+    x: frame.x,
+    y: frame.y,
+    width: Math.max(frame.width, BOARD_MIN_WIDTH),
+    height: Math.max(frame.height, BOARD_MIN_HEIGHT),
   };
+}
+
+function snapBoardFrame(frame: FloatingFrame, viewportSize: ViewportSize, dockFrame: FloatingFrame) {
+  const nextFrame = { ...normalizeFrame(frame) };
+  const guides: SnapGuide[] = [];
+  const xTargets = [
+    { value: BOARD_MARGIN, label: "吸附到左侧安全区" },
+    { value: dockFrame.x, label: "吸附到默认停靠位" },
+    { value: viewportSize.width - nextFrame.width - BOARD_MARGIN, label: "吸附到右侧安全区" },
+  ];
+  const yTargets = [
+    { value: BOARD_TOP_OFFSET, label: "吸附到顶部安全区" },
+    { value: dockFrame.y, label: "吸附到默认停靠位" },
+  ];
+
+  for (const target of xTargets) {
+    if (Math.abs(nextFrame.x - target.value) <= BOARD_SNAP_THRESHOLD) {
+      nextFrame.x = target.value;
+      guides.push({ axis: "x", value: target.value, label: target.label });
+      break;
+    }
+  }
+
+  for (const target of yTargets) {
+    if (Math.abs(nextFrame.y - target.value) <= BOARD_SNAP_THRESHOLD) {
+      nextFrame.y = target.value;
+      guides.push({ axis: "y", value: target.value, label: target.label });
+      break;
+    }
+  }
+
+  return { frame: nextFrame, guides };
+}
+
+function buildBoundaryHints(frame: FloatingFrame, viewportSize: ViewportSize) {
+  const hints: string[] = [];
+  if (frame.x < 0) {
+    hints.push(`已越出左侧 ${Math.round(Math.abs(frame.x))} px`);
+  }
+  if (frame.y < 0) {
+    hints.push(`已越出顶部 ${Math.round(Math.abs(frame.y))} px`);
+  }
+  if (frame.x + frame.width > viewportSize.width) {
+    hints.push(`已越出右侧 ${Math.round(frame.x + frame.width - viewportSize.width)} px`);
+  }
+  if (frame.y + frame.height > viewportSize.height) {
+    hints.push(`已越出底部 ${Math.round(frame.y + frame.height - viewportSize.height)} px`);
+  }
+  return hints;
 }
 
 function readPersistedFrame(viewportSize: ViewportSize) {
@@ -67,7 +121,7 @@ function readPersistedFrame(viewportSize: ViewportSize) {
       return null;
     }
 
-    return clampFrame(parsed as FloatingFrame, viewportSize);
+    return snapBoardFrame(normalizeFrame(parsed as FloatingFrame), viewportSize, normalizeFrame(parsed as FloatingFrame)).frame;
   } catch {
     return null;
   }
@@ -82,13 +136,32 @@ function persistFrame(frame: FloatingFrame) {
 }
 
 export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, children }: FloatingBoardWindowProps) {
-  const [frame, setFrame] = useState(() => readPersistedFrame(viewportSize) ?? clampFrame(initialFrame, viewportSize));
+  const [frame, setFrame] = useState(() => readPersistedFrame(viewportSize) ?? normalizeFrame(initialFrame));
+  const [previewFrame, setPreviewFrame] = useState<FloatingFrame | null>(null);
+  const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
   const [isInteracting, setIsInteracting] = useState(false);
   const rndRef = useRef<Rnd | null>(null);
+  const previewRafRef = useRef<number | null>(null);
+  const dockFrameRef = useRef(normalizeFrame(initialFrame));
+
+  const currentFrame = previewFrame ?? frame;
+  const boundaryHints = buildBoundaryHints(currentFrame, viewportSize);
+
+  function flushPreview(nextFrame: FloatingFrame, guides: SnapGuide[]) {
+    if (previewRafRef.current !== null) {
+      window.cancelAnimationFrame(previewRafRef.current);
+    }
+
+    previewRafRef.current = window.requestAnimationFrame(() => {
+      setPreviewFrame(nextFrame);
+      setActiveGuides(guides);
+      previewRafRef.current = null;
+    });
+  }
 
   useEffect(() => {
-    setFrame((current) => {
-      const nextFrame = clampFrame(current, viewportSize);
+    setFrame((current: FloatingFrame) => {
+      const nextFrame = normalizeFrame(current);
       rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
       rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
       persistFrame(nextFrame);
@@ -97,10 +170,11 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
   }, [viewportSize.height, viewportSize.width]);
 
   useEffect(() => {
-    setFrame((current) => {
+    dockFrameRef.current = normalizeFrame(initialFrame);
+    setFrame((current: FloatingFrame) => {
       const nextFrame = current.width > 0 && current.height > 0
-        ? clampFrame(current, viewportSize)
-        : readPersistedFrame(viewportSize) ?? clampFrame(initialFrame, viewportSize);
+        ? normalizeFrame(current)
+        : readPersistedFrame(viewportSize) ?? normalizeFrame(initialFrame);
       rndRef.current?.updateSize({ width: nextFrame.width, height: nextFrame.height });
       rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
       persistFrame(nextFrame);
@@ -108,79 +182,120 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
     });
   }, [initialFrame.height, initialFrame.width, initialFrame.x, initialFrame.y, viewportSize]);
 
+  useEffect(() => () => {
+    if (previewRafRef.current !== null) {
+      window.cancelAnimationFrame(previewRafRef.current);
+    }
+  }, []);
+
   if (typeof document === "undefined") {
     return null;
   }
 
   return createPortal(
-    <Rnd
-      ref={rndRef}
-      bounds="window"
-      data-testid="floating-board-window"
-      className={`board-resizable-wrap${isInteracting ? " board-resizable-wrap--interacting" : ""}`}
-      dragHandleClassName="board-drag-handle"
-      enableUserSelectHack={false}
-      enableResizing={{
-        top: true,
-        right: true,
-        bottom: true,
-        left: true,
-        topRight: true,
-        bottomRight: true,
-        bottomLeft: true,
-        topLeft: true,
-      }}
-      resizeHandleComponent={{
-        top: renderResizeHandle("board-window", "top"),
-        right: renderResizeHandle("board-window", "right"),
-        bottom: renderResizeHandle("board-window", "bottom"),
-        left: renderResizeHandle("board-window", "left"),
-        topRight: renderResizeHandle("board-window", "top-right"),
-        bottomRight: renderResizeHandle("board-window", "bottom-right"),
-        bottomLeft: renderResizeHandle("board-window", "bottom-left"),
-        topLeft: renderResizeHandle("board-window", "top-left"),
-      }}
-      resizeGrid={[12, 12]}
-      dragGrid={[1, 1]}
-      minWidth={BOARD_MIN_WIDTH}
-      minHeight={BOARD_MIN_HEIGHT}
-      maxWidth={Math.max(BOARD_MIN_WIDTH, viewportSize.width - BOARD_MAX_WIDTH_PADDING)}
-      maxHeight={Math.max(BOARD_MIN_HEIGHT, viewportSize.height - BOARD_MAX_HEIGHT_PADDING)}
-      default={{ x: frame.x, y: frame.y, width: frame.width, height: frame.height }}
-      onDragStart={() => {
-        setIsInteracting(true);
-      }}
-      onDragStop={(_event, data) => {
-        setFrame((current) => {
-          const nextFrame = clampFrame({ ...current, x: data.x, y: data.y }, viewportSize);
-          persistFrame(nextFrame);
-          return nextFrame;
-        });
-        setIsInteracting(false);
-      }}
-      onResizeStart={() => {
-        setIsInteracting(true);
-      }}
-      onResizeStop={(_event, _direction, ref, _delta, position) => {
-        const nextFrame = clampFrame({
-          x: position.x,
-          y: position.y,
-          width: ref.offsetWidth,
-          height: ref.offsetHeight,
-        }, viewportSize);
-        setFrame(nextFrame);
-        persistFrame(nextFrame);
-        setIsInteracting(false);
-      }}
-      style={{ position: "fixed", zIndex: 5 }}
-    >
-      <div className="board-window" data-testid="board-window-surface">
-        <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
-          {toolbar}
+    <>
+      <Rnd
+        ref={rndRef}
+        data-testid="floating-board-window"
+        className={`board-resizable-wrap${isInteracting ? " board-resizable-wrap--interacting" : ""}`}
+        dragHandleClassName="board-drag-handle"
+        enableUserSelectHack={false}
+        enableResizing={{
+          top: true,
+          right: true,
+          bottom: true,
+          left: true,
+          topRight: true,
+          bottomRight: true,
+          bottomLeft: true,
+          topLeft: true,
+        }}
+        resizeHandleComponent={{
+          top: renderResizeHandle("board-window", "top"),
+          right: renderResizeHandle("board-window", "right"),
+          bottom: renderResizeHandle("board-window", "bottom"),
+          left: renderResizeHandle("board-window", "left"),
+          topRight: renderResizeHandle("board-window", "top-right"),
+          bottomRight: renderResizeHandle("board-window", "bottom-right"),
+          bottomLeft: renderResizeHandle("board-window", "bottom-left"),
+          topLeft: renderResizeHandle("board-window", "top-left"),
+        }}
+        resizeGrid={[BOARD_RESIZE_STEP, BOARD_RESIZE_STEP]}
+        dragGrid={[1, 1]}
+        minWidth={BOARD_MIN_WIDTH}
+        minHeight={BOARD_MIN_HEIGHT}
+        default={{ x: frame.x, y: frame.y, width: frame.width, height: frame.height }}
+        onDragStart={() => {
+          setIsInteracting(true);
+        }}
+        onDrag={(_event, data) => {
+          const nextFrame = normalizeFrame({ ...frame, x: data.x, y: data.y });
+          const snapped = snapBoardFrame(nextFrame, viewportSize, dockFrameRef.current);
+          flushPreview(nextFrame, snapped.guides);
+        }}
+        onDragStop={(_event, data) => {
+          const snapped = snapBoardFrame(normalizeFrame({ ...frame, x: data.x, y: data.y }), viewportSize, dockFrameRef.current);
+          setFrame(snapped.frame);
+          persistFrame(snapped.frame);
+          rndRef.current?.updatePosition({ x: snapped.frame.x, y: snapped.frame.y });
+          setIsInteracting(false);
+          setPreviewFrame(null);
+          setActiveGuides([]);
+        }}
+        onResizeStart={() => {
+          setIsInteracting(true);
+        }}
+        onResize={(_event, _direction, ref, _delta, position) => {
+          const nextFrame = normalizeFrame({
+            x: position.x,
+            y: position.y,
+            width: ref.offsetWidth,
+            height: ref.offsetHeight,
+          });
+          const snapped = snapBoardFrame(nextFrame, viewportSize, dockFrameRef.current);
+          flushPreview(nextFrame, snapped.guides);
+        }}
+        onResizeStop={(_event, _direction, ref, _delta, position) => {
+          const snapped = snapBoardFrame(normalizeFrame({
+            x: position.x,
+            y: position.y,
+            width: ref.offsetWidth,
+            height: ref.offsetHeight,
+          }), viewportSize, dockFrameRef.current);
+          setFrame(snapped.frame);
+          persistFrame(snapped.frame);
+          rndRef.current?.updateSize({ width: snapped.frame.width, height: snapped.frame.height });
+          rndRef.current?.updatePosition({ x: snapped.frame.x, y: snapped.frame.y });
+          setIsInteracting(false);
+          setPreviewFrame(null);
+          setActiveGuides([]);
+        }}
+        style={{ position: "fixed", zIndex: 5 }}
+      >
+        <div className="board-window" data-testid="board-window-surface">
+          {isInteracting ? (
+            <div className="floating-window-hud" data-testid="board-window-hud">
+              <strong>{`${Math.round(currentFrame.width)} × ${Math.round(currentFrame.height)}`}</strong>
+              <span>{`X ${Math.round(currentFrame.x)} · Y ${Math.round(currentFrame.y)}`}</span>
+              {activeGuides[0] ? <span>{activeGuides[0].label}</span> : null}
+              {boundaryHints[0] ? <span>{boundaryHints[0]}</span> : null}
+            </div>
+          ) : null}
+          <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
+            {toolbar}
+          </div>
+          <div className="board-window__canvas">{children}</div>
         </div>
-        <div className="board-window__canvas">{children}</div>
-      </div>
-    </Rnd>,
+      </Rnd>
+      {activeGuides.map((guide) => (
+        <div
+          aria-hidden="true"
+          className={`floating-snap-guide floating-snap-guide--${guide.axis === "x" ? "vertical" : "horizontal"}`}
+          key={`${guide.axis}-${guide.value}`}
+          style={guide.axis === "x" ? { left: guide.value } : { top: guide.value }}
+        />
+      ))}
+    </>,
     document.body,
   );
 }

@@ -524,28 +524,16 @@ export function GamePage() {
     }
 
     const rect = shell.getBoundingClientRect();
-    const margin = 18;
-    const topOffset = 96;
-    const maxWidth = Math.max(420, viewportSize.width - margin * 2);
-    const maxHeight = Math.max(360, viewportSize.height - topOffset - margin);
-
     setBoardFrame((current) => {
-      const width = current?.width
-        ? Math.min(Math.max(current.width, 420), maxWidth)
-        : Math.min(Math.max(rect.width * 0.92, 560), maxWidth);
-      const height = current?.height
-        ? Math.min(Math.max(current.height, 360), maxHeight)
-        : Math.min(Math.max(Math.min(rect.height * 0.86, viewportSize.height * 0.62), 480), maxHeight);
-      const defaultX = Math.min(Math.max(rect.left + 12, margin), viewportSize.width - width - margin);
-      const defaultY = Math.min(topOffset + 12, viewportSize.height - height - margin);
-      const rawX = current?.x ?? defaultX;
-      const rawY = current?.y ?? defaultY;
+      if (current) {
+        return current;
+      }
 
       return {
-        x: Math.min(Math.max(rawX, margin), Math.max(margin, viewportSize.width - width - margin)),
-        y: Math.min(Math.max(rawY, topOffset), Math.max(topOffset, viewportSize.height - height - margin)),
-        width,
-        height,
+        x: Math.max(18, rect.left + 12),
+        y: 108,
+        width: Math.max(rect.width * 0.9, 680),
+        height: Math.max(Math.min(rect.height * 0.82, viewportSize.height * 0.68), 560),
       };
     });
   }, [viewportSize.height, viewportSize.width]);

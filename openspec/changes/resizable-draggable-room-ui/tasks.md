@@ -43,3 +43,5 @@
 - [x] 6.8 Add Playwright interaction and screenshot evidence for board drag/resize, event-feed drag/resize, event-feed collapse, top guidance banner, and rules guide panel.
 - [x] 6.9 Add persisted docking presets, safer initial placement, and stronger minimum usable-size calibration for the floating board and event-feed windows.
 - [x] 6.10 Add an interaction-lightweight mode during drag/resize and strengthen Playwright assertions for initial docking, growth, and minimum-size clamping.
+- [x] 6.11 Remove viewport bounds for the floating board and event-feed windows so they can be dragged and resized beyond the current screen while still enforcing minimum size.
+- [x] 6.12 Add in-interaction size HUD, snap feedback, and boundary overflow hints, then verify them in Playwright during live drag/resize gestures.

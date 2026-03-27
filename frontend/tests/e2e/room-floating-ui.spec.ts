@@ -122,6 +122,29 @@ async function dragBottomRightCorner(page: Page, selector: string, deltaX: numbe
   await page.mouse.up();
 }
 
+async function beginPointerDrag(page: Page, selector: string, anchor: "toolbar" | "bottom-right" = "toolbar") {
+  const box = await page.locator(selector).boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+
+  const point = anchor === "bottom-right"
+    ? { x: box.x + box.width - 8, y: box.y + box.height - 8 }
+    : { x: box.x + Math.min(72, box.width * 0.26), y: box.y + Math.min(28, box.height * 0.5) };
+
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+}
+
+async function movePointerBy(page: Page, deltaX: number, deltaY: number) {
+  await page.mouse.move(deltaX, deltaY, { steps: 18 });
+}
+
+async function releasePointer(page: Page) {
+  await page.mouse.up();
+}
+
 async function attachScreenshot(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(name, {
     body: await page.screenshot({ fullPage: true }),
@@ -157,6 +180,12 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   expect(boardBefore?.x ?? 0).toBeLessThan(120);
   expect(boardBefore?.y ?? 0).toBeLessThan(160);
 
+  await beginPointerDrag(page, '[data-testid="board-window-handle"]');
+  await page.mouse.move((boardBefore?.x ?? 0) + 32, (boardBefore?.y ?? 0) + 18, { steps: 8 });
+  await expect(page.getByTestId("board-window-hud")).toBeVisible();
+  await expect(page.getByTestId("board-window-hud")).toContainText(/吸附到/);
+  await releasePointer(page);
+
   await dragLocator(page, '.board-window__toolbar', 180, 96);
   await dragBottomRightCorner(page, '[data-testid="board-window-resize-bottom-right"]', 120, 140);
 
@@ -176,6 +205,13 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
     ),
   );
   expect(boardEscapesDockBounds).toBe(true);
+  await beginPointerDrag(page, '[data-testid="board-window-resize-bottom-right"]', "bottom-right");
+  await page.mouse.move((boardAfter?.x ?? 0) + (boardAfter?.width ?? 0) + 520, (boardAfter?.y ?? 0) + (boardAfter?.height ?? 0) + 280, { steps: 16 });
+  await expect(page.getByTestId("board-window-hud")).toBeVisible();
+  await expect(page.getByTestId("board-window-hud")).toContainText("已越出右侧");
+  await releasePointer(page);
+  const boardAfterOversize = await boardWindow.boundingBox();
+  expect(boardAfterOversize ? boardAfterOversize.width : 0).toBeGreaterThan(1440);
   await dragBottomRightCorner(page, '[data-testid="board-window-resize-bottom-right"]', -2000, -2000);
   const boardAfterShrink = await boardWindow.boundingBox();
   expect(boardAfterShrink).not.toBeNull();
@@ -185,6 +221,11 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   const feedBefore = await eventFeedWindow.boundingBox();
   expect(feedBefore?.x ?? 0).toBeGreaterThan(760);
   expect(feedBefore?.y ?? 0).toBeLessThan(180);
+  await beginPointerDrag(page, '[data-testid="floating-event-feed-handle"]');
+  await page.mouse.move((feedBefore?.x ?? 0) - 8, (feedBefore?.y ?? 0) + 18, { steps: 8 });
+  await expect(page.getByTestId("floating-event-feed-hud")).toBeVisible();
+  await expect(page.getByTestId("floating-event-feed-hud")).toContainText(/吸附到/);
+  await releasePointer(page);
   await dragLocator(page, '[data-testid="floating-event-feed-handle"]', -220, 72);
   await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', 120, 120);
   const feedAfterResize = await eventFeedWindow.boundingBox();
@@ -193,11 +234,6 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   expect(feedAfterResize && feedBefore ? feedAfterResize.y - feedBefore.y : 0).toBeGreaterThan(40);
   expect(feedAfterResize && feedBefore ? feedAfterResize.width - feedBefore.width : 0).toBeGreaterThan(80);
   expect(feedAfterResize && feedBefore ? feedAfterResize.height - feedBefore.height : 0).toBeGreaterThan(80);
-  await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', -2000, -2000);
-  const feedAfterShrink = await eventFeedWindow.boundingBox();
-  expect(feedAfterShrink).not.toBeNull();
-  expect(feedAfterShrink ? feedAfterShrink.width : 0).toBeGreaterThanOrEqual(340);
-  expect(feedAfterShrink ? feedAfterShrink.height : 0).toBeGreaterThanOrEqual(390);
 
   await page.getByTestId("floating-event-feed-intro-toggle").click();
   await expect(page.getByTestId("floating-event-feed-intro")).toBeVisible();
@@ -212,6 +248,19 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
   expect(listExpanded).not.toBeNull();
   expect(listCollapsed).not.toBeNull();
   expect(listCollapsed && listExpanded ? listExpanded.y - listCollapsed.y : 0).toBeGreaterThan(20);
+
+  await beginPointerDrag(page, '[data-testid="event-feed-resize-bottom-right"]', "bottom-right");
+  await page.mouse.move((feedAfterResize?.x ?? 0) + (feedAfterResize?.width ?? 0) + 420, (feedAfterResize?.y ?? 0) + (feedAfterResize?.height ?? 0) + 220, { steps: 16 });
+  await expect(page.getByTestId("floating-event-feed-hud")).toBeVisible();
+  await expect(page.getByTestId("floating-event-feed-hud")).toContainText("已越出右侧");
+  await releasePointer(page);
+  const feedAfterOversize = await eventFeedWindow.boundingBox();
+  expect(feedAfterOversize ? feedAfterOversize.width : 0).toBeGreaterThan(900);
+  await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', -2000, -2000);
+  const feedAfterShrink = await eventFeedWindow.boundingBox();
+  expect(feedAfterShrink).not.toBeNull();
+  expect(feedAfterShrink ? feedAfterShrink.width : 0).toBeGreaterThanOrEqual(340);
+  expect(feedAfterShrink ? feedAfterShrink.height : 0).toBeGreaterThanOrEqual(390);
 
   await expect(eventFeedSurface).toHaveAttribute("data-density", /compact|normal|large/);
 

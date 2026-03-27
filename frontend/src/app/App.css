@@ -2046,6 +2046,54 @@ body {
   bottom: 6px;
 }
 
+.floating-window-hud {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+  min-width: 148px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(7, 15, 13, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 24px rgba(7, 15, 13, 0.2);
+  color: #f6ecd4;
+  pointer-events: none;
+}
+
+.floating-window-hud strong {
+  font-size: 0.94rem;
+  line-height: 1.1;
+}
+
+.floating-window-hud span {
+  color: rgba(246, 236, 212, 0.8);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.floating-snap-guide {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(229, 191, 105, 0.9);
+  box-shadow: 0 0 0 1px rgba(255, 240, 196, 0.26), 0 0 24px rgba(229, 191, 105, 0.24);
+}
+
+.floating-snap-guide--vertical {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+
+.floating-snap-guide--horizontal {
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
 .board-resizable-wrap .react-resizable-handle::after,
 .floating-event-feed-shell .react-resizable-handle::after {
   content: "";
@@ -2112,6 +2160,11 @@ body {
   border: 1px solid rgba(150, 189, 212, 0.18);
   box-shadow: 0 18px 36px rgba(8, 16, 20, 0.28);
   backdrop-filter: blur(18px) saturate(150%);
+}
+
+.floating-event-feed-shell--interacting .floating-window-hud,
+.board-resizable-wrap--interacting .floating-window-hud {
+  background: rgba(7, 15, 13, 0.92);
 }
 
 .floating-event-feed__handle {
