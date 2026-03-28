@@ -55,10 +55,10 @@ export function DraggableEventFeed({
   const rndRef = useRef<Rnd | null>(null);
   const scrollRef = useRef<HTMLOListElement>(null);
   const [isInteracting, setIsInteracting] = useState(false);
-  const dragHandleRef = useRef<HTMLDivElement | null>(null);
+  const surfaceRef = useRef<HTMLElement | null>(null);
 
   const feed = buildRecentEventFeed(events, preferences);
-  
+
   const chromeHeight = FEED_HEADER_HEIGHT
     + (isIntroOpen ? FEED_INTRO_HEIGHT : 0)
     + (isSettingsOpen ? FEED_SETTINGS_HEIGHT : 0)
@@ -144,7 +144,7 @@ export function DraggableEventFeed({
 
   useThirdPartyLongPressDrag({
     enabled: dragPreferences.dragMode === "third-party-hold",
-    handleRef: dragHandleRef,
+    surfaceRef,
     rndRef,
     frame,
     onFocus,
@@ -230,25 +230,21 @@ export function DraggableEventFeed({
       }}
       style={{ position: "fixed", zIndex }}
     >
-      <section 
-        className={`floating-event-feed__surface floating-event-feed__surface--${styleDensity}`} 
-        data-testid="floating-event-feed-surface" 
-        data-density={styleDensity} 
-        data-focused={isFocused ? "true" : "false"} 
+      <section
+        ref={surfaceRef}
+        className={`floating-event-feed__surface floating-event-feed__surface--${styleDensity}`}
+        data-testid="floating-event-feed-surface"
+        data-density={styleDensity}
+        data-focused={isFocused ? "true" : "false"}
         style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}
       >
-        <div 
-          className="floating-event-feed__handle" 
-          data-testid="floating-event-feed-handle" 
+        <div
+          className="floating-event-feed__handle"
+          data-testid="floating-event-feed-handle"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', flexShrink: 0 }}
         >
-          <div className="floating-event-feed__title-group floating-event-feed__drag-hotspot" data-testid="floating-event-feed-drag-hotspot" ref={dragHandleRef} style={{ margin: 0, padding: 0 }}>
+          <div className="floating-event-feed__title-group" data-testid="floating-event-feed-drag-hotspot" style={{ margin: 0, padding: 0 }}>
             <p className="shell__eyebrow" style={{ margin: 0, fontWeight: 'bold' }}>牌局纪事</p>
-            <span>
-              {dragPreferences.dragMode === "third-party-hold"
-                ? `第三方长按拖拽 · 长按 ${dragPreferences.holdDelayMs}ms 后拖动`
-                : "原生即时拖拽 · 按下后立即开始拖动"}
-            </span>
           </div>
           <div className="floating-event-feed__toolbar-actions" style={{ display: 'flex', gap: '8px' }}>
             <button className="floating-event-feed__settings-toggle" data-testid="floating-event-feed-intro-toggle" type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => setIsIntroOpen((current) => !current)}>
@@ -353,11 +349,6 @@ export function DraggableEventFeed({
                   {feed.hasHiddenEvents
                     ? `已折叠更早 ${feed.hiddenCount} 条历史事件`
                     : "当前保留全部历史事件"}
-                </span>
-                <span>
-                  {dragPreferences.dragMode === "third-party-hold"
-                    ? "当前使用第三方长按拖拽"
-                    : "当前使用原生即时拖拽"}
                 </span>
               </div>
             </div>

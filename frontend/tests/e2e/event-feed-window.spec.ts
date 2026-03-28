@@ -153,7 +153,7 @@ test("event feed window supports all-history and custom-max retention with nativ
   await expect(eventItems).toHaveCount(12);
 
   const beforeDrag = await eventFeedWindow.boundingBox();
-  await longPressDrag(page, '[data-testid="floating-event-feed-drag-hotspot"]', -180, 80);
+  await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', -180, 80);
   const afterDrag = await eventFeedWindow.boundingBox();
   expect(afterDrag && beforeDrag ? afterDrag.x < beforeDrag.x - 120 : false).toBe(true);
   expect(afterDrag && beforeDrag ? afterDrag.y > beforeDrag.y + 40 : false).toBe(true);

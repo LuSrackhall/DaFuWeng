@@ -116,18 +116,18 @@ func loadFixedDiceRoll() ([2]int, bool) {
 }
 
 type Player struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Cash       int      `json:"cash"`
-	Position   int      `json:"position"`
-	Properties []string `json:"properties"`
-	MortgagedProperties []string `json:"mortgagedProperties,omitempty"`
+	ID                   string         `json:"id"`
+	Name                 string         `json:"name"`
+	Cash                 int            `json:"cash"`
+	Position             int            `json:"position"`
+	Properties           []string       `json:"properties"`
+	MortgagedProperties  []string       `json:"mortgagedProperties,omitempty"`
 	PropertyImprovements map[string]int `json:"propertyImprovements,omitempty"`
-	InJail     bool     `json:"inJail,omitempty"`
-	JailTurnsServed int  `json:"jailTurnsServed,omitempty"`
-	HeldCardIDs []string `json:"heldCardIds,omitempty"`
-	IsBankrupt bool     `json:"isBankrupt,omitempty"`
-	Ready      bool     `json:"ready,omitempty"`
+	InJail               bool           `json:"inJail,omitempty"`
+	JailTurnsServed      int            `json:"jailTurnsServed,omitempty"`
+	HeldCardIDs          []string       `json:"heldCardIds,omitempty"`
+	IsBankrupt           bool           `json:"isBankrupt,omitempty"`
+	Ready                bool           `json:"ready,omitempty"`
 }
 
 type PendingProperty struct {
@@ -138,37 +138,37 @@ type PendingProperty struct {
 }
 
 type PendingAuction struct {
-	TileID           string   `json:"tileId"`
-	TileIndex        int      `json:"tileIndex"`
-	Label            string   `json:"label"`
-	Price            int      `json:"price"`
-	InitiatorPlayerID string  `json:"initiatorPlayerId"`
-	HighestBid       int      `json:"highestBid"`
-	HighestBidderID  string   `json:"highestBidderId,omitempty"`
-	PassedPlayerIDs  []string `json:"passedPlayerIds"`
+	TileID            string   `json:"tileId"`
+	TileIndex         int      `json:"tileIndex"`
+	Label             string   `json:"label"`
+	Price             int      `json:"price"`
+	InitiatorPlayerID string   `json:"initiatorPlayerId"`
+	HighestBid        int      `json:"highestBid"`
+	HighestBidderID   string   `json:"highestBidderId,omitempty"`
+	PassedPlayerIDs   []string `json:"passedPlayerIds"`
 }
 
 type PendingPayment struct {
-	Amount          int    `json:"amount"`
-	Reason          string `json:"reason"`
-	CreditorKind    string `json:"creditorKind"`
+	Amount           int    `json:"amount"`
+	Reason           string `json:"reason"`
+	CreditorKind     string `json:"creditorKind"`
 	CreditorPlayerID string `json:"creditorPlayerId,omitempty"`
-	SourceTileID    string `json:"sourceTileId,omitempty"`
-	SourceTileLabel string `json:"sourceTileLabel,omitempty"`
-	ResumeRoll      [2]int `json:"resumeRoll,omitempty"`
-	ReleaseFromJail bool   `json:"releaseFromJail,omitempty"`
+	SourceTileID     string `json:"sourceTileId,omitempty"`
+	SourceTileLabel  string `json:"sourceTileLabel,omitempty"`
+	ResumeRoll       [2]int `json:"resumeRoll,omitempty"`
+	ReleaseFromJail  bool   `json:"releaseFromJail,omitempty"`
 }
 
 type PendingTrade struct {
-	ProposerPlayerID string   `json:"proposerPlayerId"`
-	CounterpartyPlayerID string `json:"counterpartyPlayerId"`
-	OfferedCash      int      `json:"offeredCash"`
-	RequestedCash    int      `json:"requestedCash"`
-	OfferedTileIDs   []string `json:"offeredTileIds"`
-	RequestedTileIDs []string `json:"requestedTileIds"`
-	OfferedCardIDs   []string `json:"offeredCardIds"`
-	RequestedCardIDs []string `json:"requestedCardIds"`
-	SnapshotVersion  int      `json:"snapshotVersion"`
+	ProposerPlayerID     string   `json:"proposerPlayerId"`
+	CounterpartyPlayerID string   `json:"counterpartyPlayerId"`
+	OfferedCash          int      `json:"offeredCash"`
+	RequestedCash        int      `json:"requestedCash"`
+	OfferedTileIDs       []string `json:"offeredTileIds"`
+	RequestedTileIDs     []string `json:"requestedTileIds"`
+	OfferedCardIDs       []string `json:"offeredCardIds"`
+	RequestedCardIDs     []string `json:"requestedCardIds"`
+	SnapshotVersion      int      `json:"snapshotVersion"`
 }
 
 type cardDeckState struct {
@@ -177,55 +177,55 @@ type cardDeckState struct {
 }
 
 type cardDefinition struct {
-	ID         string
-	DeckKind   string
-	Title      string
-	EffectType string
-	Amount     int
-	TargetIndex int
-	RelativeMove int
+	ID             string
+	DeckKind       string
+	Title          string
+	EffectType     string
+	Amount         int
+	TargetIndex    int
+	RelativeMove   int
 	PerLevelAmount int
 }
 
 type Event struct {
-	ID              string `json:"id"`
-	Type            string `json:"type"`
-	Sequence        int    `json:"sequence"`
-	SnapshotVersion int    `json:"snapshotVersion"`
-	Summary         string `json:"summary"`
-	RoomState       string `json:"roomState,omitempty"`
-	PlayerID        string `json:"playerId,omitempty"`
-	OwnerPlayerID   string `json:"ownerPlayerId,omitempty"`
-	NextPlayerID    string `json:"nextPlayerId,omitempty"`
-	TileID          string `json:"tileId,omitempty"`
-	TileIndex       int    `json:"tileIndex,omitempty"`
-	TileLabel       string `json:"tileLabel,omitempty"`
-	TilePrice       int    `json:"tilePrice,omitempty"`
-	Amount          int    `json:"amount,omitempty"`
-	PlayerPosition  int    `json:"playerPosition,omitempty"`
-	CashAfter       int    `json:"cashAfter,omitempty"`
-	OwnerCashAfter  int    `json:"ownerCashAfter,omitempty"`
-	DeckKind        string `json:"deckKind,omitempty"`
-	CardID          string `json:"cardId,omitempty"`
-	CardTitle       string `json:"cardTitle,omitempty"`
-	CardDisposition string `json:"cardDisposition,omitempty"`
-	ReleaseMethod   string `json:"releaseMethod,omitempty"`
-	FailedAttemptCount int `json:"failedAttemptCount,omitempty"`
-	ImprovementLevel int `json:"improvementLevel,omitempty"`
-	OfferedCash int `json:"offeredCash,omitempty"`
-	RequestedCash int `json:"requestedCash,omitempty"`
-	OfferedTileIDs []string `json:"offeredTileIds,omitempty"`
-	RequestedTileIDs []string `json:"requestedTileIds,omitempty"`
-	OfferedCardIDs []string `json:"offeredCardIds,omitempty"`
-	RequestedCardIDs []string `json:"requestedCardIds,omitempty"`
-	TradeSnapshotVersion int `json:"tradeSnapshotVersion,omitempty"`
-	TransferredPropertyIDs []string `json:"transferredPropertyIds,omitempty"`
-	TransferredMortgagedPropertyIDs []string `json:"transferredMortgagedPropertyIds,omitempty"`
-	TransferredCardIDs []string `json:"transferredCardIds,omitempty"`
-	ReturnedCardIDs []string `json:"returnedCardIds,omitempty"`
-	ClearedImprovementTileIDs []string `json:"clearedImprovementTileIds,omitempty"`
-	CashAfterByPlayer map[string]int `json:"cashAfterByPlayer,omitempty"`
-	LastRoll        [2]int `json:"lastRoll,omitempty"`
+	ID                              string         `json:"id"`
+	Type                            string         `json:"type"`
+	Sequence                        int            `json:"sequence"`
+	SnapshotVersion                 int            `json:"snapshotVersion"`
+	Summary                         string         `json:"summary"`
+	RoomState                       string         `json:"roomState,omitempty"`
+	PlayerID                        string         `json:"playerId,omitempty"`
+	OwnerPlayerID                   string         `json:"ownerPlayerId,omitempty"`
+	NextPlayerID                    string         `json:"nextPlayerId,omitempty"`
+	TileID                          string         `json:"tileId,omitempty"`
+	TileIndex                       int            `json:"tileIndex,omitempty"`
+	TileLabel                       string         `json:"tileLabel,omitempty"`
+	TilePrice                       int            `json:"tilePrice,omitempty"`
+	Amount                          int            `json:"amount,omitempty"`
+	PlayerPosition                  int            `json:"playerPosition,omitempty"`
+	CashAfter                       int            `json:"cashAfter,omitempty"`
+	OwnerCashAfter                  int            `json:"ownerCashAfter,omitempty"`
+	DeckKind                        string         `json:"deckKind,omitempty"`
+	CardID                          string         `json:"cardId,omitempty"`
+	CardTitle                       string         `json:"cardTitle,omitempty"`
+	CardDisposition                 string         `json:"cardDisposition,omitempty"`
+	ReleaseMethod                   string         `json:"releaseMethod,omitempty"`
+	FailedAttemptCount              int            `json:"failedAttemptCount,omitempty"`
+	ImprovementLevel                int            `json:"improvementLevel,omitempty"`
+	OfferedCash                     int            `json:"offeredCash,omitempty"`
+	RequestedCash                   int            `json:"requestedCash,omitempty"`
+	OfferedTileIDs                  []string       `json:"offeredTileIds,omitempty"`
+	RequestedTileIDs                []string       `json:"requestedTileIds,omitempty"`
+	OfferedCardIDs                  []string       `json:"offeredCardIds,omitempty"`
+	RequestedCardIDs                []string       `json:"requestedCardIds,omitempty"`
+	TradeSnapshotVersion            int            `json:"tradeSnapshotVersion,omitempty"`
+	TransferredPropertyIDs          []string       `json:"transferredPropertyIds,omitempty"`
+	TransferredMortgagedPropertyIDs []string       `json:"transferredMortgagedPropertyIds,omitempty"`
+	TransferredCardIDs              []string       `json:"transferredCardIds,omitempty"`
+	ReturnedCardIDs                 []string       `json:"returnedCardIds,omitempty"`
+	ClearedImprovementTileIDs       []string       `json:"clearedImprovementTileIds,omitempty"`
+	CashAfterByPlayer               map[string]int `json:"cashAfterByPlayer,omitempty"`
+	LastRoll                        [2]int         `json:"lastRoll,omitempty"`
 }
 
 type RoomResponse struct {
@@ -263,8 +263,8 @@ type RoomPlayerSession struct {
 }
 
 type RoomEntryResponse struct {
-	Snapshot RoomResponse       `json:"snapshot"`
-	Session  RoomPlayerSession  `json:"session"`
+	Snapshot RoomResponse      `json:"snapshot"`
+	Session  RoomPlayerSession `json:"session"`
 }
 
 type roomStreamEnvelope struct {
@@ -364,41 +364,41 @@ type roomRecord struct {
 }
 
 type eventDraft struct {
-	Type           string
-	Summary        string
-	RoomState      string
-	PlayerID       string
-	OwnerPlayerID  string
-	NextPlayerID   string
-	TileID         string
-	TileIndex      int
-	TileLabel      string
-	TilePrice      int
-	Amount         int
-	PlayerPosition int
-	CashAfter      int
-	OwnerCashAfter int
-	DeckKind       string
-	CardID         string
-	CardTitle      string
-	CardDisposition string
-	ReleaseMethod  string
-	FailedAttemptCount int
-	ImprovementLevel int
-	OfferedCash int
-	RequestedCash int
-	OfferedTileIDs []string
-	RequestedTileIDs []string
-	OfferedCardIDs []string
-	RequestedCardIDs []string
-	TradeSnapshotVersion int
-	TransferredPropertyIDs []string
+	Type                            string
+	Summary                         string
+	RoomState                       string
+	PlayerID                        string
+	OwnerPlayerID                   string
+	NextPlayerID                    string
+	TileID                          string
+	TileIndex                       int
+	TileLabel                       string
+	TilePrice                       int
+	Amount                          int
+	PlayerPosition                  int
+	CashAfter                       int
+	OwnerCashAfter                  int
+	DeckKind                        string
+	CardID                          string
+	CardTitle                       string
+	CardDisposition                 string
+	ReleaseMethod                   string
+	FailedAttemptCount              int
+	ImprovementLevel                int
+	OfferedCash                     int
+	RequestedCash                   int
+	OfferedTileIDs                  []string
+	RequestedTileIDs                []string
+	OfferedCardIDs                  []string
+	RequestedCardIDs                []string
+	TradeSnapshotVersion            int
+	TransferredPropertyIDs          []string
 	TransferredMortgagedPropertyIDs []string
-	TransferredCardIDs []string
-	ReturnedCardIDs []string
-	ClearedImprovementTileIDs []string
-	CashAfterByPlayer map[string]int
-	LastRoll       [2]int
+	TransferredCardIDs              []string
+	ReturnedCardIDs                 []string
+	ClearedImprovementTileIDs       []string
+	CashAfterByPlayer               map[string]int
+	LastRoll                        [2]int
 }
 
 var chanceDeckOrder = []string{"chance-jail-card", "chance-go-to-jail", "chance-advance-airport", "chance-bonus-50", "chance-move-back-three", "chance-nearest-railway", "chance-pay-bank-75"}
@@ -406,20 +406,20 @@ var chanceDeckOrder = []string{"chance-jail-card", "chance-go-to-jail", "chance-
 var communityDeckOrder = []string{"community-bonus-100", "community-jail-card", "community-go-start", "community-bonus-50", "community-repair-fee", "community-player-count-bonus", "community-pay-bank-75"}
 
 var cardDefinitions = map[string]cardDefinition{
-	"chance-jail-card": {ID: "chance-jail-card", DeckKind: "chance", Title: "保释特赦", EffectType: "held-jail-card"},
-	"chance-go-to-jail": {ID: "chance-go-to-jail", DeckKind: "chance", Title: "立即入狱", EffectType: "go-to-jail"},
-	"chance-advance-airport": {ID: "chance-advance-airport", DeckKind: "chance", Title: "前往机场路", EffectType: "move", TargetIndex: 34},
-	"chance-bonus-50": {ID: "chance-bonus-50", DeckKind: "chance", Title: "意外收入", EffectType: "gain-cash", Amount: 50},
-	"chance-move-back-three": {ID: "chance-move-back-three", DeckKind: "chance", Title: "后退三格", EffectType: "relative-move", RelativeMove: -3},
-	"chance-nearest-railway": {ID: "chance-nearest-railway", DeckKind: "chance", Title: "前往最近车站", EffectType: "nearest-railway"},
-	"chance-pay-bank-75": {ID: "chance-pay-bank-75", DeckKind: "chance", Title: "缴纳服务费", EffectType: "lose-cash", Amount: 75},
-	"community-bonus-100": {ID: "community-bonus-100", DeckKind: "community", Title: "年终分红", EffectType: "gain-cash", Amount: 100},
-	"community-jail-card": {ID: "community-jail-card", DeckKind: "community", Title: "免费出狱", EffectType: "held-jail-card"},
-	"community-go-start": {ID: "community-go-start", DeckKind: "community", Title: "回到起点", EffectType: "move-to-start", Amount: 200, TargetIndex: 0},
-	"community-bonus-50": {ID: "community-bonus-50", DeckKind: "community", Title: "银行返利", EffectType: "gain-cash", Amount: 50},
-	"community-repair-fee": {ID: "community-repair-fee", DeckKind: "community", Title: "房屋维修", EffectType: "repair-fee", PerLevelAmount: 25},
+	"chance-jail-card":             {ID: "chance-jail-card", DeckKind: "chance", Title: "保释特赦", EffectType: "held-jail-card"},
+	"chance-go-to-jail":            {ID: "chance-go-to-jail", DeckKind: "chance", Title: "立即入狱", EffectType: "go-to-jail"},
+	"chance-advance-airport":       {ID: "chance-advance-airport", DeckKind: "chance", Title: "前往机场路", EffectType: "move", TargetIndex: 34},
+	"chance-bonus-50":              {ID: "chance-bonus-50", DeckKind: "chance", Title: "意外收入", EffectType: "gain-cash", Amount: 50},
+	"chance-move-back-three":       {ID: "chance-move-back-three", DeckKind: "chance", Title: "后退三格", EffectType: "relative-move", RelativeMove: -3},
+	"chance-nearest-railway":       {ID: "chance-nearest-railway", DeckKind: "chance", Title: "前往最近车站", EffectType: "nearest-railway"},
+	"chance-pay-bank-75":           {ID: "chance-pay-bank-75", DeckKind: "chance", Title: "缴纳服务费", EffectType: "lose-cash", Amount: 75},
+	"community-bonus-100":          {ID: "community-bonus-100", DeckKind: "community", Title: "年终分红", EffectType: "gain-cash", Amount: 100},
+	"community-jail-card":          {ID: "community-jail-card", DeckKind: "community", Title: "免费出狱", EffectType: "held-jail-card"},
+	"community-go-start":           {ID: "community-go-start", DeckKind: "community", Title: "回到起点", EffectType: "move-to-start", Amount: 200, TargetIndex: 0},
+	"community-bonus-50":           {ID: "community-bonus-50", DeckKind: "community", Title: "银行返利", EffectType: "gain-cash", Amount: 50},
+	"community-repair-fee":         {ID: "community-repair-fee", DeckKind: "community", Title: "房屋维修", EffectType: "repair-fee", PerLevelAmount: 25},
 	"community-player-count-bonus": {ID: "community-player-count-bonus", DeckKind: "community", Title: "社群奖励", EffectType: "gain-per-opponent", Amount: 25},
-	"community-pay-bank-75": {ID: "community-pay-bank-75", DeckKind: "community", Title: "支付管理费", EffectType: "lose-cash", Amount: 75},
+	"community-pay-bank-75":        {ID: "community-pay-bank-75", DeckKind: "community", Title: "支付管理费", EffectType: "lose-cash", Amount: 75},
 }
 
 var developmentRules = map[string]developmentRule{
@@ -448,13 +448,13 @@ var developmentRules = map[string]developmentRule{
 }
 
 type Service struct {
-	mu           sync.Mutex
-	streamMu     sync.Mutex
-	store        *pocketbase.Client
-	diceRoller   DiceRoller
-	nextRoomID   int
-	nextPlayerID int
-	nextStreamID int
+	mu                sync.Mutex
+	streamMu          sync.Mutex
+	store             *pocketbase.Client
+	diceRoller        DiceRoller
+	nextRoomID        int
+	nextPlayerID      int
+	nextStreamID      int
 	streamSubscribers map[string]map[int]chan roomStreamEnvelope
 }
 
@@ -464,10 +464,10 @@ func NewService(store *pocketbase.Client) *Service {
 
 func NewServiceWithDependencies(store *pocketbase.Client, diceRoller DiceRoller) *Service {
 	service := &Service{
-		store:        store,
-		diceRoller:   diceRoller,
-		nextRoomID:   1,
-		nextPlayerID: 1,
+		store:             store,
+		diceRoller:        diceRoller,
+		nextRoomID:        1,
+		nextPlayerID:      1,
 		streamSubscribers: make(map[string]map[int]chan roomStreamEnvelope),
 	}
 	service.syncCounters()
@@ -1316,11 +1316,11 @@ func (service *Service) payJailFine(roomID string, playerID string, idempotencyK
 		room.TurnState = "awaiting-roll"
 		room.PendingAction = "等待当前玩家掷骰"
 		service.commitRoomMutation(&room, []eventDraft{{
-			Type:      "jail-fine-paid",
-			Summary:   fmt.Sprintf("%s 支付了 %d 罚金并离开监狱。", room.Players[playerIndex].Name, jailFine),
-			PlayerID:  playerID,
-			Amount:    jailFine,
-			CashAfter: room.Players[playerIndex].Cash,
+			Type:          "jail-fine-paid",
+			Summary:       fmt.Sprintf("%s 支付了 %d 罚金并离开监狱。", room.Players[playerIndex].Name, jailFine),
+			PlayerID:      playerID,
+			Amount:        jailFine,
+			CashAfter:     room.Players[playerIndex].Cash,
 			ReleaseMethod: "fine",
 		}})
 	}
@@ -1371,10 +1371,10 @@ func (service *Service) attemptJailRoll(roomID string, playerID string, idempote
 	dice := service.diceRoller.Roll()
 	room.LastRoll = dice
 	drafts := []eventDraft{{
-		Type:      "jail-roll-attempted",
-		Summary:   fmt.Sprintf("%s 尝试掷骰出狱，结果 %d + %d。", room.Players[playerIndex].Name, dice[0], dice[1]),
-		PlayerID:  playerID,
-		LastRoll:  dice,
+		Type:               "jail-roll-attempted",
+		Summary:            fmt.Sprintf("%s 尝试掷骰出狱，结果 %d + %d。", room.Players[playerIndex].Name, dice[0], dice[1]),
+		PlayerID:           playerID,
+		LastRoll:           dice,
 		FailedAttemptCount: room.Players[playerIndex].JailTurnsServed,
 	}}
 
@@ -1596,17 +1596,17 @@ func (service *Service) declareBankruptcy(roomID string, playerID string, idempo
 	room.Players[playerIndex].IsBankrupt = true
 	room.PendingPayment = nil
 	drafts := []eventDraft{{
-		Type:      "bankruptcy-declared",
-		Summary:   bankruptcySummary(room.Players[playerIndex].Name, creditorPlayerID, room.playerName(creditorPlayerID)),
-		PlayerID:  playerID,
-		OwnerPlayerID: creditorPlayerID,
-		CashAfter: 0,
-		OwnerCashAfter: creditorCashAfter,
-		TransferredPropertyIDs: transferredPropertyIDs,
+		Type:                            "bankruptcy-declared",
+		Summary:                         bankruptcySummary(room.Players[playerIndex].Name, creditorPlayerID, room.playerName(creditorPlayerID)),
+		PlayerID:                        playerID,
+		OwnerPlayerID:                   creditorPlayerID,
+		CashAfter:                       0,
+		OwnerCashAfter:                  creditorCashAfter,
+		TransferredPropertyIDs:          transferredPropertyIDs,
 		TransferredMortgagedPropertyIDs: transferredMortgagedPropertyIDs,
-		TransferredCardIDs: transferredCardIDs,
-		ReturnedCardIDs: returnedCardIDs,
-		ClearedImprovementTileIDs: clearedImprovementTileIDs,
+		TransferredCardIDs:              transferredCardIDs,
+		ReturnedCardIDs:                 returnedCardIDs,
+		ClearedImprovementTileIDs:       clearedImprovementTileIDs,
 	}}
 
 	if room.countActivePlayers() <= 1 {
@@ -1793,15 +1793,15 @@ func (service *Service) proposeTrade(roomID string, payload TradeProposalRequest
 	}
 
 	room.PendingTrade = &PendingTrade{
-		ProposerPlayerID: playerID,
+		ProposerPlayerID:     playerID,
 		CounterpartyPlayerID: counterpartyPlayerID,
-		OfferedCash: payload.OfferedCash,
-		RequestedCash: payload.RequestedCash,
-		OfferedTileIDs: normalizeIDs(payload.OfferedTileIDs),
-		RequestedTileIDs: normalizeIDs(payload.RequestedTileIDs),
-		OfferedCardIDs: normalizeIDs(payload.OfferedCardIDs),
-		RequestedCardIDs: normalizeIDs(payload.RequestedCardIDs),
-		SnapshotVersion: room.SnapshotVersion,
+		OfferedCash:          payload.OfferedCash,
+		RequestedCash:        payload.RequestedCash,
+		OfferedTileIDs:       normalizeIDs(payload.OfferedTileIDs),
+		RequestedTileIDs:     normalizeIDs(payload.RequestedTileIDs),
+		OfferedCardIDs:       normalizeIDs(payload.OfferedCardIDs),
+		RequestedCardIDs:     normalizeIDs(payload.RequestedCardIDs),
+		SnapshotVersion:      room.SnapshotVersion,
 	}
 	room.TurnState = "awaiting-trade-response"
 	room.CurrentTurnPlayerID = counterpartyPlayerID
@@ -2141,89 +2141,88 @@ func (service *Service) commitRoomMutation(room *roomRecord, drafts []eventDraft
 	for _, draft := range drafts {
 		room.EventSequence++
 		event := Event{
-			ID:              fmt.Sprintf("evt-%s-%03d", room.RoomID, room.EventSequence),
-			Type:            draft.Type,
-			Sequence:        room.EventSequence,
-			SnapshotVersion: room.SnapshotVersion,
-			Summary:         draft.Summary,
-			RoomState:       draft.RoomState,
-			PlayerID:        draft.PlayerID,
-			OwnerPlayerID:   draft.OwnerPlayerID,
-			NextPlayerID:    draft.NextPlayerID,
-			TileID:          draft.TileID,
-			TileIndex:       draft.TileIndex,
-			TileLabel:       draft.TileLabel,
-			TilePrice:       draft.TilePrice,
-			Amount:          draft.Amount,
-			PlayerPosition:  draft.PlayerPosition,
-			CashAfter:       draft.CashAfter,
-			OwnerCashAfter:  draft.OwnerCashAfter,
-			DeckKind:        draft.DeckKind,
-			CardID:          draft.CardID,
-			CardTitle:       draft.CardTitle,
-			CardDisposition: draft.CardDisposition,
-			ReleaseMethod:   draft.ReleaseMethod,
-			FailedAttemptCount: draft.FailedAttemptCount,
-			ImprovementLevel: draft.ImprovementLevel,
-			OfferedCash: draft.OfferedCash,
-			RequestedCash: draft.RequestedCash,
-			OfferedTileIDs: copyStringSlice(draft.OfferedTileIDs),
-			RequestedTileIDs: copyStringSlice(draft.RequestedTileIDs),
-			OfferedCardIDs: copyStringSlice(draft.OfferedCardIDs),
-			RequestedCardIDs: copyStringSlice(draft.RequestedCardIDs),
-			TradeSnapshotVersion: draft.TradeSnapshotVersion,
-			TransferredPropertyIDs: copyStringSlice(draft.TransferredPropertyIDs),
+			ID:                              fmt.Sprintf("evt-%s-%03d", room.RoomID, room.EventSequence),
+			Type:                            draft.Type,
+			Sequence:                        room.EventSequence,
+			SnapshotVersion:                 room.SnapshotVersion,
+			Summary:                         draft.Summary,
+			RoomState:                       draft.RoomState,
+			PlayerID:                        draft.PlayerID,
+			OwnerPlayerID:                   draft.OwnerPlayerID,
+			NextPlayerID:                    draft.NextPlayerID,
+			TileID:                          draft.TileID,
+			TileIndex:                       draft.TileIndex,
+			TileLabel:                       draft.TileLabel,
+			TilePrice:                       draft.TilePrice,
+			Amount:                          draft.Amount,
+			PlayerPosition:                  draft.PlayerPosition,
+			CashAfter:                       draft.CashAfter,
+			OwnerCashAfter:                  draft.OwnerCashAfter,
+			DeckKind:                        draft.DeckKind,
+			CardID:                          draft.CardID,
+			CardTitle:                       draft.CardTitle,
+			CardDisposition:                 draft.CardDisposition,
+			ReleaseMethod:                   draft.ReleaseMethod,
+			FailedAttemptCount:              draft.FailedAttemptCount,
+			ImprovementLevel:                draft.ImprovementLevel,
+			OfferedCash:                     draft.OfferedCash,
+			RequestedCash:                   draft.RequestedCash,
+			OfferedTileIDs:                  copyStringSlice(draft.OfferedTileIDs),
+			RequestedTileIDs:                copyStringSlice(draft.RequestedTileIDs),
+			OfferedCardIDs:                  copyStringSlice(draft.OfferedCardIDs),
+			RequestedCardIDs:                copyStringSlice(draft.RequestedCardIDs),
+			TradeSnapshotVersion:            draft.TradeSnapshotVersion,
+			TransferredPropertyIDs:          copyStringSlice(draft.TransferredPropertyIDs),
 			TransferredMortgagedPropertyIDs: copyStringSlice(draft.TransferredMortgagedPropertyIDs),
-			TransferredCardIDs: copyStringSlice(draft.TransferredCardIDs),
-			ReturnedCardIDs: copyStringSlice(draft.ReturnedCardIDs),
-			ClearedImprovementTileIDs: copyStringSlice(draft.ClearedImprovementTileIDs),
-			CashAfterByPlayer: copyIntMap(draft.CashAfterByPlayer),
-			LastRoll:        draft.LastRoll,
+			TransferredCardIDs:              copyStringSlice(draft.TransferredCardIDs),
+			ReturnedCardIDs:                 copyStringSlice(draft.ReturnedCardIDs),
+			ClearedImprovementTileIDs:       copyStringSlice(draft.ClearedImprovementTileIDs),
+			CashAfterByPlayer:               copyIntMap(draft.CashAfterByPlayer),
+			LastRoll:                        draft.LastRoll,
 		}
 		room.RecentEvents = append(room.RecentEvents, event)
 		persistedEvents = append(persistedEvents, pocketbase.PersistedRoomEvent{
-			ID:              event.ID,
-			RoomID:          room.RoomID,
-			Type:            event.Type,
-			Sequence:        event.Sequence,
-			SnapshotVersion: event.SnapshotVersion,
-			Summary:         event.Summary,
-			RoomState:       event.RoomState,
-			PlayerID:        event.PlayerID,
-			OwnerPlayerID:   event.OwnerPlayerID,
-			NextPlayerID:    event.NextPlayerID,
-			TileID:          event.TileID,
-			TileIndex:       event.TileIndex,
-			TileLabel:       event.TileLabel,
-			TilePrice:       event.TilePrice,
-			Amount:          event.Amount,
-			PlayerPosition:  event.PlayerPosition,
-			CashAfter:       event.CashAfter,
-			OwnerCashAfter:  event.OwnerCashAfter,
-			DeckKind:        event.DeckKind,
-			CardID:          event.CardID,
-			CardTitle:       event.CardTitle,
-			CardDisposition: event.CardDisposition,
-			ReleaseMethod:   event.ReleaseMethod,
-			FailedAttemptCount: event.FailedAttemptCount,
-			ImprovementLevel: event.ImprovementLevel,
-			OfferedCash: event.OfferedCash,
-			RequestedCash: event.RequestedCash,
-			OfferedTileIDs: copyStringSlice(event.OfferedTileIDs),
-			RequestedTileIDs: copyStringSlice(event.RequestedTileIDs),
-			OfferedCardIDs: copyStringSlice(event.OfferedCardIDs),
-			RequestedCardIDs: copyStringSlice(event.RequestedCardIDs),
-			TradeSnapshotVersion: event.TradeSnapshotVersion,
-			TransferredPropertyIDs: copyStringSlice(event.TransferredPropertyIDs),
+			ID:                              event.ID,
+			RoomID:                          room.RoomID,
+			Type:                            event.Type,
+			Sequence:                        event.Sequence,
+			SnapshotVersion:                 event.SnapshotVersion,
+			Summary:                         event.Summary,
+			RoomState:                       event.RoomState,
+			PlayerID:                        event.PlayerID,
+			OwnerPlayerID:                   event.OwnerPlayerID,
+			NextPlayerID:                    event.NextPlayerID,
+			TileID:                          event.TileID,
+			TileIndex:                       event.TileIndex,
+			TileLabel:                       event.TileLabel,
+			TilePrice:                       event.TilePrice,
+			Amount:                          event.Amount,
+			PlayerPosition:                  event.PlayerPosition,
+			CashAfter:                       event.CashAfter,
+			OwnerCashAfter:                  event.OwnerCashAfter,
+			DeckKind:                        event.DeckKind,
+			CardID:                          event.CardID,
+			CardTitle:                       event.CardTitle,
+			CardDisposition:                 event.CardDisposition,
+			ReleaseMethod:                   event.ReleaseMethod,
+			FailedAttemptCount:              event.FailedAttemptCount,
+			ImprovementLevel:                event.ImprovementLevel,
+			OfferedCash:                     event.OfferedCash,
+			RequestedCash:                   event.RequestedCash,
+			OfferedTileIDs:                  copyStringSlice(event.OfferedTileIDs),
+			RequestedTileIDs:                copyStringSlice(event.RequestedTileIDs),
+			OfferedCardIDs:                  copyStringSlice(event.OfferedCardIDs),
+			RequestedCardIDs:                copyStringSlice(event.RequestedCardIDs),
+			TradeSnapshotVersion:            event.TradeSnapshotVersion,
+			TransferredPropertyIDs:          copyStringSlice(event.TransferredPropertyIDs),
 			TransferredMortgagedPropertyIDs: copyStringSlice(event.TransferredMortgagedPropertyIDs),
-			TransferredCardIDs: copyStringSlice(event.TransferredCardIDs),
-			ReturnedCardIDs: copyStringSlice(event.ReturnedCardIDs),
-			ClearedImprovementTileIDs: copyStringSlice(event.ClearedImprovementTileIDs),
-			CashAfterByPlayer: copyIntMap(event.CashAfterByPlayer),
-			LastRoll:        event.LastRoll,
+			TransferredCardIDs:              copyStringSlice(event.TransferredCardIDs),
+			ReturnedCardIDs:                 copyStringSlice(event.ReturnedCardIDs),
+			ClearedImprovementTileIDs:       copyStringSlice(event.ClearedImprovementTileIDs),
+			CashAfterByPlayer:               copyIntMap(event.CashAfterByPlayer),
+			LastRoll:                        event.LastRoll,
 		})
 	}
-	room.RecentEvents = tailEvents(room.RecentEvents, 10)
 	service.store.SaveRoomState(room.toPersistedSnapshot())
 	if len(persistedEvents) > 0 {
 		service.store.AppendRoomEvents(room.RoomID, persistedEvents)
@@ -2291,7 +2290,7 @@ func (service *Service) hydrateRoom(snapshot pocketbase.PersistedRoomSnapshot) r
 		LastRoll:            snapshot.LastRoll,
 		Players:             players,
 		PlayerSessions:      playerSessions,
-		RecentEvents:        tailEvents(events, 10),
+		RecentEvents:        events,
 	}
 }
 
@@ -2300,14 +2299,14 @@ func (service *Service) newPlayer(name string) Player {
 	service.nextPlayerID++
 
 	return Player{
-		ID:         playerID,
-		Name:       name,
-		Cash:       1500,
-		Position:   0,
-		Properties: []string{},
-		MortgagedProperties: []string{},
+		ID:                   playerID,
+		Name:                 name,
+		Cash:                 1500,
+		Position:             0,
+		Properties:           []string{},
+		MortgagedProperties:  []string{},
 		PropertyImprovements: map[string]int{},
-		HeldCardIDs: []string{},
+		HeldCardIDs:          []string{},
 	}
 }
 
@@ -2550,45 +2549,45 @@ func toPersistedEvents(roomID string, events []Event) []pocketbase.PersistedRoom
 	persisted := make([]pocketbase.PersistedRoomEvent, 0, len(events))
 	for _, event := range events {
 		persisted = append(persisted, pocketbase.PersistedRoomEvent{
-			ID:              event.ID,
-			RoomID:          roomID,
-			Type:            event.Type,
-			Sequence:        event.Sequence,
-			SnapshotVersion: event.SnapshotVersion,
-			Summary:         event.Summary,
-			RoomState:       event.RoomState,
-			PlayerID:        event.PlayerID,
-			OwnerPlayerID:   event.OwnerPlayerID,
-			NextPlayerID:    event.NextPlayerID,
-			TileID:          event.TileID,
-			TileIndex:       event.TileIndex,
-			TileLabel:       event.TileLabel,
-			TilePrice:       event.TilePrice,
-			Amount:          event.Amount,
-			PlayerPosition:  event.PlayerPosition,
-			CashAfter:       event.CashAfter,
-			OwnerCashAfter:  event.OwnerCashAfter,
-			DeckKind:        event.DeckKind,
-			CardID:          event.CardID,
-			CardTitle:       event.CardTitle,
-			CardDisposition: event.CardDisposition,
-			ReleaseMethod:   event.ReleaseMethod,
-			FailedAttemptCount: event.FailedAttemptCount,
-			ImprovementLevel: event.ImprovementLevel,
-			OfferedCash: event.OfferedCash,
-			RequestedCash: event.RequestedCash,
-			OfferedTileIDs: copyStringSlice(event.OfferedTileIDs),
-			RequestedTileIDs: copyStringSlice(event.RequestedTileIDs),
-			OfferedCardIDs: copyStringSlice(event.OfferedCardIDs),
-			RequestedCardIDs: copyStringSlice(event.RequestedCardIDs),
-			TradeSnapshotVersion: event.TradeSnapshotVersion,
-			TransferredPropertyIDs: copyStringSlice(event.TransferredPropertyIDs),
+			ID:                              event.ID,
+			RoomID:                          roomID,
+			Type:                            event.Type,
+			Sequence:                        event.Sequence,
+			SnapshotVersion:                 event.SnapshotVersion,
+			Summary:                         event.Summary,
+			RoomState:                       event.RoomState,
+			PlayerID:                        event.PlayerID,
+			OwnerPlayerID:                   event.OwnerPlayerID,
+			NextPlayerID:                    event.NextPlayerID,
+			TileID:                          event.TileID,
+			TileIndex:                       event.TileIndex,
+			TileLabel:                       event.TileLabel,
+			TilePrice:                       event.TilePrice,
+			Amount:                          event.Amount,
+			PlayerPosition:                  event.PlayerPosition,
+			CashAfter:                       event.CashAfter,
+			OwnerCashAfter:                  event.OwnerCashAfter,
+			DeckKind:                        event.DeckKind,
+			CardID:                          event.CardID,
+			CardTitle:                       event.CardTitle,
+			CardDisposition:                 event.CardDisposition,
+			ReleaseMethod:                   event.ReleaseMethod,
+			FailedAttemptCount:              event.FailedAttemptCount,
+			ImprovementLevel:                event.ImprovementLevel,
+			OfferedCash:                     event.OfferedCash,
+			RequestedCash:                   event.RequestedCash,
+			OfferedTileIDs:                  copyStringSlice(event.OfferedTileIDs),
+			RequestedTileIDs:                copyStringSlice(event.RequestedTileIDs),
+			OfferedCardIDs:                  copyStringSlice(event.OfferedCardIDs),
+			RequestedCardIDs:                copyStringSlice(event.RequestedCardIDs),
+			TradeSnapshotVersion:            event.TradeSnapshotVersion,
+			TransferredPropertyIDs:          copyStringSlice(event.TransferredPropertyIDs),
 			TransferredMortgagedPropertyIDs: copyStringSlice(event.TransferredMortgagedPropertyIDs),
-			TransferredCardIDs: copyStringSlice(event.TransferredCardIDs),
-			ReturnedCardIDs: copyStringSlice(event.ReturnedCardIDs),
-			ClearedImprovementTileIDs: copyStringSlice(event.ClearedImprovementTileIDs),
-			CashAfterByPlayer: copyIntMap(event.CashAfterByPlayer),
-			LastRoll:        event.LastRoll,
+			TransferredCardIDs:              copyStringSlice(event.TransferredCardIDs),
+			ReturnedCardIDs:                 copyStringSlice(event.ReturnedCardIDs),
+			ClearedImprovementTileIDs:       copyStringSlice(event.ClearedImprovementTileIDs),
+			CashAfterByPlayer:               copyIntMap(event.CashAfterByPlayer),
+			LastRoll:                        event.LastRoll,
 		})
 	}
 	return persisted
@@ -2598,44 +2597,44 @@ func toRoomEvents(events []pocketbase.PersistedRoomEvent) []Event {
 	roomEvents := make([]Event, 0, len(events))
 	for _, event := range events {
 		roomEvents = append(roomEvents, Event{
-			ID:              event.ID,
-			Type:            event.Type,
-			Sequence:        event.Sequence,
-			SnapshotVersion: event.SnapshotVersion,
-			Summary:         event.Summary,
-			RoomState:       event.RoomState,
-			PlayerID:        event.PlayerID,
-			OwnerPlayerID:   event.OwnerPlayerID,
-			NextPlayerID:    event.NextPlayerID,
-			TileID:          event.TileID,
-			TileIndex:       event.TileIndex,
-			TileLabel:       event.TileLabel,
-			TilePrice:       event.TilePrice,
-			Amount:          event.Amount,
-			PlayerPosition:  event.PlayerPosition,
-			CashAfter:       event.CashAfter,
-			OwnerCashAfter:  event.OwnerCashAfter,
-			DeckKind:        event.DeckKind,
-			CardID:          event.CardID,
-			CardTitle:       event.CardTitle,
-			CardDisposition: event.CardDisposition,
-			ReleaseMethod:   event.ReleaseMethod,
-			FailedAttemptCount: event.FailedAttemptCount,
-			ImprovementLevel: event.ImprovementLevel,
-			OfferedCash: event.OfferedCash,
-			RequestedCash: event.RequestedCash,
-			OfferedTileIDs: copyStringSlice(event.OfferedTileIDs),
-			RequestedTileIDs: copyStringSlice(event.RequestedTileIDs),
-			OfferedCardIDs: copyStringSlice(event.OfferedCardIDs),
-			RequestedCardIDs: copyStringSlice(event.RequestedCardIDs),
-			TradeSnapshotVersion: event.TradeSnapshotVersion,
-			TransferredPropertyIDs: copyStringSlice(event.TransferredPropertyIDs),
+			ID:                              event.ID,
+			Type:                            event.Type,
+			Sequence:                        event.Sequence,
+			SnapshotVersion:                 event.SnapshotVersion,
+			Summary:                         event.Summary,
+			RoomState:                       event.RoomState,
+			PlayerID:                        event.PlayerID,
+			OwnerPlayerID:                   event.OwnerPlayerID,
+			NextPlayerID:                    event.NextPlayerID,
+			TileID:                          event.TileID,
+			TileIndex:                       event.TileIndex,
+			TileLabel:                       event.TileLabel,
+			TilePrice:                       event.TilePrice,
+			Amount:                          event.Amount,
+			PlayerPosition:                  event.PlayerPosition,
+			CashAfter:                       event.CashAfter,
+			OwnerCashAfter:                  event.OwnerCashAfter,
+			DeckKind:                        event.DeckKind,
+			CardID:                          event.CardID,
+			CardTitle:                       event.CardTitle,
+			CardDisposition:                 event.CardDisposition,
+			ReleaseMethod:                   event.ReleaseMethod,
+			FailedAttemptCount:              event.FailedAttemptCount,
+			ImprovementLevel:                event.ImprovementLevel,
+			OfferedCash:                     event.OfferedCash,
+			RequestedCash:                   event.RequestedCash,
+			OfferedTileIDs:                  copyStringSlice(event.OfferedTileIDs),
+			RequestedTileIDs:                copyStringSlice(event.RequestedTileIDs),
+			OfferedCardIDs:                  copyStringSlice(event.OfferedCardIDs),
+			RequestedCardIDs:                copyStringSlice(event.RequestedCardIDs),
+			TradeSnapshotVersion:            event.TradeSnapshotVersion,
+			TransferredPropertyIDs:          copyStringSlice(event.TransferredPropertyIDs),
 			TransferredMortgagedPropertyIDs: copyStringSlice(event.TransferredMortgagedPropertyIDs),
-			TransferredCardIDs: copyStringSlice(event.TransferredCardIDs),
-			ReturnedCardIDs: copyStringSlice(event.ReturnedCardIDs),
-			ClearedImprovementTileIDs: copyStringSlice(event.ClearedImprovementTileIDs),
-			CashAfterByPlayer: copyIntMap(event.CashAfterByPlayer),
-			LastRoll:        event.LastRoll,
+			TransferredCardIDs:              copyStringSlice(event.TransferredCardIDs),
+			ReturnedCardIDs:                 copyStringSlice(event.ReturnedCardIDs),
+			ClearedImprovementTileIDs:       copyStringSlice(event.ClearedImprovementTileIDs),
+			CashAfterByPlayer:               copyIntMap(event.CashAfterByPlayer),
+			LastRoll:                        event.LastRoll,
 		})
 	}
 	return roomEvents
@@ -2696,13 +2695,6 @@ func (service *Service) broadcastRoomEvents(events []pocketbase.PersistedRoomEve
 			}
 		}
 	}
-}
-
-func tailEvents(events []Event, limit int) []Event {
-	if len(events) <= limit {
-		return events
-	}
-	return events[len(events)-limit:]
 }
 
 func findPlayerIndex(players []Player, playerID string) int {

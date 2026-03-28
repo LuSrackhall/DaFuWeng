@@ -94,7 +94,7 @@ export function FloatingBoardWindow({
   const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const rndRef = useRef<Rnd | null>(null);
-  const dragHandleRef = useRef<HTMLDivElement | null>(null);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
 
   const dockFrameRef = useRef(normalizeFrame(initialFrame));
   useEffect(() => {
@@ -103,7 +103,7 @@ export function FloatingBoardWindow({
 
   useThirdPartyLongPressDrag({
     enabled: dragPreferences.dragMode === "third-party-hold",
-    handleRef: dragHandleRef,
+    surfaceRef,
     rndRef,
     frame,
     onFocus,
@@ -184,16 +184,11 @@ export function FloatingBoardWindow({
       style={{ position: "fixed", zIndex }}
       cancel="button, input, select, option"
     >
-      <div className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
+      <div ref={surfaceRef} className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
         <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
-          <div className="board-window__toolbar-title board-window__drag-hotspot" data-testid="board-window-drag-hotspot" ref={dragHandleRef}>
+          <div className="board-window__toolbar-title" data-testid="board-window-drag-hotspot">
             <p className="shell__eyebrow">棋盘工作台</p>
             <strong>自由拖拽与八向缩放</strong>
-            <span>
-              {dragPreferences.dragMode === "third-party-hold"
-                ? `第三方长按拖拽 · 长按 ${dragPreferences.holdDelayMs}ms 后拖动`
-                : "原生即时拖拽 · 按下后立即开始拖动"}
-            </span>
           </div>
           {!isDetailsCollapsed ? <div className="board-window__toolbar-content">{toolbar}</div> : null}
           <div className="board-window__toolbar-actions">
@@ -239,11 +234,6 @@ export function FloatingBoardWindow({
                 <option value="native">原生即时拖拽</option>
               </select>
             </label>
-            <div className="board-window__settings-copy">
-              {dragPreferences.dragMode === "third-party-hold"
-                ? "鼠标或手指长按标题区后开始拖动，松开即停止，优先降低漂移与抖动。"
-                : "保留当前 react-rnd 原生即时拖拽行为，适合不需要长按等待的操作。"}
-            </div>
           </div>
         ) : null}
         <div className="board-window__canvas" style={{ pointerEvents: isInteracting ? "none" : "auto" }}>

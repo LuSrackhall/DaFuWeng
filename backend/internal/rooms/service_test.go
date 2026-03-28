@@ -1,6 +1,7 @@
 package rooms
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -164,5 +165,40 @@ func TestMortgagePropertyKeepsRentDeficitPendingUntilFullyCovered(t *testing.T) 
 	}
 	if updated.PendingAction == "等待当前玩家处理欠款" {
 		t.Fatalf("expected pending action to update remaining shortfall")
+	}
+}
+
+func TestHydrateRoomRetainsFullPersistedEventHistory(t *testing.T) {
+	service := newUnitService(t)
+	room := testRoomRecord()
+	service.store.SaveRoomState(room.toPersistedSnapshot())
+
+	persistedEvents := make([]pocketbase.PersistedRoomEvent, 0, 12)
+	for index := 0; index < 12; index++ {
+		persistedEvents = append(persistedEvents, pocketbase.PersistedRoomEvent{
+			ID:              fmt.Sprintf("evt-%d", index+1),
+			RoomID:          room.RoomID,
+			Type:            "turn-advanced",
+			Sequence:        index + 1,
+			SnapshotVersion: index + 1,
+			Summary:         fmt.Sprintf("事件 %d", index+1),
+		})
+	}
+	service.store.AppendRoomEvents(room.RoomID, persistedEvents)
+
+	snapshot, ok := service.store.LoadRoomState(room.RoomID)
+	if !ok {
+		t.Fatalf("expected persisted room snapshot to exist")
+	}
+
+	hydrated := service.hydrateRoom(snapshot)
+	if len(hydrated.RecentEvents) != 12 {
+		t.Fatalf("expected 12 hydrated recent events, got %d", len(hydrated.RecentEvents))
+	}
+	if hydrated.RecentEvents[0].Sequence != 1 {
+		t.Fatalf("expected first hydrated sequence 1, got %d", hydrated.RecentEvents[0].Sequence)
+	}
+	if hydrated.RecentEvents[len(hydrated.RecentEvents)-1].Sequence != 12 {
+		t.Fatalf("expected last hydrated sequence 12, got %d", hydrated.RecentEvents[len(hydrated.RecentEvents)-1].Sequence)
 	}
 }

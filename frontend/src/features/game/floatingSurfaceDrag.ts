@@ -5,7 +5,7 @@ import type { Rnd } from "react-rnd";
 
 export const FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY =
   "dafuweng-floating-surface-drag-preferences-v1";
-export const DEFAULT_FLOATING_SURFACE_HOLD_DELAY_MS = 180;
+export const DEFAULT_FLOATING_SURFACE_HOLD_DELAY_MS = 160;
 
 export type FloatingSurfaceDragMode = "native" | "third-party-hold";
 
@@ -54,7 +54,7 @@ export function sanitizeFloatingSurfaceDragPreferences(
 
 type UseThirdPartyLongPressDragOptions = {
   enabled: boolean;
-  handleRef: RefObject<HTMLElement | null>;
+  surfaceRef: RefObject<HTMLElement | null>;
   rndRef: RefObject<Rnd | null>;
   frame: FloatingSurfaceFrame;
   onFocus: () => void;
@@ -65,7 +65,7 @@ type UseThirdPartyLongPressDragOptions = {
 
 export function useThirdPartyLongPressDrag({
   enabled,
-  handleRef,
+  surfaceRef,
   rndRef,
   frame,
   onFocus,
@@ -74,62 +74,51 @@ export function useThirdPartyLongPressDrag({
   holdDelayMs,
 }: UseThirdPartyLongPressDragOptions) {
   const frameRef = useRef(frame);
-  const previewFrameRef = useRef(frame);
-  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     frameRef.current = frame;
-    previewFrameRef.current = frame;
   }, [frame]);
 
-  useEffect(() => () => {
-    if (rafRef.current !== null) {
-      window.cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+  function shouldIgnoreDragTarget(target: EventTarget | null) {
+    if (!(target instanceof Element)) {
+      return false;
     }
-  }, []);
+
+    return target.closest("button, input, select, option, textarea, a, label, .react-resizable-handle") !== null;
+  }
 
   useDrag(
-    ({ first, last, movement: [movementX, movementY], memo }) => {
+    ({ first, last, offset: [offsetX, offsetY], event, memo }) => {
       if (!enabled) {
         return memo;
       }
 
       if (first) {
+        if (shouldIgnoreDragTarget(event.target)) {
+          return { blocked: true };
+        }
+
         onFocus();
         onInteractingChange(true);
-        return { x: frameRef.current.x, y: frameRef.current.y };
+        return { blocked: false };
       }
 
-      if (!memo) {
+      if (!memo || memo.blocked) {
         return memo;
       }
 
       const nextFrame = {
         ...frameRef.current,
-        x: Math.round(memo.x + movementX),
-        y: Math.round(memo.y + movementY),
+        x: Math.round(offsetX),
+        y: Math.round(offsetY),
       };
 
-      previewFrameRef.current = nextFrame;
-
-      if (rafRef.current === null) {
-        rafRef.current = window.requestAnimationFrame(() => {
-          rndRef.current?.updatePosition({
-            x: previewFrameRef.current.x,
-            y: previewFrameRef.current.y,
-          });
-          rafRef.current = null;
-        });
-      }
+      rndRef.current?.updatePosition({
+        x: nextFrame.x,
+        y: nextFrame.y,
+      });
 
       if (last) {
-        if (rafRef.current !== null) {
-          window.cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        }
-
-        rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
         onInteractingChange(false);
         onCommit(nextFrame);
       }
@@ -137,12 +126,13 @@ export function useThirdPartyLongPressDrag({
       return memo;
     },
     {
-      target: handleRef,
+      target: surfaceRef,
       enabled,
       delay: holdDelayMs,
+      from: () => [frameRef.current.x, frameRef.current.y],
       filterTaps: true,
       preventDefault: true,
-      pointer: { touch: true },
+      pointer: { touch: true, capture: true },
       threshold: 0,
     },
   );

@@ -2225,17 +2225,6 @@ body {
   line-height: 1.15;
 }
 
-.board-window__toolbar-title span {
-  color: rgba(246, 236, 212, 0.74);
-  font-size: 0.76rem;
-  line-height: 1.35;
-}
-
-.board-window__drag-hotspot {
-  user-select: none;
-  touch-action: none;
-}
-
 .board-window__toolbar-content {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
@@ -2272,12 +2261,6 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(7, 15, 13, 0.45);
   color: #f6ecd4;
-}
-
-.board-window__settings-copy {
-  color: rgba(246, 236, 212, 0.76);
-  font-size: 0.84rem;
-  line-height: 1.42;
 }
 
 .board-window--details-collapsed .board-window__toolbar {
@@ -2436,12 +2419,6 @@ body {
   display: grid;
   gap: 6px;
   min-width: 0;
-}
-
-.floating-event-feed__drag-hotspot {
-  pointer-events: auto;
-  user-select: none;
-  touch-action: none;
 }
 
 .floating-event-feed__title-group .shell__eyebrow {
