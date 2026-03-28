@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
+import type { FloatingSurfaceDragPreferences } from "./floatingSurfaceDrag";
+import { useThirdPartyLongPressDrag } from "./floatingSurfaceDrag";
 
 const FLOATING_BOARD_STORAGE_KEY = "dafuweng-floating-board-frame-v3";
 const BOARD_MIN_WIDTH = 520;
@@ -23,6 +25,8 @@ type ViewportSize = {
 type FloatingBoardWindowProps = {
   initialFrame: FloatingFrame;
   viewportSize: ViewportSize;
+  dragPreferences: FloatingSurfaceDragPreferences;
+  onDragPreferencesChange: (updater: (prev: FloatingSurfaceDragPreferences) => FloatingSurfaceDragPreferences) => void;
   toolbar: ReactNode;
   children: ReactNode;
   isFocused: boolean;
@@ -74,16 +78,42 @@ function persistFrame(frame: FloatingFrame) {
   window.localStorage.setItem(FLOATING_BOARD_STORAGE_KEY, JSON.stringify(frame));
 }
 
-export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, children, isFocused, zIndex, onFocus }: FloatingBoardWindowProps) {
+export function FloatingBoardWindow({
+  initialFrame,
+  viewportSize,
+  dragPreferences,
+  onDragPreferencesChange,
+  toolbar,
+  children,
+  isFocused,
+  zIndex,
+  onFocus,
+}: FloatingBoardWindowProps) {
   const [frame, setFrame] = useState(() => readPersistedFrame(viewportSize, initialFrame));
   const [isInteracting, setIsInteracting] = useState(false);
   const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const rndRef = useRef<Rnd | null>(null);
+  const dragHandleRef = useRef<HTMLDivElement | null>(null);
 
   const dockFrameRef = useRef(normalizeFrame(initialFrame));
   useEffect(() => {
     dockFrameRef.current = normalizeFrame(initialFrame);
   }, [initialFrame]);
+
+  useThirdPartyLongPressDrag({
+    enabled: dragPreferences.dragMode === "third-party-hold",
+    handleRef: dragHandleRef,
+    rndRef,
+    frame,
+    onFocus,
+    onInteractingChange: setIsInteracting,
+    onCommit: (nextFrame) => {
+      setFrame(nextFrame);
+      persistFrame(nextFrame);
+    },
+    holdDelayMs: dragPreferences.holdDelayMs,
+  });
 
   function resetToDock() {
     const nextFrame = normalizeFrame(dockFrameRef.current);
@@ -103,6 +133,7 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
       data-testid="floating-board-window"
       className={`board-resizable-wrap${isFocused ? " board-resizable-wrap--focused" : ""}${isInteracting ? " board-resizable-wrap--interacting" : ""}`}
       dragHandleClassName="board-drag-handle"
+      disableDragging={dragPreferences.dragMode === "third-party-hold"}
       enableUserSelectHack={true}
       enableResizing={{
         top: true, right: true, bottom: true, left: true,
@@ -155,12 +186,26 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
     >
       <div className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
         <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
-          <div className="board-window__toolbar-title">
+          <div className="board-window__toolbar-title board-window__drag-hotspot" data-testid="board-window-drag-hotspot" ref={dragHandleRef}>
             <p className="shell__eyebrow">棋盘工作台</p>
             <strong>自由拖拽与八向缩放</strong>
+            <span>
+              {dragPreferences.dragMode === "third-party-hold"
+                ? `第三方长按拖拽 · 长按 ${dragPreferences.holdDelayMs}ms 后拖动`
+                : "原生即时拖拽 · 按下后立即开始拖动"}
+            </span>
           </div>
           {!isDetailsCollapsed ? <div className="board-window__toolbar-content">{toolbar}</div> : null}
           <div className="board-window__toolbar-actions">
+            <button
+              className="floating-surface__action"
+              data-testid="board-window-settings-toggle"
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setIsSettingsOpen((current) => !current)}
+            >
+              {isSettingsOpen ? "收起设置" : "设置"}
+            </button>
             <button
               className="floating-surface__action"
               data-testid="board-window-toggle-details"
@@ -178,6 +223,29 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
             </button>
           </div>
         </div>
+        {isSettingsOpen ? (
+          <div className="board-window__settings" data-testid="board-window-settings">
+            <label className="board-window__field">
+              <strong>拖拽方案</strong>
+              <select
+                data-testid="board-window-drag-mode"
+                value={dragPreferences.dragMode}
+                onChange={(event) => onDragPreferencesChange((current) => ({
+                  ...current,
+                  dragMode: event.target.value as FloatingSurfaceDragPreferences["dragMode"],
+                }))}
+              >
+                <option value="third-party-hold">第三方长按拖拽</option>
+                <option value="native">原生即时拖拽</option>
+              </select>
+            </label>
+            <div className="board-window__settings-copy">
+              {dragPreferences.dragMode === "third-party-hold"
+                ? "鼠标或手指长按标题区后开始拖动，松开即停止，优先降低漂移与抖动。"
+                : "保留当前 react-rnd 原生即时拖拽行为，适合不需要长按等待的操作。"}
+            </div>
+          </div>
+        ) : null}
         <div className="board-window__canvas" style={{ pointerEvents: isInteracting ? "none" : "auto" }}>
           {children}
         </div>

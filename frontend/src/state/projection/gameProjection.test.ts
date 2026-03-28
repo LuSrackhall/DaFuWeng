@@ -101,6 +101,45 @@ describe("toProjectionView", () => {
     expect(updated.eventSequence).toBe(8);
   });
 
+  test("keeps more than ten recent events after projection catch-up merges", () => {
+    const denseSnapshot: ProjectionSnapshot = {
+      ...sampleProjection,
+      eventSequence: 10,
+      snapshotVersion: 10,
+      recentEvents: Array.from({ length: 10 }, (_, index) => ({
+        id: `evt-${index + 1}`,
+        type: "turn-advanced",
+        sequence: index + 1,
+        snapshotVersion: index + 1,
+        summary: `事件 ${index + 1}`,
+        nextPlayerId: index % 2 === 0 ? "p2" : "p1",
+      })),
+    };
+
+    const updated = applyRoomEvents(denseSnapshot, [
+      {
+        id: "evt-11",
+        type: "turn-advanced",
+        sequence: 11,
+        snapshotVersion: 11,
+        summary: "事件 11",
+        nextPlayerId: "p2",
+      },
+      {
+        id: "evt-12",
+        type: "turn-advanced",
+        sequence: 12,
+        snapshotVersion: 12,
+        summary: "事件 12",
+        nextPlayerId: "p1",
+      },
+    ]);
+
+    expect(updated.recentEvents).toHaveLength(12);
+    expect(updated.recentEvents.at(0)?.sequence).toBe(1);
+    expect(updated.recentEvents.at(-1)?.sequence).toBe(12);
+  });
+
   test("applies auction lifecycle events from catch-up state", () => {
     const updated = applyRoomEvents(sampleProjection, [
       {

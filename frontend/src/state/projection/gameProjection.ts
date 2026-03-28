@@ -612,8 +612,7 @@ function mergeRecentEvents(existingEvents: ProjectionEvent[], nextEvents: Projec
   }
 
   return [...byId.values()]
-    .sort((left, right) => left.sequence - right.sequence)
-    .slice(-10);
+    .sort((left, right) => left.sequence - right.sequence);
 }
 
 function requiresSnapshotRefresh(events: ProjectionEvent[]) {

@@ -6,8 +6,8 @@ function buildInteractiveSnapshot(roomId: string) {
     roomId,
     roomState: "in-game",
     hostId: "p1",
-    snapshotVersion: 8,
-    eventSequence: 8,
+    snapshotVersion: 12,
+    eventSequence: 12,
     turnState: "awaiting-roll",
     currentTurnPlayerId: "p1",
     pendingActionLabel: "等待你掷骰",
@@ -42,7 +42,7 @@ function buildInteractiveSnapshot(roomId: string) {
         isBankrupt: false,
       },
     ],
-    recentEvents: Array.from({ length: 8 }, (_, index) => ({
+    recentEvents: Array.from({ length: 12 }, (_, index) => ({
       id: `evt-${index + 1}`,
       type: "turn-advanced",
       sequence: index + 1,
@@ -119,6 +119,22 @@ async function dragToolbar(page: Page, selector: string, deltaX: number, deltaY:
   await page.mouse.up();
 }
 
+async function longPressDrag(page: Page, selector: string, deltaX: number, deltaY: number) {
+  const box = await page.locator(selector).boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+
+  const startX = box.x + Math.min(72, box.width * 0.28);
+  const startY = box.y + Math.min(26, box.height * 0.55);
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.waitForTimeout(240);
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 20 });
+  await page.mouse.up();
+}
+
 test("event feed window supports all-history and custom-max retention with native resize handles", async ({ page }) => {
   test.setTimeout(90000);
   await page.setViewportSize({ width: 1440, height: 980 });
@@ -134,10 +150,10 @@ test("event feed window supports all-history and custom-max retention with nativ
   const eventItems = page.locator(".floating-scroll-list > li");
 
   await expect(eventFeedWindow).toBeVisible();
-  await expect(eventItems).toHaveCount(8);
+  await expect(eventItems).toHaveCount(12);
 
   const beforeDrag = await eventFeedWindow.boundingBox();
-  await dragToolbar(page, '[data-testid="floating-event-feed-handle"]', -180, 80);
+  await longPressDrag(page, '[data-testid="floating-event-feed-drag-hotspot"]', -180, 80);
   const afterDrag = await eventFeedWindow.boundingBox();
   expect(afterDrag && beforeDrag ? afterDrag.x < beforeDrag.x - 120 : false).toBe(true);
   expect(afterDrag && beforeDrag ? afterDrag.y > beforeDrag.y + 40 : false).toBe(true);
@@ -157,16 +173,25 @@ test("event feed window supports all-history and custom-max retention with nativ
 
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await expect(page.getByTestId("floating-event-feed-settings")).toBeVisible();
-  await expect(page.getByTestId("floating-event-feed-metrics")).toContainText("当前展示 8 / 累计 8 条");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
+  await expect(page.getByTestId("floating-event-feed-metrics")).toContainText("当前展示 12 / 累计 12 条");
 
   await page.getByTestId("floating-event-feed-history-mode").selectOption("custom");
   await page.getByTestId("floating-event-feed-custom-max-count").fill("3");
   await page.getByTestId("floating-event-feed-custom-max-count").blur();
   await expect(eventItems).toHaveCount(3);
-  await expect(page.getByTestId("floating-event-feed-metrics")).toContainText("当前展示 3 / 累计 8 条");
-  await expect(page.getByTestId("floating-event-feed-metrics")).toContainText("已折叠更早 5 条历史事件");
+  await expect(page.getByTestId("floating-event-feed-metrics")).toContainText("当前展示 3 / 累计 12 条");
+  await expect(page.getByTestId("floating-event-feed-metrics")).toContainText("已折叠更早 9 条历史事件");
 
   await page.getByTestId("floating-event-feed-history-mode").selectOption("all");
-  await expect(eventItems).toHaveCount(8);
+  await expect(eventItems).toHaveCount(12);
   await expect(page.getByTestId("floating-event-feed-metrics")).toContainText("当前保留全部历史事件");
+
+  await page.getByTestId("floating-event-feed-drag-mode").selectOption("native");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("native");
+  const beforeNativeDrag = await eventFeedWindow.boundingBox();
+  await dragToolbar(page, '[data-testid="floating-event-feed-handle"]', 80, 40);
+  const afterNativeDrag = await eventFeedWindow.boundingBox();
+  expect(afterNativeDrag && beforeNativeDrag ? afterNativeDrag.x > beforeNativeDrag.x + 40 : false).toBe(true);
+  expect(afterNativeDrag && beforeNativeDrag ? afterNativeDrag.y > beforeNativeDrag.y + 20 : false).toBe(true);
 });

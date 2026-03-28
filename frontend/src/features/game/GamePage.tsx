@@ -10,6 +10,11 @@ import { getActivePlayer } from "../../state/projection/activePlayer";
 import { useGameProjection } from "../../state/projection/gameProjection";
 import { usePresentationState } from "../../state/presentation/gamePresentation";
 import { getAuctionBidValidation, getDeficitControlMode, sanitizeAuctionBidInput } from "./gameActionState";
+import {
+  defaultFloatingSurfaceDragPreferences,
+  FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY,
+  sanitizeFloatingSurfaceDragPreferences,
+} from "./floatingSurfaceDrag";
 import { defaultEventFeedPreferences, EVENT_FEED_PREFERENCES_STORAGE_KEY, sanitizeEventFeedPreferences } from "./roomEventFeed";
 import { DraggableEventFeed } from "./DraggableEventFeed";
 import { FloatingBoardWindow } from "./FloatingBoardWindow";
@@ -58,14 +63,14 @@ const RULE_GUIDE_SECTIONS = [
   {
     title: "基础回合",
     items: [
-      "轮到你时，先看顶部提醒和右侧“现在该做什么”，它们会告诉你这一步是否该掷骰、买地、回应交易或处理欠款。",
+      "牌局纪事支持保留全部历史事件，也可以自定义最大保留条数。可以切换序号正反序、列表正反序，并设置窗口最少要容纳多少条记录。",
       "掷骰后，棋盘中央负责解释结果，牌局纪事负责保留完整历史。",
     ],
   },
   {
     title: "牌局纪事",
     items: [
-      "牌局纪事保留全部事件历史。可以切换序号正反序、列表正反序，并设置窗口最少要容纳多少条记录。",
+      "棋盘和牌局纪事都可以拖拽与缩放。你可以在设置里切换原生即时拖拽或第三方长按拖拽。",
       "缩放纪事窗口时，列表项会按 Compact / Normal / Large 自动切换；当达到最小条数且已是最小档位后，窗口会停止继续缩小。",
     ],
   },
@@ -382,6 +387,7 @@ export function GamePage() {
   const [tradeRequestedCardIds, setTradeRequestedCardIds] = useState<string[]>([]);
   const [tradeComposerStep, setTradeComposerStep] = useState<TradeComposerStep>("counterparty");
   const [eventFeedPreferences, setEventFeedPreferences] = useState(defaultEventFeedPreferences);
+  const [floatingSurfaceDragPreferences, setFloatingSurfaceDragPreferences] = useState(defaultFloatingSurfaceDragPreferences);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isTurnToolsOpen, setIsTurnToolsOpen] = useState(false);
   const [isRulesGuideOpen, setIsRulesGuideOpen] = useState(false);
@@ -1870,6 +1876,34 @@ export function GamePage() {
   }, [eventFeedPreferences]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const raw = window.localStorage.getItem(FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+
+    try {
+      setFloatingSurfaceDragPreferences(sanitizeFloatingSurfaceDragPreferences(JSON.parse(raw)));
+    } catch {
+      setFloatingSurfaceDragPreferences(defaultFloatingSurfaceDragPreferences);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(floatingSurfaceDragPreferences),
+    );
+  }, [floatingSurfaceDragPreferences]);
+
+  useEffect(() => {
     const selectableOfferedTileIds = new Set(
       offeredPropertyOptions
         .filter((option) => !option.disabledReason)
@@ -2913,6 +2947,8 @@ export function GamePage() {
             <FloatingBoardWindow
               initialFrame={boardFrame}
               viewportSize={viewportSize}
+              dragPreferences={floatingSurfaceDragPreferences}
+              onDragPreferencesChange={setFloatingSurfaceDragPreferences}
               isFocused={floatingFocus === "board"}
               zIndex={floatingZOrder.board}
               onFocus={() => focusFloatingSurface("board")}
@@ -3316,6 +3352,8 @@ export function GamePage() {
         events={projection.recentEvents}
         preferences={eventFeedPreferences}
         onPreferencesChange={setEventFeedPreferences}
+        dragPreferences={floatingSurfaceDragPreferences}
+        onDragPreferencesChange={setFloatingSurfaceDragPreferences}
         isFocused={floatingFocus === "event-feed"}
         zIndex={floatingZOrder["event-feed"]}
         onFocus={() => focusFloatingSurface("event-feed")}

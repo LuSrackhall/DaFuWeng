@@ -103,6 +103,22 @@ async function dragHandle(page: Page, selector: string, deltaX: number, deltaY: 
   await page.mouse.up();
 }
 
+async function longPressDrag(page: Page, selector: string, deltaX: number, deltaY: number) {
+  const box = await page.locator(selector).boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+
+  const startX = box.x + Math.min(72, box.width * 0.28);
+  const startY = box.y + Math.min(28, box.height * 0.55);
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.waitForTimeout(240);
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 20 });
+  await page.mouse.up();
+}
+
 async function readCanvasMetrics(page: Page) {
   return page.locator(".board__pixi-host canvas").evaluate((canvas) => {
     const rect = canvas.getBoundingClientRect();
@@ -133,6 +149,23 @@ test("board window keeps full board visible while maximizing canvas area and sup
   await expect(boardWindow).toBeVisible();
   await expect(boardHost).toBeVisible();
   await expect(page.getByTestId("board-window-toggle-details")).toContainText("展开信息");
+
+  await page.getByTestId("board-window-settings-toggle").click();
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("third-party-hold");
+
+  const beforeLongPressDrag = await boardWindow.boundingBox();
+  await longPressDrag(page, '[data-testid="board-window-drag-hotspot"]', 120, 80);
+  const afterLongPressDrag = await boardWindow.boundingBox();
+  expect(afterLongPressDrag && beforeLongPressDrag ? afterLongPressDrag.x > beforeLongPressDrag.x + 80 : false).toBe(true);
+  expect(afterLongPressDrag && beforeLongPressDrag ? afterLongPressDrag.y > beforeLongPressDrag.y + 40 : false).toBe(true);
+
+  await page.getByTestId("board-window-drag-mode").selectOption("native");
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await dragHandle(page, '[data-testid="board-window-drag-hotspot"]', 60, 40);
+  const afterNativeDrag = await boardWindow.boundingBox();
+  expect(afterNativeDrag && afterLongPressDrag ? afterNativeDrag.x > afterLongPressDrag.x + 40 : false).toBe(true);
+  expect(afterNativeDrag && afterLongPressDrag ? afterNativeDrag.y > afterLongPressDrag.y + 20 : false).toBe(true);
+  await page.getByTestId("board-window-settings-toggle").click();
 
   const canvasBeforeExpand = await boardCanvas.boundingBox();
   const metricsBeforeExpand = await readCanvasMetrics(page);

@@ -7,6 +7,8 @@ import {
   sanitizeEventFeedCustomMaxCount,
   sanitizeEventFeedMinCount,
 } from "./roomEventFeed";
+import type { FloatingSurfaceDragPreferences } from "./floatingSurfaceDrag";
+import { useThirdPartyLongPressDrag } from "./floatingSurfaceDrag";
 import type { ProjectionEvent } from "@dafuweng/contracts";
 
 const FLOATING_EVENT_FEED_STORAGE_KEY = "dafuweng-floating-event-feed-frame-v3";
@@ -27,12 +29,23 @@ type DraggableEventFeedProps = {
   events: ProjectionEvent[];
   preferences: EventFeedPreferences;
   onPreferencesChange: (updater: (prev: EventFeedPreferences) => EventFeedPreferences) => void;
+  dragPreferences: FloatingSurfaceDragPreferences;
+  onDragPreferencesChange: (updater: (prev: FloatingSurfaceDragPreferences) => FloatingSurfaceDragPreferences) => void;
   isFocused: boolean;
   zIndex: number;
   onFocus: () => void;
 };
 
-export function DraggableEventFeed({ events, preferences, onPreferencesChange, isFocused, zIndex, onFocus }: DraggableEventFeedProps) {
+export function DraggableEventFeed({
+  events,
+  preferences,
+  onPreferencesChange,
+  dragPreferences,
+  onDragPreferencesChange,
+  isFocused,
+  zIndex,
+  onFocus,
+}: DraggableEventFeedProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIntroOpen, setIsIntroOpen] = useState(false);
   const [viewportSize, setViewportSize] = useState(() => ({
@@ -42,6 +55,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
   const rndRef = useRef<Rnd | null>(null);
   const scrollRef = useRef<HTMLOListElement>(null);
   const [isInteracting, setIsInteracting] = useState(false);
+  const dragHandleRef = useRef<HTMLDivElement | null>(null);
 
   const feed = buildRecentEventFeed(events, preferences);
   
@@ -128,6 +142,20 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
     }
   }
 
+  useThirdPartyLongPressDrag({
+    enabled: dragPreferences.dragMode === "third-party-hold",
+    handleRef: dragHandleRef,
+    rndRef,
+    frame,
+    onFocus,
+    onInteractingChange: setIsInteracting,
+    onCommit: (nextFrame) => {
+      setFrame(nextFrame);
+      persistFrame(nextFrame);
+    },
+    holdDelayMs: dragPreferences.holdDelayMs,
+  });
+
   function resetToDock() {
     const nextFrame = { ...dockFrameRef.current };
     setFrame(nextFrame);
@@ -154,6 +182,7 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
       minHeight={minimumHeight}
       data-testid="floating-event-feed-window"
       dragHandleClassName="floating-event-feed__handle"
+      disableDragging={dragPreferences.dragMode === "third-party-hold"}
       enableUserSelectHack={true}
       enableResizing={{
         top: true, right: true, bottom: true, left: true,
@@ -213,8 +242,13 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
           data-testid="floating-event-feed-handle" 
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', flexShrink: 0 }}
         >
-          <div className="floating-event-feed__title-group" style={{ margin: 0, padding: 0 }}>
+          <div className="floating-event-feed__title-group floating-event-feed__drag-hotspot" data-testid="floating-event-feed-drag-hotspot" ref={dragHandleRef} style={{ margin: 0, padding: 0 }}>
             <p className="shell__eyebrow" style={{ margin: 0, fontWeight: 'bold' }}>牌局纪事</p>
+            <span>
+              {dragPreferences.dragMode === "third-party-hold"
+                ? `第三方长按拖拽 · 长按 ${dragPreferences.holdDelayMs}ms 后拖动`
+                : "原生即时拖拽 · 按下后立即开始拖动"}
+            </span>
           </div>
           <div className="floating-event-feed__toolbar-actions" style={{ display: 'flex', gap: '8px' }}>
             <button className="floating-event-feed__settings-toggle" data-testid="floating-event-feed-intro-toggle" type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => setIsIntroOpen((current) => !current)}>
@@ -270,6 +304,20 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
                   <option value="custom">自定义最大条数</option>
                 </select>
               </label>
+              <label className="floating-event-feed__field">
+                <strong>拖拽方案</strong>
+                <select
+                  data-testid="floating-event-feed-drag-mode"
+                  value={dragPreferences.dragMode}
+                  onChange={(e) => onDragPreferencesChange((current) => ({
+                    ...current,
+                    dragMode: e.target.value as FloatingSurfaceDragPreferences["dragMode"],
+                  }))}
+                >
+                  <option value="third-party-hold">第三方长按拖拽</option>
+                  <option value="native">原生即时拖拽</option>
+                </select>
+              </label>
               {preferences.historyMode === "custom" ? (
                 <label className="floating-event-feed__field">
                   <strong>最大历史事件条数</strong>
@@ -305,6 +353,11 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
                   {feed.hasHiddenEvents
                     ? `已折叠更早 ${feed.hiddenCount} 条历史事件`
                     : "当前保留全部历史事件"}
+                </span>
+                <span>
+                  {dragPreferences.dragMode === "third-party-hold"
+                    ? "当前使用第三方长按拖拽"
+                    : "当前使用原生即时拖拽"}
                 </span>
               </div>
             </div>
