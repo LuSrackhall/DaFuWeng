@@ -6,7 +6,7 @@ import { Rnd } from "react-rnd";
 const FLOATING_BOARD_STORAGE_KEY = "dafuweng-floating-board-frame-v3";
 const BOARD_MIN_WIDTH = 520;
 const BOARD_MIN_HEIGHT = 420;
-const BOARD_RESIZE_STEP = 12;
+const BOARD_RESIZE_STEP = 1;
 
 type FloatingFrame = {
   x: number;
@@ -29,10 +29,6 @@ type FloatingBoardWindowProps = {
   zIndex: number;
   onFocus: () => void;
 };
-
-function renderResizeHandle(prefix: string, direction: string) {
-  return <span className={`floating-resize-handle floating-resize-handle--${direction}`} data-testid={`${prefix}-resize-${direction}`} />;
-}
 
 function normalizeFrame(frame: FloatingFrame): FloatingFrame {
   return {
@@ -81,6 +77,7 @@ function persistFrame(frame: FloatingFrame) {
 export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, children, isFocused, zIndex, onFocus }: FloatingBoardWindowProps) {
   const [frame, setFrame] = useState(() => readPersistedFrame(viewportSize, initialFrame));
   const [isInteracting, setIsInteracting] = useState(false);
+  const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(true);
   const rndRef = useRef<Rnd | null>(null);
 
   const dockFrameRef = useRef(normalizeFrame(initialFrame));
@@ -106,20 +103,20 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
       data-testid="floating-board-window"
       className={`board-resizable-wrap${isFocused ? " board-resizable-wrap--focused" : ""}${isInteracting ? " board-resizable-wrap--interacting" : ""}`}
       dragHandleClassName="board-drag-handle"
-      enableUserSelectHack={false}
+      enableUserSelectHack={true}
       enableResizing={{
         top: true, right: true, bottom: true, left: true,
         topRight: true, bottomRight: true, bottomLeft: true, topLeft: true,
       }}
-      resizeHandleComponent={{
-        top: renderResizeHandle("board-window", "top"),
-        right: renderResizeHandle("board-window", "right"),
-        bottom: renderResizeHandle("board-window", "bottom"),
-        left: renderResizeHandle("board-window", "left"),
-        topRight: renderResizeHandle("board-window", "top-right"),
-        bottomRight: renderResizeHandle("board-window", "bottom-right"),
-        bottomLeft: renderResizeHandle("board-window", "bottom-left"),
-        topLeft: renderResizeHandle("board-window", "top-left"),
+      resizeHandleClasses={{
+        top: "board-window-resize-handle board-window-resize-handle--top",
+        right: "board-window-resize-handle board-window-resize-handle--right",
+        bottom: "board-window-resize-handle board-window-resize-handle--bottom",
+        left: "board-window-resize-handle board-window-resize-handle--left",
+        topRight: "board-window-resize-handle board-window-resize-handle--top-right",
+        bottomRight: "board-window-resize-handle board-window-resize-handle--bottom-right",
+        bottomLeft: "board-window-resize-handle board-window-resize-handle--bottom-left",
+        topLeft: "board-window-resize-handle board-window-resize-handle--top-left",
       }}
       resizeGrid={[BOARD_RESIZE_STEP, BOARD_RESIZE_STEP]}
       dragGrid={[1, 1]}
@@ -138,7 +135,10 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
         setFrame(nextFrame);
         persistFrame(nextFrame);
       }}
-      onResizeStart={() => setIsInteracting(true)}
+      onResizeStart={() => {
+        onFocus();
+        setIsInteracting(true);
+      }}
       onResizeStop={(_event, _direction, ref, _delta, position) => {
         setIsInteracting(false);
         const nextFrame = normalizeFrame({
@@ -153,10 +153,23 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
       style={{ position: "fixed", zIndex }}
       cancel="button, input, select, option"
     >
-      <div className="board-window" data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
+      <div className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
         <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
-          <div className="board-window__toolbar-content">{toolbar}</div>
+          <div className="board-window__toolbar-title">
+            <p className="shell__eyebrow">棋盘工作台</p>
+            <strong>自由拖拽与八向缩放</strong>
+          </div>
+          {!isDetailsCollapsed ? <div className="board-window__toolbar-content">{toolbar}</div> : null}
           <div className="board-window__toolbar-actions">
+            <button
+              className="floating-surface__action"
+              data-testid="board-window-toggle-details"
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setIsDetailsCollapsed((current) => !current)}
+            >
+              {isDetailsCollapsed ? "展开信息" : "收起信息"}
+            </button>
             <button className="floating-surface__action" data-testid="board-window-reset" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => resetToDock()}>
               重置停靠位
             </button>
@@ -165,9 +178,8 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
             </button>
           </div>
         </div>
-        <div className="board-window__canvas">
+        <div className="board-window__canvas" style={{ pointerEvents: isInteracting ? "none" : "auto" }}>
           {children}
-          {isInteracting && <div className="board-window__interaction-shield" />}
         </div>
       </div>
     </Rnd>,

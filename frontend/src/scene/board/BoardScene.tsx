@@ -274,8 +274,8 @@ function getFeedbackBannerAlpha(tone: NonNullable<BoardSceneProps["resultFeedbac
 function getHostSize(host: HTMLDivElement) {
   const rect = host.getBoundingClientRect();
   return {
-    width: Math.max(320, Math.floor(rect.width || host.clientWidth || 640)),
-    height: Math.max(320, Math.floor(rect.height || host.clientHeight || 640)),
+    width: Math.max(1, Math.floor(rect.width || host.clientWidth || 1)),
+    height: Math.max(1, Math.floor(rect.height || host.clientHeight || 1)),
   };
 }
 
