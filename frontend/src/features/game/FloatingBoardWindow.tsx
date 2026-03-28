@@ -165,7 +165,7 @@ export function FloatingBoardWindow({ initialFrame, viewportSize, toolbar, child
             </button>
           </div>
         </div>
-        <div className="board-window__content">
+        <div className="board-window__canvas">
           {children}
           {isInteracting && <div className="board-window__interaction-shield" />}
         </div>

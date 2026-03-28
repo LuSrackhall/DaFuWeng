@@ -1395,9 +1395,11 @@ body {
 
 .board__surface {
   position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-  min-height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
   border-radius: 28px;
   background:
     linear-gradient(160deg, rgba(237, 223, 189, 0.85), rgba(189, 151, 94, 0.38)),
@@ -1414,7 +1416,7 @@ body {
 }
 
 .board__pixi-host {
-  min-height: 100%;
+  height: 100%;
 }
 
 .room-shell__board--roll-ready .board__surface {
@@ -1956,23 +1958,17 @@ body {
 }
 
 .board-resizable-wrap {
-  overflow: hidden;
-  border-radius: 28px;
-  border: 1px solid rgba(232, 205, 143, 0.16);
-  background: linear-gradient(180deg, rgba(10, 22, 18, 0.52), rgba(10, 22, 18, 0.36));
-  box-shadow: 0 24px 48px rgba(3, 10, 8, 0.28);
-  backdrop-filter: blur(16px) saturate(145%);
   contain: layout paint style;
   transform: translateZ(0);
   will-change: transform, width, height;
 }
 
-.board-resizable-wrap--focused {
+.board-resizable-wrap--focused .board-window {
   border-color: rgba(229, 191, 105, 0.42);
   box-shadow: 0 0 0 2px rgba(229, 191, 105, 0.2), 0 28px 56px rgba(3, 10, 8, 0.3);
 }
 
-.board-resizable-wrap--interacting {
+.board-resizable-wrap--interacting .board-window {
   box-shadow: 0 12px 24px rgba(3, 10, 8, 0.18);
   backdrop-filter: none;
 }
@@ -2150,6 +2146,12 @@ body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(232, 205, 143, 0.16);
+  background: linear-gradient(180deg, rgba(10, 22, 18, 0.52), rgba(10, 22, 18, 0.36));
+  box-shadow: 0 24px 48px rgba(3, 10, 8, 0.28);
+  backdrop-filter: blur(16px) saturate(145%);
 }
 
 .board-window__toolbar {
@@ -2179,10 +2181,15 @@ body {
 .board-window__canvas {
   min-height: 0;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px; /* Give it a little breathing room when shrunk tight */
+  box-sizing: border-box;
 }
 
 .board-window__canvas > * {
-  height: 100%;
+  /* Flex child preserves own sizes and aspect-ratio naturally */
 }
 
 .board-drag-handle {
