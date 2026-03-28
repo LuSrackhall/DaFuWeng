@@ -1,4 +1,3 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
@@ -163,26 +162,41 @@ export function DraggableEventFeed({
       return;
     }
 
+    element.blur();
+    window.setTimeout(() => element.blur(), 0);
     window.requestAnimationFrame(() => element.blur());
   }
 
-  function blurActiveSelectOnSurfacePointerDown(event: ReactPointerEvent<HTMLElement>) {
-    if (typeof document === "undefined") {
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
       return;
     }
 
-    const activeElement = document.activeElement;
-    if (!(activeElement instanceof HTMLSelectElement)) {
-      return;
-    }
+    const dismissActiveSelect = (event: Event) => {
+      const activeElement = document.activeElement;
+      if (!(activeElement instanceof HTMLSelectElement)) {
+        return;
+      }
 
-    const target = event.target;
-    if (target instanceof Node && activeElement.contains(target)) {
-      return;
-    }
+      if (!surfaceRef.current?.contains(activeElement)) {
+        return;
+      }
 
-    activeElement.blur();
-  }
+      const target = event.target;
+      if (target instanceof Node && activeElement.contains(target)) {
+        return;
+      }
+
+      activeElement.blur();
+    };
+
+    window.addEventListener("pointerdown", dismissActiveSelect, true);
+    window.addEventListener("click", dismissActiveSelect, true);
+    return () => {
+      window.removeEventListener("pointerdown", dismissActiveSelect, true);
+      window.removeEventListener("click", dismissActiveSelect, true);
+    };
+  }, []);
 
   function resetToDock() {
     const nextFrame = { ...dockFrameRef.current };
@@ -253,7 +267,6 @@ export function DraggableEventFeed({
         data-testid="floating-event-feed-surface"
         data-density={styleDensity}
         data-focused={isFocused ? "true" : "false"}
-        onPointerDownCapture={blurActiveSelectOnSurfacePointerDown}
         style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}
       >
         <div

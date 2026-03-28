@@ -2198,6 +2198,10 @@ body {
   backdrop-filter: blur(16px) saturate(145%);
 }
 
+.board-window--settings-open {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .board-window__toolbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

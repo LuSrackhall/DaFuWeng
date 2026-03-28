@@ -135,6 +135,21 @@ async function getZIndex(page: Page, selector: string) {
   return page.locator(selector).evaluate((element) => Number.parseInt(window.getComputedStyle(element).zIndex || "0", 10));
 }
 
+async function readFrame(page: Page, selector: string) {
+  const box = await page.locator(selector).boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return null;
+  }
+
+  return {
+    x: Math.round(box.x),
+    y: Math.round(box.y),
+    width: Math.round(box.width),
+    height: Math.round(box.height),
+  };
+}
+
 test("desktop room floating surfaces follow whole-window long-press drag and independent drag-mode settings", async ({ page }, testInfo) => {
   test.setTimeout(90000);
   await page.setViewportSize({ width: 1440, height: 980 });
@@ -173,7 +188,7 @@ test("desktop room floating surfaces follow whole-window long-press drag and ind
   await page.getByTestId("board-window-drag-mode").selectOption("native");
   await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
   await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
-  await page.getByTestId("board-window-surface").click({ position: { x: 36, y: 96 } });
+  await page.getByTestId("board-window-drag-hotspot").click();
   await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
   await page.getByTestId("board-window-settings-toggle").click();
   await expect(page.getByTestId("board-window-settings")).toHaveCount(0);
@@ -191,7 +206,7 @@ test("desktop room floating surfaces follow whole-window long-press drag and ind
   await page.getByTestId("floating-event-feed-drag-mode").selectOption("third-party-hold");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
-  await page.getByTestId("floating-event-feed-surface").click({ position: { x: 44, y: 96 } });
+  await page.getByTestId("floating-event-feed-drag-hotspot").click();
   await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', -180, 70);
@@ -203,7 +218,7 @@ test("desktop room floating surfaces follow whole-window long-press drag and ind
   await page.getByTestId("floating-event-feed-drag-mode").selectOption("native");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("native");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
-  await page.getByTestId("floating-event-feed-surface").click({ position: { x: 44, y: 96 } });
+  await page.getByTestId("floating-event-feed-drag-hotspot").click();
   await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await page.getByTestId("board-window-settings-toggle").evaluate((element: HTMLButtonElement) => element.click());
@@ -234,6 +249,9 @@ test("desktop room floating surfaces follow whole-window long-press drag and ind
 
   await expect(page.getByTestId("board-window-drag-hotspot")).toContainText("棋盘工作台");
   await expect(page.getByTestId("board-window-drag-hotspot")).not.toContainText("自由拖拽与八向缩放");
+  await page.getByTestId("board-window-toggle-details").evaluate((element: HTMLButtonElement) => element.click());
+  await expect(page.getByTestId("board-window-drag-hotspot")).toContainText("自由拖拽与八向缩放");
+  await page.getByTestId("board-window-toggle-details").evaluate((element: HTMLButtonElement) => element.click());
 
   await page.getByTestId("open-rules-guide").click();
   await expect(page.getByTestId("rules-guide-panel")).toBeVisible();
@@ -265,13 +283,69 @@ test("drag mode preferences persist independently after reload", async ({ page }
 
   await page.reload();
 
-  await page.getByTestId("board-window-settings-toggle").click();
+  await page.getByTestId("board-window-settings-toggle").evaluate((element: HTMLButtonElement) => element.click());
   await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
-  await page.getByTestId("board-window-settings-toggle").click();
+  await page.getByTestId("board-window-settings-toggle").evaluate((element: HTMLButtonElement) => element.click());
 
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
   await page.getByTestId("floating-event-feed-settings-toggle").click();
+});
+
+test("window frames and drag modes restore independently after repeated changes and reload", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 980 });
+
+  const roomId = "room-floating-frame-persistence";
+  const snapshot = buildInteractiveSnapshot(roomId);
+
+  await installFakeEventSource(page, roomId, { playerId: "p1", playerName: "房主甲" });
+  await mockRoomSnapshot(page, roomId, snapshot);
+  await page.goto(`/room/${roomId}`);
+
+  await page.getByTestId("board-window-settings-toggle").click();
+  await page.getByTestId("board-window-drag-mode").selectOption("native");
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await page.getByTestId("board-window-settings-toggle").click();
+
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await page.getByTestId("floating-event-feed-drag-mode").selectOption("third-party-hold");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+
+  await longPressDrag(page, '[data-testid="board-window-surface"]', 150, 80);
+  await dragResizeHandle(page, ".board-window-resize-handle--bottom-right", 110, 130);
+  await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', -140, 60);
+  await dragResizeHandle(page, ".event-feed-resize-handle--bottom-right", 90, 110);
+
+  const boardFrameBeforeReload = await readFrame(page, ".board-resizable-wrap");
+  const feedFrameBeforeReload = await readFrame(page, ".floating-event-feed-shell");
+
+  await page.reload();
+
+  await page.getByTestId("board-window-settings-toggle").evaluate((element: HTMLButtonElement) => element.click());
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await page.getByTestId("board-window-settings-toggle").evaluate((element: HTMLButtonElement) => element.click());
+
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+
+  const boardFrameAfterReload = await readFrame(page, ".board-resizable-wrap");
+  const feedFrameAfterReload = await readFrame(page, ".floating-event-feed-shell");
+
+  expect(boardFrameAfterReload).not.toBeNull();
+  expect(feedFrameAfterReload).not.toBeNull();
+  expect(boardFrameBeforeReload).not.toBeNull();
+  expect(feedFrameBeforeReload).not.toBeNull();
+
+  expect(Math.abs((boardFrameAfterReload?.x ?? 0) - (boardFrameBeforeReload?.x ?? 0))).toBeLessThanOrEqual(2);
+  expect(Math.abs((boardFrameAfterReload?.y ?? 0) - (boardFrameBeforeReload?.y ?? 0))).toBeLessThanOrEqual(2);
+  expect(Math.abs((boardFrameAfterReload?.width ?? 0) - (boardFrameBeforeReload?.width ?? 0))).toBeLessThanOrEqual(2);
+  expect(Math.abs((boardFrameAfterReload?.height ?? 0) - (boardFrameBeforeReload?.height ?? 0))).toBeLessThanOrEqual(2);
+  expect(Math.abs((feedFrameAfterReload?.x ?? 0) - (feedFrameBeforeReload?.x ?? 0))).toBeLessThanOrEqual(2);
+  expect(Math.abs((feedFrameAfterReload?.y ?? 0) - (feedFrameBeforeReload?.y ?? 0))).toBeLessThanOrEqual(2);
+  expect(Math.abs((feedFrameAfterReload?.width ?? 0) - (feedFrameBeforeReload?.width ?? 0))).toBeLessThanOrEqual(2);
+  expect(Math.abs((feedFrameAfterReload?.height ?? 0) - (feedFrameBeforeReload?.height ?? 0))).toBeLessThanOrEqual(2);
 });
 
 test("mobile room guidance panel remains readable with floating surfaces enabled", async ({ page }, testInfo) => {

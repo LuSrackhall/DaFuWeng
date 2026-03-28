@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
@@ -121,26 +121,41 @@ export function FloatingBoardWindow({
       return;
     }
 
+    element.blur();
+    window.setTimeout(() => element.blur(), 0);
     window.requestAnimationFrame(() => element.blur());
   }
 
-  function blurActiveSelectOnSurfacePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (typeof document === "undefined") {
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
       return;
     }
 
-    const activeElement = document.activeElement;
-    if (!(activeElement instanceof HTMLSelectElement)) {
-      return;
-    }
+    const dismissActiveSelect = (event: Event) => {
+      const activeElement = document.activeElement;
+      if (!(activeElement instanceof HTMLSelectElement)) {
+        return;
+      }
 
-    const target = event.target;
-    if (target instanceof Node && activeElement.contains(target)) {
-      return;
-    }
+      if (!surfaceRef.current?.contains(activeElement)) {
+        return;
+      }
 
-    activeElement.blur();
-  }
+      const target = event.target;
+      if (target instanceof Node && activeElement.contains(target)) {
+        return;
+      }
+
+      activeElement.blur();
+    };
+
+    window.addEventListener("pointerdown", dismissActiveSelect, true);
+    window.addEventListener("click", dismissActiveSelect, true);
+    return () => {
+      window.removeEventListener("pointerdown", dismissActiveSelect, true);
+      window.removeEventListener("click", dismissActiveSelect, true);
+    };
+  }, []);
 
   function resetToDock() {
     const nextFrame = normalizeFrame(dockFrameRef.current);
@@ -200,7 +215,7 @@ export function FloatingBoardWindow({
       style={{ position: "fixed", zIndex }}
       cancel="button, input, select, option"
     >
-      <div ref={surfaceRef} className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"} onPointerDownCapture={blurActiveSelectOnSurfacePointerDown}>
+      <div ref={surfaceRef} className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}${isSettingsOpen ? " board-window--settings-open" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
         <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
           <div className="board-window__toolbar-title" data-testid="board-window-drag-hotspot">
             <p className="shell__eyebrow">棋盘工作台</p>
