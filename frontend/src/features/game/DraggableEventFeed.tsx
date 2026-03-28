@@ -156,6 +156,15 @@ export function DraggableEventFeed({
     holdDelayMs: dragPreferences.holdDelayMs,
   });
 
+  function blurElementOnNextFrame(element: HTMLButtonElement | HTMLSelectElement) {
+    if (typeof window === "undefined") {
+      element.blur();
+      return;
+    }
+
+    window.requestAnimationFrame(() => element.blur());
+  }
+
   function resetToDock() {
     const nextFrame = { ...dockFrameRef.current };
     setFrame(nextFrame);
@@ -294,10 +303,14 @@ export function DraggableEventFeed({
                 <select
                   data-testid="floating-event-feed-drag-mode"
                   value={dragPreferences.dragMode}
-                  onChange={(e) => onDragPreferencesChange((current) => ({
-                    ...current,
-                    dragMode: e.target.value as FloatingSurfaceDragPreferences["dragMode"],
-                  }))}
+                  onChange={(e) => {
+                    const nextValue = e.target.value as FloatingSurfaceDragPreferences["dragMode"];
+                    onDragPreferencesChange((current) => ({
+                      ...current,
+                      dragMode: nextValue,
+                    }));
+                    blurElementOnNextFrame(e.currentTarget);
+                  }}
                 >
                   <option value="third-party-hold">第三方库整窗长按拖拽</option>
                   <option value="native">原生整窗长按拖拽</option>

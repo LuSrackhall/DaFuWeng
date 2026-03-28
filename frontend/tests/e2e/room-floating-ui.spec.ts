@@ -163,6 +163,7 @@ test("desktop room floating surfaces follow whole-window long-press drag and sha
 
   const boardBefore = await boardWindow.boundingBox();
   await page.getByTestId("board-window-settings-toggle").click();
+  await expect(page.getByTestId("board-window-settings")).toBeVisible();
   await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("third-party-hold");
   await longPressDrag(page, '[data-testid="board-window-surface"]', 140, 90);
   const boardAfterThirdParty = await boardWindow.boundingBox();
@@ -171,7 +172,9 @@ test("desktop room floating surfaces follow whole-window long-press drag and sha
 
   await page.getByTestId("board-window-drag-mode").selectOption("native");
   await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
   await page.getByTestId("board-window-settings-toggle").click();
+  await expect(page.getByTestId("board-window-settings")).toHaveCount(0);
   await longPressDrag(page, '[data-testid="board-window-surface"]', 70, 50);
   const boardAfterNative = await boardWindow.boundingBox();
   expect(boardAfterNative && boardAfterThirdParty ? boardAfterNative.x > boardAfterThirdParty.x + 40 : false).toBe(true);
@@ -183,7 +186,9 @@ test("desktop room floating surfaces follow whole-window long-press drag and sha
 
   const feedBefore = await eventFeedWindow.boundingBox();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
-  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("native");
+  await page.getByTestId("floating-event-feed-drag-mode").selectOption("third-party-hold");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', -180, 70);
   const feedAfterNative = await eventFeedWindow.boundingBox();
@@ -191,9 +196,13 @@ test("desktop room floating surfaces follow whole-window long-press drag and sha
   expect(feedAfterNative && feedBefore ? feedAfterNative.y > feedBefore.y + 40 : false).toBe(true);
 
   await page.getByTestId("floating-event-feed-settings-toggle").click();
-  await page.getByTestId("floating-event-feed-drag-mode").selectOption("third-party-hold");
-  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
+  await page.getByTestId("floating-event-feed-drag-mode").selectOption("native");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("native");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await page.getByTestId("board-window-settings-toggle").evaluate((element: HTMLButtonElement) => element.click());
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await page.getByTestId("board-window-settings-toggle").evaluate((element: HTMLButtonElement) => element.click());
   await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', 90, 50);
   const feedAfterThirdParty = await eventFeedWindow.boundingBox();
   expect(feedAfterThirdParty && feedAfterNative ? feedAfterThirdParty.x > feedAfterNative.x + 50 : false).toBe(true);

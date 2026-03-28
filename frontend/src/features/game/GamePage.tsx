@@ -12,7 +12,9 @@ import { usePresentationState } from "../../state/presentation/gamePresentation"
 import { getAuctionBidValidation, getDeficitControlMode, sanitizeAuctionBidInput } from "./gameActionState";
 import {
   defaultFloatingSurfaceDragPreferences,
-  FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY,
+  FLOATING_BOARD_DRAG_PREFERENCES_STORAGE_KEY,
+  FLOATING_EVENT_FEED_DRAG_PREFERENCES_STORAGE_KEY,
+  LEGACY_FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY,
   sanitizeFloatingSurfaceDragPreferences,
 } from "./floatingSurfaceDrag";
 import { defaultEventFeedPreferences, EVENT_FEED_PREFERENCES_STORAGE_KEY, sanitizeEventFeedPreferences } from "./roomEventFeed";
@@ -387,7 +389,8 @@ export function GamePage() {
   const [tradeRequestedCardIds, setTradeRequestedCardIds] = useState<string[]>([]);
   const [tradeComposerStep, setTradeComposerStep] = useState<TradeComposerStep>("counterparty");
   const [eventFeedPreferences, setEventFeedPreferences] = useState(defaultEventFeedPreferences);
-  const [floatingSurfaceDragPreferences, setFloatingSurfaceDragPreferences] = useState(defaultFloatingSurfaceDragPreferences);
+  const [boardDragPreferences, setBoardDragPreferences] = useState(defaultFloatingSurfaceDragPreferences);
+  const [eventFeedDragPreferences, setEventFeedDragPreferences] = useState(defaultFloatingSurfaceDragPreferences);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isTurnToolsOpen, setIsTurnToolsOpen] = useState(false);
   const [isRulesGuideOpen, setIsRulesGuideOpen] = useState(false);
@@ -1880,16 +1883,22 @@ export function GamePage() {
       return;
     }
 
-    const raw = window.localStorage.getItem(FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY);
-    if (!raw) {
-      return;
-    }
+    const readStoredPreferences = (storageKey: string) => {
+      const raw = window.localStorage.getItem(storageKey)
+        ?? window.localStorage.getItem(LEGACY_FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY);
+      if (!raw) {
+        return defaultFloatingSurfaceDragPreferences;
+      }
 
-    try {
-      setFloatingSurfaceDragPreferences(sanitizeFloatingSurfaceDragPreferences(JSON.parse(raw)));
-    } catch {
-      setFloatingSurfaceDragPreferences(defaultFloatingSurfaceDragPreferences);
-    }
+      try {
+        return sanitizeFloatingSurfaceDragPreferences(JSON.parse(raw));
+      } catch {
+        return defaultFloatingSurfaceDragPreferences;
+      }
+    };
+
+    setBoardDragPreferences(readStoredPreferences(FLOATING_BOARD_DRAG_PREFERENCES_STORAGE_KEY));
+    setEventFeedDragPreferences(readStoredPreferences(FLOATING_EVENT_FEED_DRAG_PREFERENCES_STORAGE_KEY));
   }, []);
 
   useEffect(() => {
@@ -1898,10 +1907,21 @@ export function GamePage() {
     }
 
     window.localStorage.setItem(
-      FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY,
-      JSON.stringify(floatingSurfaceDragPreferences),
+      FLOATING_BOARD_DRAG_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(boardDragPreferences),
     );
-  }, [floatingSurfaceDragPreferences]);
+  }, [boardDragPreferences]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      FLOATING_EVENT_FEED_DRAG_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(eventFeedDragPreferences),
+    );
+  }, [eventFeedDragPreferences]);
 
   useEffect(() => {
     const selectableOfferedTileIds = new Set(
@@ -2947,8 +2967,8 @@ export function GamePage() {
             <FloatingBoardWindow
               initialFrame={boardFrame}
               viewportSize={viewportSize}
-              dragPreferences={floatingSurfaceDragPreferences}
-              onDragPreferencesChange={setFloatingSurfaceDragPreferences}
+              dragPreferences={boardDragPreferences}
+              onDragPreferencesChange={setBoardDragPreferences}
               isFocused={floatingFocus === "board"}
               zIndex={floatingZOrder.board}
               onFocus={() => focusFloatingSurface("board")}
@@ -3352,8 +3372,8 @@ export function GamePage() {
         events={projection.recentEvents}
         preferences={eventFeedPreferences}
         onPreferencesChange={setEventFeedPreferences}
-        dragPreferences={floatingSurfaceDragPreferences}
-        onDragPreferencesChange={setFloatingSurfaceDragPreferences}
+        dragPreferences={eventFeedDragPreferences}
+        onDragPreferencesChange={setEventFeedDragPreferences}
         isFocused={floatingFocus === "event-feed"}
         zIndex={floatingZOrder["event-feed"]}
         onFocus={() => focusFloatingSurface("event-feed")}

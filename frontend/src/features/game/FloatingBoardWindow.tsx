@@ -115,6 +115,15 @@ export function FloatingBoardWindow({
     holdDelayMs: dragPreferences.holdDelayMs,
   });
 
+  function blurElementOnNextFrame(element: HTMLButtonElement | HTMLSelectElement) {
+    if (typeof window === "undefined") {
+      element.blur();
+      return;
+    }
+
+    window.requestAnimationFrame(() => element.blur());
+  }
+
   function resetToDock() {
     const nextFrame = normalizeFrame(dockFrameRef.current);
     setFrame(nextFrame);
@@ -186,7 +195,11 @@ export function FloatingBoardWindow({
               data-testid="board-window-settings-toggle"
               type="button"
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => setIsSettingsOpen((current) => !current)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsSettingsOpen((current) => !current);
+                blurElementOnNextFrame(event.currentTarget);
+              }}
             >
               {isSettingsOpen ? "收起设置" : "设置"}
             </button>
@@ -214,10 +227,14 @@ export function FloatingBoardWindow({
               <select
                 data-testid="board-window-drag-mode"
                 value={dragPreferences.dragMode}
-                onChange={(event) => onDragPreferencesChange((current) => ({
-                  ...current,
-                  dragMode: event.target.value as FloatingSurfaceDragPreferences["dragMode"],
-                }))}
+                onChange={(event) => {
+                  const nextValue = event.target.value as FloatingSurfaceDragPreferences["dragMode"];
+                  onDragPreferencesChange((current) => ({
+                    ...current,
+                    dragMode: nextValue,
+                  }));
+                  blurElementOnNextFrame(event.currentTarget);
+                }}
               >
                 <option value="third-party-hold">第三方库整窗长按拖拽</option>
                 <option value="native">原生整窗长按拖拽</option>

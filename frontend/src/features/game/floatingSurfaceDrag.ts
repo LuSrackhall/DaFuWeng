@@ -3,8 +3,12 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
 import type { Rnd } from "react-rnd";
 
-export const FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY =
+export const LEGACY_FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY =
   "dafuweng-floating-surface-drag-preferences-v1";
+export const FLOATING_BOARD_DRAG_PREFERENCES_STORAGE_KEY =
+  "dafuweng-floating-board-drag-preferences-v1";
+export const FLOATING_EVENT_FEED_DRAG_PREFERENCES_STORAGE_KEY =
+  "dafuweng-floating-event-feed-drag-preferences-v1";
 export const DEFAULT_FLOATING_SURFACE_HOLD_DELAY_MS = 160;
 
 export type FloatingSurfaceDragMode = "native" | "third-party-hold";

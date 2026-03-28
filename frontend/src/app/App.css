@@ -2238,6 +2238,13 @@ body {
   gap: 8px;
   justify-content: flex-end;
   align-items: flex-start;
+  touch-action: manipulation;
+}
+
+.board-window__toolbar-actions button,
+.board-window__settings,
+.board-window__settings * {
+  touch-action: manipulation;
 }
 
 .board-window__settings {
@@ -2500,6 +2507,7 @@ body {
   padding: 12px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  touch-action: manipulation;
 }
 
 .floating-event-feed__field {
