@@ -4,14 +4,19 @@ export const EVENT_FEED_PREFERENCES_STORAGE_KEY =
   "dafuweng-room-event-feed-preferences";
 export const DEFAULT_EVENT_FEED_MIN_ITEMS = 6;
 export const MAX_EVENT_FEED_MIN_ITEMS = 20;
+export const DEFAULT_EVENT_FEED_CUSTOM_MAX = 50;
+export const MAX_EVENT_FEED_CUSTOM_MAX = 500;
 
 export type EventFeedNumbering = "asc" | "desc";
 export type EventFeedSorting = "asc" | "desc";
+export type EventFeedHistoryMode = "all" | "custom";
 
 export type EventFeedPreferences = {
   numberingOrder: EventFeedNumbering;
   sortingOrder: EventFeedSorting;
   minItemsCount: number;
+  historyMode: EventFeedHistoryMode;
+  customMaxCount: number;
 };
 
 export type EventFeedItem = {
@@ -26,10 +31,16 @@ export const defaultEventFeedPreferences: EventFeedPreferences = {
   numberingOrder: "asc",
   sortingOrder: "asc",
   minItemsCount: DEFAULT_EVENT_FEED_MIN_ITEMS,
+  historyMode: "all",
+  customMaxCount: DEFAULT_EVENT_FEED_CUSTOM_MAX,
 };
 
 function clampEventFeedMinItems(value: number) {
   return Math.max(1, Math.min(MAX_EVENT_FEED_MIN_ITEMS, value));
+}
+
+function clampEventFeedCustomMax(value: number) {
+  return Math.max(1, Math.min(MAX_EVENT_FEED_CUSTOM_MAX, value));
 }
 
 function isPreferenceRecord(value: unknown): value is Record<string, unknown> {
@@ -47,9 +58,15 @@ export function sanitizeEventFeedPreferences(
     raw.numberingOrder === "desc" ? "desc" : "asc";
   const sortingOrder =
     raw.sortingOrder === "desc" ? "desc" : "asc";
+  const historyMode =
+    raw.historyMode === "custom" ? "custom" : "all";
   
   const parsedMinItemsCount = Number.parseInt(
     String(raw.minItemsCount ?? DEFAULT_EVENT_FEED_MIN_ITEMS),
+    10,
+  );
+  const parsedCustomMaxCount = Number.parseInt(
+    String(raw.customMaxCount ?? DEFAULT_EVENT_FEED_CUSTOM_MAX),
     10,
   );
 
@@ -59,6 +76,10 @@ export function sanitizeEventFeedPreferences(
     minItemsCount: Number.isFinite(parsedMinItemsCount)
       ? clampEventFeedMinItems(parsedMinItemsCount)
       : DEFAULT_EVENT_FEED_MIN_ITEMS,
+    historyMode,
+    customMaxCount: Number.isFinite(parsedCustomMaxCount)
+      ? clampEventFeedCustomMax(parsedCustomMaxCount)
+      : DEFAULT_EVENT_FEED_CUSTOM_MAX,
   };
 }
 
@@ -70,15 +91,21 @@ export function sanitizeEventFeedMinCount(value: number) {
   return clampEventFeedMinItems(Math.trunc(value));
 }
 
+export function sanitizeEventFeedCustomMaxCount(value: number) {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_EVENT_FEED_CUSTOM_MAX;
+  }
+
+  return clampEventFeedCustomMax(Math.trunc(value));
+}
+
 export function buildRecentEventFeed(
   events: ProjectionEvent[],
   preferences: EventFeedPreferences,
 ) {
-  // Always include all events
   const chronoEvents = [...events].sort((left, right) => left.sequence - right.sequence);
   const total = chronoEvents.length;
 
-  // We assign displayNumber based on numberingOrder BEFORE actual sorting to ensure absolute labels
   const annotatedEvents = chronoEvents.map((event, index) => {
     return {
       id: event.id,
@@ -89,15 +116,21 @@ export function buildRecentEventFeed(
     };
   });
 
-  // Now apply visual sorting
+  const retainedItems = preferences.historyMode === "custom"
+    ? annotatedEvents.slice(-preferences.customMaxCount)
+    : annotatedEvents;
+
   const items: EventFeedItem[] = preferences.sortingOrder === "asc"
-    ? annotatedEvents
-    : annotatedEvents.reverse();
+    ? retainedItems
+    : [...retainedItems].reverse();
+  const hiddenCount = Math.max(0, total - retainedItems.length);
 
   return {
     items,
-    retainedCount: total,
-    visibleCount: total,
-    hasHiddenEvents: false,
+    retainedCount: retainedItems.length,
+    visibleCount: retainedItems.length,
+    totalCount: total,
+    hiddenCount,
+    hasHiddenEvents: hiddenCount > 0,
   };
 }

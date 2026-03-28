@@ -2290,9 +2290,49 @@ body {
 }
 
 .floating-event-feed-shell {
-  contain: layout paint style;
+  contain: layout style;
   transform: translateZ(0);
   will-change: transform, width, height;
+}
+
+.event-feed-resize-handle {
+  position: absolute;
+  z-index: 5;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.event-feed-resize-handle::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(246, 236, 212, 0.88);
+  box-shadow: 0 0 0 1px rgba(7, 15, 13, 0.22), 0 6px 12px rgba(7, 15, 13, 0.12);
+}
+
+.event-feed-resize-handle--top::after,
+.event-feed-resize-handle--bottom::after {
+  left: 50%;
+  top: 50%;
+  width: 88px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+}
+
+.event-feed-resize-handle--left::after,
+.event-feed-resize-handle--right::after {
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 88px;
+  transform: translate(-50%, -50%);
+}
+
+.event-feed-resize-handle--top-left::after,
+.event-feed-resize-handle--top-right::after,
+.event-feed-resize-handle--bottom-left::after,
+.event-feed-resize-handle--bottom-right::after {
+  inset: 0;
 }
 
 .floating-event-feed-shell--focused .floating-event-feed__surface {

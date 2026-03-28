@@ -4,6 +4,7 @@ import { Rnd } from "react-rnd";
 import {
   buildRecentEventFeed,
   EventFeedPreferences,
+  sanitizeEventFeedCustomMaxCount,
   sanitizeEventFeedMinCount,
 } from "./roomEventFeed";
 import type { ProjectionEvent } from "@dafuweng/contracts";
@@ -20,7 +21,7 @@ const FEED_ITEM_GAP = 8;
 const FEED_COMPACT_ROW_HEIGHT = 42;
 const FEED_NORMAL_ROW_HEIGHT = 58;
 const FEED_LARGE_ROW_HEIGHT = 76;
-const FEED_RESIZE_STEP = 12;
+const FEED_RESIZE_STEP = 1;
 
 type DraggableEventFeedProps = {
   events: ProjectionEvent[];
@@ -30,10 +31,6 @@ type DraggableEventFeedProps = {
   zIndex: number;
   onFocus: () => void;
 };
-
-function renderResizeHandle(prefix: string, direction: string) {
-  return <span className={`floating-resize-handle floating-resize-handle--${direction}`} data-testid={`${prefix}-resize-${direction}`} />;
-}
 
 export function DraggableEventFeed({ events, preferences, onPreferencesChange, isFocused, zIndex, onFocus }: DraggableEventFeedProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -162,15 +159,15 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
         top: true, right: true, bottom: true, left: true,
         topRight: true, bottomRight: true, bottomLeft: true, topLeft: true,
       }}
-      resizeHandleComponent={{
-        top: renderResizeHandle("event-feed", "top"),
-        right: renderResizeHandle("event-feed", "right"),
-        bottom: renderResizeHandle("event-feed", "bottom"),
-        left: renderResizeHandle("event-feed", "left"),
-        topRight: renderResizeHandle("event-feed", "top-right"),
-        bottomRight: renderResizeHandle("event-feed", "bottom-right"),
-        bottomLeft: renderResizeHandle("event-feed", "bottom-left"),
-        topLeft: renderResizeHandle("event-feed", "top-left"),
+      resizeHandleClasses={{
+        top: "event-feed-resize-handle event-feed-resize-handle--top",
+        right: "event-feed-resize-handle event-feed-resize-handle--right",
+        bottom: "event-feed-resize-handle event-feed-resize-handle--bottom",
+        left: "event-feed-resize-handle event-feed-resize-handle--left",
+        topRight: "event-feed-resize-handle event-feed-resize-handle--top-right",
+        bottomRight: "event-feed-resize-handle event-feed-resize-handle--bottom-right",
+        bottomLeft: "event-feed-resize-handle event-feed-resize-handle--bottom-left",
+        topLeft: "event-feed-resize-handle event-feed-resize-handle--top-left",
       }}
       resizeGrid={[FEED_RESIZE_STEP, FEED_RESIZE_STEP]}
       dragGrid={[1, 1]}
@@ -187,7 +184,10 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
         setFrame(nextFrame);
         persistFrame(nextFrame);
       }}
-      onResizeStart={() => setIsInteracting(true)}
+      onResizeStart={() => {
+        onFocus();
+        setIsInteracting(true);
+      }}
       onResizeStop={(_event, _direction, ref, _delta, position) => {
         setIsInteracting(false);
         const nextFrame = {
@@ -256,6 +256,36 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
                   <option value="desc">新在上，旧在下</option>
                 </select>
               </label>
+              <label className="floating-event-feed__field">
+                <strong>历史保留范围</strong>
+                <select
+                  data-testid="floating-event-feed-history-mode"
+                  value={preferences.historyMode}
+                  onChange={(e) => onPreferencesChange((current) => ({
+                    ...current,
+                    historyMode: e.target.value as "all" | "custom",
+                  }))}
+                >
+                  <option value="all">全部历史事件</option>
+                  <option value="custom">自定义最大条数</option>
+                </select>
+              </label>
+              {preferences.historyMode === "custom" ? (
+                <label className="floating-event-feed__field">
+                  <strong>最大历史事件条数</strong>
+                  <input
+                    data-testid="floating-event-feed-custom-max-count"
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={preferences.customMaxCount}
+                    onChange={(e) => onPreferencesChange((current) => ({
+                      ...current,
+                      customMaxCount: sanitizeEventFeedCustomMaxCount(Number(e.target.value)),
+                    }))}
+                  />
+                </label>
+              ) : null}
               <label className="floating-event-feed__field floating-event-feed__field--wide">
                 <strong>最小可视条数限制</strong>
                 <input
@@ -269,6 +299,14 @@ export function DraggableEventFeed({ events, preferences, onPreferencesChange, i
                   }))}
                 />
               </label>
+              <div className="floating-event-feed__metrics" data-testid="floating-event-feed-metrics">
+                <span>{`当前展示 ${feed.visibleCount} / 累计 ${feed.totalCount} 条`}</span>
+                <span>
+                  {feed.hasHiddenEvents
+                    ? `已折叠更早 ${feed.hiddenCount} 条历史事件`
+                    : "当前保留全部历史事件"}
+                </span>
+              </div>
             </div>
           </div>
         ) : null}
