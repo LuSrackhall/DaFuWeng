@@ -161,11 +161,11 @@ test("board window keeps full board visible while maximizing canvas area and sup
 
   await page.getByTestId("board-window-drag-mode").selectOption("native");
   await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
-  await dragHandle(page, '[data-testid="board-window-handle"]', 60, 40);
+  await page.getByTestId("board-window-settings-toggle").click();
+  await longPressDrag(page, '[data-testid="board-window-surface"]', 60, 40);
   const afterNativeDrag = await boardWindow.boundingBox();
   expect(afterNativeDrag && afterLongPressDrag ? afterNativeDrag.x > afterLongPressDrag.x + 40 : false).toBe(true);
   expect(afterNativeDrag && afterLongPressDrag ? afterNativeDrag.y > afterLongPressDrag.y + 20 : false).toBe(true);
-  await page.getByTestId("board-window-settings-toggle").click();
 
   const canvasBeforeExpand = await boardCanvas.boundingBox();
   const metricsBeforeExpand = await readCanvasMetrics(page);

@@ -189,8 +189,9 @@ test("event feed window supports all-history and custom-max retention with nativ
 
   await page.getByTestId("floating-event-feed-drag-mode").selectOption("native");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("native");
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
   const beforeNativeDrag = await eventFeedWindow.boundingBox();
-  await dragToolbar(page, '[data-testid="floating-event-feed-handle"]', 80, 40);
+  await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', 80, 40);
   const afterNativeDrag = await eventFeedWindow.boundingBox();
   expect(afterNativeDrag && beforeNativeDrag ? afterNativeDrag.x > beforeNativeDrag.x + 40 : false).toBe(true);
   expect(afterNativeDrag && beforeNativeDrag ? afterNativeDrag.y > beforeNativeDrag.y + 20 : false).toBe(true);

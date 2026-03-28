@@ -143,7 +143,7 @@ export function DraggableEventFeed({
   }
 
   useThirdPartyLongPressDrag({
-    enabled: dragPreferences.dragMode === "third-party-hold",
+    enabled: true,
     surfaceRef,
     rndRef,
     frame,
@@ -181,8 +181,7 @@ export function DraggableEventFeed({
       minWidth={FEED_MIN_WIDTH}
       minHeight={minimumHeight}
       data-testid="floating-event-feed-window"
-      dragHandleClassName="floating-event-feed__handle"
-      disableDragging={dragPreferences.dragMode === "third-party-hold"}
+      disableDragging={true}
       enableUserSelectHack={true}
       enableResizing={{
         top: true, right: true, bottom: true, left: true,
@@ -203,16 +202,6 @@ export function DraggableEventFeed({
       cancel="button, input, select, option, .floating-scroll-list, .floating-event-feed__settings-wrap, .floating-event-feed__intro"
       onMouseDown={onFocus}
       onTouchStart={onFocus}
-      onDragStart={() => {
-        onFocus();
-        setIsInteracting(true);
-      }}
-      onDragStop={(_event, data) => {
-        setIsInteracting(false);
-        const nextFrame = { ...frame, x: data.x, y: data.y };
-        setFrame(nextFrame);
-        persistFrame(nextFrame);
-      }}
       onResizeStart={() => {
         onFocus();
         setIsInteracting(true);
@@ -310,8 +299,8 @@ export function DraggableEventFeed({
                     dragMode: e.target.value as FloatingSurfaceDragPreferences["dragMode"],
                   }))}
                 >
-                  <option value="third-party-hold">第三方长按拖拽</option>
-                  <option value="native">原生即时拖拽</option>
+                  <option value="third-party-hold">第三方库整窗长按拖拽</option>
+                  <option value="native">原生整窗长按拖拽</option>
                 </select>
               </label>
               {preferences.historyMode === "custom" ? (

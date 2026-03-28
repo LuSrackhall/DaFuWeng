@@ -1,5 +1,5 @@
 import { useDrag } from "@use-gesture/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
 import type { Rnd } from "react-rnd";
 
@@ -63,6 +63,212 @@ type UseThirdPartyLongPressDragOptions = {
   holdDelayMs: number;
 };
 
+const DRAG_CANCEL_SELECTOR = [
+  "button",
+  "input",
+  "select",
+  "option",
+  "textarea",
+  "a",
+  "label",
+  ".react-resizable-handle",
+  ".board-window-resize-handle",
+  ".event-feed-resize-handle",
+].join(", ");
+
+function shouldIgnoreDragTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return target.closest(DRAG_CANCEL_SELECTOR) !== null;
+}
+
+type UseNativeLongPressDragOptions = UseThirdPartyLongPressDragOptions;
+
+export function useNativeLongPressDrag({
+  enabled,
+  surfaceRef,
+  rndRef,
+  frame,
+  onFocus,
+  onInteractingChange,
+  onCommit,
+  holdDelayMs,
+}: UseNativeLongPressDragOptions) {
+  const frameRef = useRef(frame);
+
+  useLayoutEffect(() => {
+    frameRef.current = frame;
+  }, [frame]);
+
+  useLayoutEffect(() => {
+    if (!enabled || !surfaceRef.current) {
+      return;
+    }
+
+    const surface = surfaceRef.current;
+    let holdTimer: number | null = null;
+    let activeKind: "mouse" | "touch" | null = null;
+    let startClientX = 0;
+    let startClientY = 0;
+    let startFrame = frameRef.current;
+    let isDragging = false;
+
+    const clearHoldTimer = () => {
+      if (holdTimer !== null) {
+        window.clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+    };
+
+    const computeNextFrame = (clientX: number, clientY: number) => ({
+      ...startFrame,
+      x: Math.round(startFrame.x + (clientX - startClientX)),
+      y: Math.round(startFrame.y + (clientY - startClientY)),
+    });
+
+    const finishDrag = (clientX: number, clientY: number) => {
+      const nextFrame = computeNextFrame(clientX, clientY);
+      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+      onInteractingChange(false);
+      onCommit(nextFrame);
+      isDragging = false;
+    };
+
+    const cancelPendingDrag = () => {
+      clearHoldTimer();
+      activeKind = null;
+      isDragging = false;
+    };
+
+    const beginPendingDrag = (clientX: number, clientY: number, kind: "mouse" | "touch") => {
+      activeKind = kind;
+      startClientX = clientX;
+      startClientY = clientY;
+      startFrame = frameRef.current;
+      clearHoldTimer();
+      holdTimer = window.setTimeout(() => {
+        if (activeKind !== kind) {
+          return;
+        }
+
+        onFocus();
+        onInteractingChange(true);
+        isDragging = true;
+      }, holdDelayMs);
+    };
+
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      if (shouldIgnoreDragTarget(event.target)) {
+        return;
+      }
+
+      beginPendingDrag(event.clientX, event.clientY, "mouse");
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+      if (activeKind !== "mouse") {
+        return;
+      }
+
+      if (!isDragging) {
+        if (Math.abs(event.clientX - startClientX) > 6 || Math.abs(event.clientY - startClientY) > 6) {
+          cancelPendingDrag();
+        }
+        return;
+      }
+
+      event.preventDefault();
+      const nextFrame = computeNextFrame(event.clientX, event.clientY);
+      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+    };
+
+    const onMouseUp = (event: MouseEvent) => {
+      if (activeKind !== "mouse") {
+        return;
+      }
+
+      clearHoldTimer();
+      if (isDragging) {
+        finishDrag(event.clientX, event.clientY);
+      }
+
+      activeKind = null;
+      isDragging = false;
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        return;
+      }
+
+      if (shouldIgnoreDragTarget(event.target)) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      beginPendingDrag(touch.clientX, touch.clientY, "touch");
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (activeKind !== "touch" || event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      if (!isDragging) {
+        if (Math.abs(touch.clientX - startClientX) > 6 || Math.abs(touch.clientY - startClientY) > 6) {
+          cancelPendingDrag();
+        }
+        return;
+      }
+
+      event.preventDefault();
+      const nextFrame = computeNextFrame(touch.clientX, touch.clientY);
+      rndRef.current?.updatePosition({ x: nextFrame.x, y: nextFrame.y });
+    };
+
+    const onTouchEnd = (event: TouchEvent) => {
+      if (activeKind !== "touch") {
+        return;
+      }
+
+      clearHoldTimer();
+      if (isDragging) {
+        const touch = event.changedTouches[0];
+        finishDrag(touch.clientX, touch.clientY);
+      }
+
+      activeKind = null;
+      isDragging = false;
+    };
+
+    surface.addEventListener("mousedown", onMouseDown, { capture: true });
+    surface.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
+
+    return () => {
+      cancelPendingDrag();
+      surface.removeEventListener("mousedown", onMouseDown, true);
+      surface.removeEventListener("touchstart", onTouchStart, true);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [enabled, holdDelayMs, onCommit, onFocus, onInteractingChange, rndRef, surfaceRef]);
+}
+
 export function useThirdPartyLongPressDrag({
   enabled,
   surfaceRef,
@@ -78,14 +284,6 @@ export function useThirdPartyLongPressDrag({
   useEffect(() => {
     frameRef.current = frame;
   }, [frame]);
-
-  function shouldIgnoreDragTarget(target: EventTarget | null) {
-    if (!(target instanceof Element)) {
-      return false;
-    }
-
-    return target.closest("button, input, select, option, textarea, a, label, .react-resizable-handle") !== null;
-  }
 
   useDrag(
     ({ first, last, offset: [offsetX, offsetY], event, memo }) => {

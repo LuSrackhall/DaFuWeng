@@ -102,7 +102,7 @@ export function FloatingBoardWindow({
   }, [initialFrame]);
 
   useThirdPartyLongPressDrag({
-    enabled: dragPreferences.dragMode === "third-party-hold",
+    enabled: true,
     surfaceRef,
     rndRef,
     frame,
@@ -132,8 +132,7 @@ export function FloatingBoardWindow({
       ref={rndRef}
       data-testid="floating-board-window"
       className={`board-resizable-wrap${isFocused ? " board-resizable-wrap--focused" : ""}${isInteracting ? " board-resizable-wrap--interacting" : ""}`}
-      dragHandleClassName="board-drag-handle"
-      disableDragging={dragPreferences.dragMode === "third-party-hold"}
+      disableDragging={true}
       enableUserSelectHack={true}
       enableResizing={{
         top: true, right: true, bottom: true, left: true,
@@ -156,16 +155,6 @@ export function FloatingBoardWindow({
       default={{ x: frame.x, y: frame.y, width: frame.width, height: frame.height }}
       onMouseDown={onFocus}
       onTouchStart={onFocus}
-      onDragStart={() => {
-        onFocus();
-        setIsInteracting(true);
-      }}
-      onDragStop={(_event, data) => {
-        setIsInteracting(false);
-        const nextFrame = normalizeFrame({ ...frame, x: data.x, y: data.y });
-        setFrame(nextFrame);
-        persistFrame(nextFrame);
-      }}
       onResizeStart={() => {
         onFocus();
         setIsInteracting(true);
@@ -230,8 +219,8 @@ export function FloatingBoardWindow({
                   dragMode: event.target.value as FloatingSurfaceDragPreferences["dragMode"],
                 }))}
               >
-                <option value="third-party-hold">第三方长按拖拽</option>
-                <option value="native">原生即时拖拽</option>
+                <option value="third-party-hold">第三方库整窗长按拖拽</option>
+                <option value="native">原生整窗长按拖拽</option>
               </select>
             </label>
           </div>

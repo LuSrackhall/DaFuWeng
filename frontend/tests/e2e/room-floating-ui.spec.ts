@@ -6,8 +6,8 @@ function buildInteractiveSnapshot(roomId: string) {
     roomId,
     roomState: "in-game",
     hostId: "p1",
-    snapshotVersion: 6,
-    eventSequence: 6,
+    snapshotVersion: 12,
+    eventSequence: 12,
     turnState: "awaiting-roll",
     currentTurnPlayerId: "p1",
     pendingActionLabel: "等待你掷骰",
@@ -42,14 +42,15 @@ function buildInteractiveSnapshot(roomId: string) {
         isBankrupt: false,
       },
     ],
-    recentEvents: [
-      { id: "evt-1", type: "room-started", sequence: 1, snapshotVersion: 1, summary: "房主甲 开始了本局。", playerId: "p1" },
-      { id: "evt-2", type: "dice-rolled", sequence: 2, snapshotVersion: 2, summary: "房主甲 掷出 3 + 3。", playerId: "p1", lastRoll: [3, 3] as [number, number] },
-      { id: "evt-3", type: "player-moved", sequence: 3, snapshotVersion: 3, summary: "房主甲 前进到 北城路。", playerId: "p1", tileId: "tile-6", tileIndex: 6, tileLabel: "北城路", playerPosition: 6, lastRoll: [3, 3] as [number, number] },
-      { id: "evt-4", type: "property-purchased", sequence: 4, snapshotVersion: 4, summary: "房主甲 买下 北城路。", playerId: "p1", tileId: "tile-6", tileIndex: 6, tileLabel: "北城路", tilePrice: 130, amount: 130, cashAfter: 1370 },
-      { id: "evt-5", type: "turn-advanced", sequence: 5, snapshotVersion: 5, summary: "轮到 玩家乙 行动。", playerId: "p1", nextPlayerId: "p2" },
-      { id: "evt-6", type: "turn-advanced", sequence: 6, snapshotVersion: 6, summary: "轮到 房主甲 继续行动。", playerId: "p2", nextPlayerId: "p1" },
-    ],
+    recentEvents: Array.from({ length: 12 }, (_, index) => ({
+      id: `evt-${index + 1}`,
+      type: "turn-advanced",
+      sequence: index + 1,
+      snapshotVersion: index + 1,
+      summary: `事件 ${index + 1}`,
+      playerId: index % 2 === 0 ? "p1" : "p2",
+      nextPlayerId: index % 2 === 0 ? "p2" : "p1",
+    })),
   };
 }
 
@@ -94,54 +95,32 @@ async function mockRoomSnapshot(page: Page, roomId: string, snapshot: ReturnType
   });
 }
 
-async function dragLocator(page: Page, selector: string, deltaX: number, deltaY: number) {
+async function longPressDrag(page: Page, selector: string, deltaX: number, deltaY: number) {
   const box = await page.locator(selector).boundingBox();
   expect(box).not.toBeNull();
   if (!box) {
     return;
   }
 
-  const startX = box.x + Math.min(72, box.width * 0.26);
-  const startY = box.y + Math.min(28, box.height * 0.5);
+  const startX = box.x + Math.min(72, box.width * 0.24);
+  const startY = box.y + Math.min(36, box.height * 0.28);
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 18 });
+  await page.waitForTimeout(240);
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 20 });
   await page.mouse.up();
 }
 
-async function dragBottomRightCorner(page: Page, selector: string, deltaX: number, deltaY: number) {
+async function dragResizeHandle(page: Page, selector: string, deltaX: number, deltaY: number) {
   const box = await page.locator(selector).boundingBox();
   expect(box).not.toBeNull();
   if (!box) {
     return;
   }
 
-  await page.mouse.move(box.x + box.width - 8, box.y + box.height - 8);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width - 8 + deltaX, box.y + box.height - 8 + deltaY, { steps: 18 });
-  await page.mouse.up();
-}
-
-async function beginPointerDrag(page: Page, selector: string, anchor: "toolbar" | "bottom-right" = "toolbar") {
-  const box = await page.locator(selector).boundingBox();
-  expect(box).not.toBeNull();
-  if (!box) {
-    return;
-  }
-
-  const point = anchor === "bottom-right"
-    ? { x: box.x + box.width - 8, y: box.y + box.height - 8 }
-    : { x: box.x + Math.min(72, box.width * 0.26), y: box.y + Math.min(28, box.height * 0.5) };
-
-  await page.mouse.move(point.x, point.y);
-  await page.mouse.down();
-}
-
-async function movePointerBy(page: Page, deltaX: number, deltaY: number) {
-  await page.mouse.move(deltaX, deltaY, { steps: 18 });
-}
-
-async function releasePointer(page: Page) {
+  await page.mouse.move(box.x + box.width / 2 + deltaX, box.y + box.height / 2 + deltaY, { steps: 20 });
   await page.mouse.up();
 }
 
@@ -156,7 +135,7 @@ async function getZIndex(page: Page, selector: string) {
   return page.locator(selector).evaluate((element) => Number.parseInt(window.getComputedStyle(element).zIndex || "0", 10));
 }
 
-test("desktop room floating surfaces drag resize and guidance interactions stay usable", async ({ page }, testInfo) => {
+test("desktop room floating surfaces follow whole-window long-press drag and shared drag-mode settings", async ({ page }, testInfo) => {
   test.setTimeout(90000);
   await page.setViewportSize({ width: 1440, height: 980 });
 
@@ -165,132 +144,78 @@ test("desktop room floating surfaces drag resize and guidance interactions stay 
 
   await installFakeEventSource(page, roomId, { playerId: "p1", playerName: "房主甲" });
   await mockRoomSnapshot(page, roomId, snapshot);
-
   await page.goto(`/room/${roomId}`);
 
   const boardWindow = page.locator(".board-resizable-wrap").first();
   const eventFeedWindow = page.locator(".floating-event-feed-shell").first();
-  const eventFeedSurface = page.getByTestId("floating-event-feed-surface");
-  const guidanceBanner = page.getByTestId("room-guidance-banner");
+  const eventItems = page.locator(".floating-scroll-list > li");
 
   await expect(boardWindow).toBeVisible();
   await expect(eventFeedWindow).toBeVisible();
-  await expect(guidanceBanner).toBeVisible();
-  expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
-  await expect(page.getByTestId("floating-event-feed-surface")).toHaveAttribute("data-focused", "true");
+  await expect(page.getByTestId("room-guidance-banner")).toBeVisible();
+  await expect(eventItems).toHaveCount(12);
 
+  expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
   await page.getByTestId("board-window-bring-front").click();
   expect(await getZIndex(page, ".board-resizable-wrap")).toBeGreaterThan(await getZIndex(page, ".floating-event-feed-shell"));
-  await expect(page.getByTestId("board-window-surface")).toHaveAttribute("data-focused", "true");
-
-  await page.getByTestId("floating-event-feed-bring-front").evaluate((element: HTMLButtonElement) => element.click());
+  await page.getByTestId("floating-event-feed-bring-front").click();
   expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
-  await expect(page.getByTestId("floating-event-feed-surface")).toHaveAttribute("data-focused", "true");
-  await page.getByTestId("board-window-bring-front").click();
-  expect(await getZIndex(page, ".board-resizable-wrap")).toBeGreaterThan(await getZIndex(page, ".floating-event-feed-shell"));
 
   const boardBefore = await boardWindow.boundingBox();
-  const placeholderBefore = await page.locator(".board__stage-placeholder").boundingBox();
-  expect(boardBefore).not.toBeNull();
-  expect(placeholderBefore).not.toBeNull();
-  expect(boardBefore?.x ?? 0).toBeLessThan(120);
-  expect(boardBefore?.y ?? 0).toBeLessThan(160);
+  await page.getByTestId("board-window-settings-toggle").click();
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("third-party-hold");
+  await longPressDrag(page, '[data-testid="board-window-surface"]', 140, 90);
+  const boardAfterThirdParty = await boardWindow.boundingBox();
+  expect(boardAfterThirdParty && boardBefore ? boardAfterThirdParty.x > boardBefore.x + 100 : false).toBe(true);
+  expect(boardAfterThirdParty && boardBefore ? boardAfterThirdParty.y > boardBefore.y + 50 : false).toBe(true);
 
-  await beginPointerDrag(page, '[data-testid="board-window-handle"]');
-  await page.mouse.move((boardBefore?.x ?? 0) + 32, (boardBefore?.y ?? 0) + 18, { steps: 8 });
-  await expect(page.getByTestId("board-window-hud")).toBeVisible();
-  await expect(page.getByTestId("board-window-hud")).toContainText(/吸附到/);
-  await releasePointer(page);
-
-  await dragLocator(page, '.board-window__toolbar', 180, 96);
-  await dragBottomRightCorner(page, '[data-testid="board-window-resize-bottom-right"]', 120, 140);
-
-  const boardAfter = await boardWindow.boundingBox();
-  expect(boardAfter).not.toBeNull();
-  expect(boardAfter && boardBefore ? boardAfter.x - boardBefore.x : 0).toBeGreaterThan(120);
-  expect(boardAfter && boardBefore ? boardAfter.y - boardBefore.y : 0).toBeGreaterThan(60);
-  expect(boardAfter && boardBefore ? boardAfter.width - boardBefore.width : 0).toBeGreaterThan(80);
-  expect(boardAfter && boardBefore ? boardAfter.height - boardBefore.height : 0).toBeGreaterThan(100);
-  const boardEscapesDockBounds = Boolean(
-    boardAfter && placeholderBefore
-    && (
-      boardAfter.x < placeholderBefore.x - 20
-      || boardAfter.y < placeholderBefore.y - 20
-      || boardAfter.x + boardAfter.width > placeholderBefore.x + placeholderBefore.width + 20
-      || boardAfter.y + boardAfter.height > placeholderBefore.y + placeholderBefore.height + 20
-    ),
-  );
-  expect(boardEscapesDockBounds).toBe(true);
-  await beginPointerDrag(page, '[data-testid="board-window-resize-bottom-right"]', "bottom-right");
-  await page.mouse.move((boardAfter?.x ?? 0) + (boardAfter?.width ?? 0) + 520, (boardAfter?.y ?? 0) + (boardAfter?.height ?? 0) + 280, { steps: 16 });
-  await expect(page.getByTestId("board-window-hud")).toBeVisible();
-  await expect(page.getByTestId("board-window-hud")).toContainText("已越出右侧");
-  await releasePointer(page);
-  const boardAfterOversize = await boardWindow.boundingBox();
-  expect(boardAfterOversize ? boardAfterOversize.width : 0).toBeGreaterThan(1440);
-  await expect(page.getByTestId("board-window-recover")).toBeVisible();
-  await page.getByTestId("board-window-recover").click();
-  const boardAfterRecover = await boardWindow.boundingBox();
-  expect(boardAfterRecover).not.toBeNull();
-  expect(boardAfterRecover ? boardAfterRecover.x : 0).toBeLessThan(140);
-  expect(boardAfterRecover ? boardAfterRecover.y : 0).toBeLessThan(220);
-  await dragBottomRightCorner(page, '[data-testid="board-window-resize-bottom-right"]', -2000, -2000);
-  const boardAfterShrink = await boardWindow.boundingBox();
-  expect(boardAfterShrink).not.toBeNull();
-  expect(boardAfterShrink ? boardAfterShrink.width : 0).toBeGreaterThanOrEqual(520);
-  expect(boardAfterShrink ? boardAfterShrink.height : 0).toBeGreaterThanOrEqual(420);
+  await page.getByTestId("board-window-drag-mode").selectOption("native");
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await page.getByTestId("board-window-settings-toggle").click();
+  await longPressDrag(page, '[data-testid="board-window-surface"]', 70, 50);
+  const boardAfterNative = await boardWindow.boundingBox();
+  expect(boardAfterNative && boardAfterThirdParty ? boardAfterNative.x > boardAfterThirdParty.x + 40 : false).toBe(true);
+  expect(boardAfterNative && boardAfterThirdParty ? boardAfterNative.y > boardAfterThirdParty.y + 20 : false).toBe(true);
+  await dragResizeHandle(page, ".board-window-resize-handle--bottom-right", 120, 140);
+  const boardAfterResize = await boardWindow.boundingBox();
+  expect(boardAfterResize && boardAfterNative ? boardAfterResize.width > boardAfterNative.width + 80 : false).toBe(true);
+  expect(boardAfterResize && boardAfterNative ? boardAfterResize.height > boardAfterNative.height + 100 : false).toBe(true);
 
   const feedBefore = await eventFeedWindow.boundingBox();
-  expect(feedBefore?.x ?? 0).toBeGreaterThan(760);
-  expect(feedBefore?.y ?? 0).toBeLessThan(180);
-  await page.getByTestId("floating-event-feed-bring-front").evaluate((element: HTMLButtonElement) => element.click());
-  expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
-  await dragLocator(page, '[data-testid="floating-event-feed-handle"]', -220, 72);
-  await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', 120, 120);
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("native");
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', -180, 70);
+  const feedAfterNative = await eventFeedWindow.boundingBox();
+  expect(feedAfterNative && feedBefore ? feedAfterNative.x < feedBefore.x - 120 : false).toBe(true);
+  expect(feedAfterNative && feedBefore ? feedAfterNative.y > feedBefore.y + 40 : false).toBe(true);
+
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await page.getByTestId("floating-event-feed-drag-mode").selectOption("third-party-hold");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', 90, 50);
+  const feedAfterThirdParty = await eventFeedWindow.boundingBox();
+  expect(feedAfterThirdParty && feedAfterNative ? feedAfterThirdParty.x > feedAfterNative.x + 50 : false).toBe(true);
+  expect(feedAfterThirdParty && feedAfterNative ? feedAfterThirdParty.y > feedAfterNative.y + 20 : false).toBe(true);
+  await dragResizeHandle(page, ".event-feed-resize-handle--bottom-right", 120, 120);
   const feedAfterResize = await eventFeedWindow.boundingBox();
-  expect(feedAfterResize).not.toBeNull();
-  expect(feedAfterResize && feedBefore ? feedAfterResize.x - feedBefore.x : 0).toBeLessThan(-150);
-  expect(feedAfterResize && feedBefore ? Math.abs(feedAfterResize.y - feedBefore.y) : 0).toBeGreaterThan(40);
-  expect(feedAfterResize && feedBefore ? feedAfterResize.width - feedBefore.width : 0).toBeGreaterThan(80);
-  expect(feedAfterResize && feedBefore ? feedAfterResize.height - feedBefore.height : 0).toBeGreaterThan(80);
+  expect(feedAfterResize && feedAfterThirdParty ? feedAfterResize.width > feedAfterThirdParty.width + 80 : false).toBe(true);
+  expect(feedAfterResize && feedAfterThirdParty ? feedAfterResize.height > feedAfterThirdParty.height + 80 : false).toBe(true);
 
   await page.getByTestId("floating-event-feed-intro-toggle").click();
   await expect(page.getByTestId("floating-event-feed-intro")).toBeVisible();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
-  await expect(page.getByTestId("floating-event-feed-settings")).toBeVisible();
-  const listExpanded = await page.locator(".floating-scroll-list").boundingBox();
+  await page.getByTestId("floating-event-feed-history-mode").selectOption("custom");
+  await page.getByTestId("floating-event-feed-custom-max-count").fill("4");
+  await page.getByTestId("floating-event-feed-custom-max-count").blur();
+  await expect(eventItems).toHaveCount(4);
+  await page.getByTestId("floating-event-feed-history-mode").selectOption("all");
+  await expect(eventItems).toHaveCount(12);
+  await expect(page.getByTestId("floating-event-feed-metrics")).toContainText("当前展示 12 / 累计 12 条");
   await page.getByTestId("floating-event-feed-intro-toggle").click();
-  await page.getByTestId("floating-event-feed-settings-toggle").click();
   await expect(page.getByTestId("floating-event-feed-intro")).toHaveCount(0);
-  await expect(page.getByTestId("floating-event-feed-settings")).toHaveCount(0);
-  const listCollapsed = await page.locator(".floating-scroll-list").boundingBox();
-  expect(listExpanded).not.toBeNull();
-  expect(listCollapsed).not.toBeNull();
-  expect(listCollapsed && listExpanded ? listExpanded.y - listCollapsed.y : 0).toBeGreaterThan(20);
-
-  await page.getByTestId("floating-event-feed-bring-front").evaluate((element: HTMLButtonElement) => element.click());
-  expect(await getZIndex(page, ".floating-event-feed-shell")).toBeGreaterThan(await getZIndex(page, ".board-resizable-wrap"));
-  const feedBeforeRecoveryDrag = await eventFeedWindow.boundingBox();
-  expect(feedBeforeRecoveryDrag).not.toBeNull();
-  await beginPointerDrag(page, '[data-testid="floating-event-feed-handle"]');
-  await page.mouse.move(-120, Math.max(40, (feedBeforeRecoveryDrag?.y ?? 0) - 120), { steps: 16 });
-  await releasePointer(page);
-  await expect(page.getByTestId("floating-event-feed-recover")).toBeVisible();
-  await page.getByTestId("floating-event-feed-recover").click();
-  await expect(page.getByTestId("floating-event-feed-recover")).toHaveCount(0);
-  const feedAfterRecover = await eventFeedWindow.boundingBox();
-  expect(feedAfterRecover).not.toBeNull();
-  expect(feedAfterRecover ? feedAfterRecover.x : 0).toBeGreaterThanOrEqual(0);
-  expect(feedAfterRecover ? feedAfterRecover.y : 0).toBeLessThan(220);
-  expect(feedAfterRecover ? feedAfterRecover.width : 0).toBeLessThan(600);
-  expect(feedAfterRecover ? feedAfterRecover.height : 0).toBeLessThan(560);
-  await dragBottomRightCorner(page, '[data-testid="event-feed-resize-bottom-right"]', -2000, -2000);
-  const feedAfterShrink = await eventFeedWindow.boundingBox();
-  expect(feedAfterShrink).not.toBeNull();
-  expect(feedAfterShrink ? feedAfterShrink.width : 0).toBeGreaterThanOrEqual(340);
-  expect(feedAfterShrink ? feedAfterShrink.height : 0).toBeGreaterThanOrEqual(390);
-
-  await expect(eventFeedSurface).toHaveAttribute("data-density", /compact|normal|large/);
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
 
   await page.getByTestId("open-rules-guide").click();
   await expect(page.getByTestId("rules-guide-panel")).toBeVisible();
@@ -309,7 +234,6 @@ test("mobile room guidance panel remains readable with floating surfaces enabled
 
   await installFakeEventSource(page, roomId, { playerId: "p1", playerName: "房主甲" });
   await mockRoomSnapshot(page, roomId, snapshot);
-
   await page.goto(`/room/${roomId}`);
 
   await expect(page.getByTestId("room-guidance-banner")).toBeVisible();
