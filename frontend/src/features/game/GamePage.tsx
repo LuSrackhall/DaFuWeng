@@ -61,6 +61,24 @@ type GameplayNotice = {
   rule: string;
 };
 
+function readStoredFloatingDragPreferences(storageKey: string) {
+  if (typeof window === "undefined") {
+    return defaultFloatingSurfaceDragPreferences;
+  }
+
+  const raw = window.localStorage.getItem(storageKey)
+    ?? window.localStorage.getItem(LEGACY_FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY);
+  if (!raw) {
+    return defaultFloatingSurfaceDragPreferences;
+  }
+
+  try {
+    return sanitizeFloatingSurfaceDragPreferences(JSON.parse(raw));
+  } catch {
+    return defaultFloatingSurfaceDragPreferences;
+  }
+}
+
 const RULE_GUIDE_SECTIONS = [
   {
     title: "基础回合",
@@ -389,8 +407,8 @@ export function GamePage() {
   const [tradeRequestedCardIds, setTradeRequestedCardIds] = useState<string[]>([]);
   const [tradeComposerStep, setTradeComposerStep] = useState<TradeComposerStep>("counterparty");
   const [eventFeedPreferences, setEventFeedPreferences] = useState(defaultEventFeedPreferences);
-  const [boardDragPreferences, setBoardDragPreferences] = useState(defaultFloatingSurfaceDragPreferences);
-  const [eventFeedDragPreferences, setEventFeedDragPreferences] = useState(defaultFloatingSurfaceDragPreferences);
+  const [boardDragPreferences, setBoardDragPreferences] = useState(() => readStoredFloatingDragPreferences(FLOATING_BOARD_DRAG_PREFERENCES_STORAGE_KEY));
+  const [eventFeedDragPreferences, setEventFeedDragPreferences] = useState(() => readStoredFloatingDragPreferences(FLOATING_EVENT_FEED_DRAG_PREFERENCES_STORAGE_KEY));
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isTurnToolsOpen, setIsTurnToolsOpen] = useState(false);
   const [isRulesGuideOpen, setIsRulesGuideOpen] = useState(false);
@@ -412,6 +430,31 @@ export function GamePage() {
     height: typeof window === "undefined" ? 900 : window.innerHeight,
   }));
   const recoveryRecapDismissTimerRef = useRef<number | null>(null);
+
+  function persistFloatingDragPreferences(storageKey: string, nextPreferences: typeof defaultFloatingSurfaceDragPreferences) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(nextPreferences));
+  }
+
+  function updateBoardDragPreferences(updater: (prev: typeof defaultFloatingSurfaceDragPreferences) => typeof defaultFloatingSurfaceDragPreferences) {
+    setBoardDragPreferences((current) => {
+      const nextPreferences = updater(current);
+      persistFloatingDragPreferences(FLOATING_BOARD_DRAG_PREFERENCES_STORAGE_KEY, nextPreferences);
+      return nextPreferences;
+    });
+  }
+
+  function updateEventFeedDragPreferences(updater: (prev: typeof defaultFloatingSurfaceDragPreferences) => typeof defaultFloatingSurfaceDragPreferences) {
+    setEventFeedDragPreferences((current) => {
+      const nextPreferences = updater(current);
+      persistFloatingDragPreferences(FLOATING_EVENT_FEED_DRAG_PREFERENCES_STORAGE_KEY, nextPreferences);
+      return nextPreferences;
+    });
+  }
+
   const presentation = usePresentationState(
     projection.currentTurnPlayerId,
     projection.players,
@@ -1879,51 +1922,6 @@ export function GamePage() {
   }, [eventFeedPreferences]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const readStoredPreferences = (storageKey: string) => {
-      const raw = window.localStorage.getItem(storageKey)
-        ?? window.localStorage.getItem(LEGACY_FLOATING_SURFACE_DRAG_PREFERENCES_STORAGE_KEY);
-      if (!raw) {
-        return defaultFloatingSurfaceDragPreferences;
-      }
-
-      try {
-        return sanitizeFloatingSurfaceDragPreferences(JSON.parse(raw));
-      } catch {
-        return defaultFloatingSurfaceDragPreferences;
-      }
-    };
-
-    setBoardDragPreferences(readStoredPreferences(FLOATING_BOARD_DRAG_PREFERENCES_STORAGE_KEY));
-    setEventFeedDragPreferences(readStoredPreferences(FLOATING_EVENT_FEED_DRAG_PREFERENCES_STORAGE_KEY));
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(
-      FLOATING_BOARD_DRAG_PREFERENCES_STORAGE_KEY,
-      JSON.stringify(boardDragPreferences),
-    );
-  }, [boardDragPreferences]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(
-      FLOATING_EVENT_FEED_DRAG_PREFERENCES_STORAGE_KEY,
-      JSON.stringify(eventFeedDragPreferences),
-    );
-  }, [eventFeedDragPreferences]);
-
-  useEffect(() => {
     const selectableOfferedTileIds = new Set(
       offeredPropertyOptions
         .filter((option) => !option.disabledReason)
@@ -2968,7 +2966,7 @@ export function GamePage() {
               initialFrame={boardFrame}
               viewportSize={viewportSize}
               dragPreferences={boardDragPreferences}
-              onDragPreferencesChange={setBoardDragPreferences}
+              onDragPreferencesChange={updateBoardDragPreferences}
               isFocused={floatingFocus === "board"}
               zIndex={floatingZOrder.board}
               onFocus={() => focusFloatingSurface("board")}
@@ -3373,7 +3371,7 @@ export function GamePage() {
         preferences={eventFeedPreferences}
         onPreferencesChange={setEventFeedPreferences}
         dragPreferences={eventFeedDragPreferences}
-        onDragPreferencesChange={setEventFeedDragPreferences}
+        onDragPreferencesChange={updateEventFeedDragPreferences}
         isFocused={floatingFocus === "event-feed"}
         zIndex={floatingZOrder["event-feed"]}
         onFocus={() => focusFloatingSurface("event-feed")}

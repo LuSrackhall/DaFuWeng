@@ -135,7 +135,7 @@ async function getZIndex(page: Page, selector: string) {
   return page.locator(selector).evaluate((element) => Number.parseInt(window.getComputedStyle(element).zIndex || "0", 10));
 }
 
-test("desktop room floating surfaces follow whole-window long-press drag and shared drag-mode settings", async ({ page }, testInfo) => {
+test("desktop room floating surfaces follow whole-window long-press drag and independent drag-mode settings", async ({ page }, testInfo) => {
   test.setTimeout(90000);
   await page.setViewportSize({ width: 1440, height: 980 });
 
@@ -173,6 +173,8 @@ test("desktop room floating surfaces follow whole-window long-press drag and sha
   await page.getByTestId("board-window-drag-mode").selectOption("native");
   await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
   await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
+  await page.getByTestId("board-window-surface").click({ position: { x: 36, y: 96 } });
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
   await page.getByTestId("board-window-settings-toggle").click();
   await expect(page.getByTestId("board-window-settings")).toHaveCount(0);
   await longPressDrag(page, '[data-testid="board-window-surface"]', 70, 50);
@@ -189,6 +191,8 @@ test("desktop room floating surfaces follow whole-window long-press drag and sha
   await page.getByTestId("floating-event-feed-drag-mode").selectOption("third-party-hold");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
+  await page.getByTestId("floating-event-feed-surface").click({ position: { x: 44, y: 96 } });
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', -180, 70);
   const feedAfterNative = await eventFeedWindow.boundingBox();
@@ -198,6 +202,8 @@ test("desktop room floating surfaces follow whole-window long-press drag and sha
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await page.getByTestId("floating-event-feed-drag-mode").selectOption("native");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("native");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
+  await page.getByTestId("floating-event-feed-surface").click({ position: { x: 44, y: 96 } });
   await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await page.getByTestId("board-window-settings-toggle").evaluate((element: HTMLButtonElement) => element.click());
@@ -226,12 +232,46 @@ test("desktop room floating surfaces follow whole-window long-press drag and sha
   await expect(page.getByTestId("floating-event-feed-intro")).toHaveCount(0);
   await page.getByTestId("floating-event-feed-settings-toggle").click();
 
+  await expect(page.getByTestId("board-window-drag-hotspot")).toContainText("棋盘工作台");
+  await expect(page.getByTestId("board-window-drag-hotspot")).not.toContainText("自由拖拽与八向缩放");
+
   await page.getByTestId("open-rules-guide").click();
   await expect(page.getByTestId("rules-guide-panel")).toBeVisible();
   await expect(page.getByText("基础回合")).toBeVisible();
   await expect(page.getByText("自由布局")).toBeVisible();
 
   await attachScreenshot(page, testInfo, "room-floating-desktop");
+});
+
+test("drag mode preferences persist independently after reload", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 980 });
+
+  const roomId = "room-floating-drag-persistence";
+  const snapshot = buildInteractiveSnapshot(roomId);
+
+  await installFakeEventSource(page, roomId, { playerId: "p1", playerName: "房主甲" });
+  await mockRoomSnapshot(page, roomId, snapshot);
+  await page.goto(`/room/${roomId}`);
+
+  await page.getByTestId("board-window-settings-toggle").click();
+  await page.getByTestId("board-window-drag-mode").selectOption("native");
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await page.getByTestId("board-window-settings-toggle").click();
+
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await page.getByTestId("floating-event-feed-drag-mode").selectOption("third-party-hold");
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+
+  await page.reload();
+
+  await page.getByTestId("board-window-settings-toggle").click();
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await page.getByTestId("board-window-settings-toggle").click();
+
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
 });
 
 test("mobile room guidance panel remains readable with floating surfaces enabled", async ({ page }, testInfo) => {

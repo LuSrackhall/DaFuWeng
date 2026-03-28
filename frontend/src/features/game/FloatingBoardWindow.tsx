@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
@@ -124,6 +124,24 @@ export function FloatingBoardWindow({
     window.requestAnimationFrame(() => element.blur());
   }
 
+  function blurActiveSelectOnSurfacePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    const target = event.target;
+    if (target instanceof Node && activeElement.contains(target)) {
+      return;
+    }
+
+    activeElement.blur();
+  }
+
   function resetToDock() {
     const nextFrame = normalizeFrame(dockFrameRef.current);
     setFrame(nextFrame);
@@ -182,11 +200,11 @@ export function FloatingBoardWindow({
       style={{ position: "fixed", zIndex }}
       cancel="button, input, select, option"
     >
-      <div ref={surfaceRef} className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
+      <div ref={surfaceRef} className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"} onPointerDownCapture={blurActiveSelectOnSurfacePointerDown}>
         <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
           <div className="board-window__toolbar-title" data-testid="board-window-drag-hotspot">
             <p className="shell__eyebrow">棋盘工作台</p>
-            <strong>自由拖拽与八向缩放</strong>
+            {!isDetailsCollapsed ? <strong>自由拖拽与八向缩放</strong> : null}
           </div>
           {!isDetailsCollapsed ? <div className="board-window__toolbar-content">{toolbar}</div> : null}
           <div className="board-window__toolbar-actions">

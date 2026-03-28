@@ -2278,14 +2278,15 @@ body {
 
 .board-window--details-collapsed .board-window__toolbar-title {
   min-width: 0;
+  gap: 0;
 }
 
 .board-window--details-collapsed .board-window__toolbar-title .shell__eyebrow {
-  display: none;
+  display: block;
 }
 
 .board-window--details-collapsed .board-window__toolbar-title strong {
-  font-size: 0.92rem;
+  display: none;
 }
 
 .board-window--details-collapsed .board-window__canvas {

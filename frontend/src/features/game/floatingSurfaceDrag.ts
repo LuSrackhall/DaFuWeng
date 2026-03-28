@@ -302,11 +302,18 @@ export function useThirdPartyLongPressDrag({
 
         onFocus();
         onInteractingChange(true);
+        if (event.cancelable) {
+          event.preventDefault();
+        }
         return { blocked: false };
       }
 
       if (!memo || memo.blocked) {
         return memo;
+      }
+
+      if (event.cancelable) {
+        event.preventDefault();
       }
 
       const nextFrame = {
@@ -333,7 +340,7 @@ export function useThirdPartyLongPressDrag({
       delay: holdDelayMs,
       from: () => [frameRef.current.x, frameRef.current.y],
       filterTaps: true,
-      preventDefault: true,
+      preventDefault: false,
       pointer: { touch: true, capture: true },
       threshold: 0,
     },

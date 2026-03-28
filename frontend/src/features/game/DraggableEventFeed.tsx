@@ -1,3 +1,4 @@
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
@@ -165,6 +166,24 @@ export function DraggableEventFeed({
     window.requestAnimationFrame(() => element.blur());
   }
 
+  function blurActiveSelectOnSurfacePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    const target = event.target;
+    if (target instanceof Node && activeElement.contains(target)) {
+      return;
+    }
+
+    activeElement.blur();
+  }
+
   function resetToDock() {
     const nextFrame = { ...dockFrameRef.current };
     setFrame(nextFrame);
@@ -234,6 +253,7 @@ export function DraggableEventFeed({
         data-testid="floating-event-feed-surface"
         data-density={styleDensity}
         data-focused={isFocused ? "true" : "false"}
+        onPointerDownCapture={blurActiveSelectOnSurfacePointerDown}
         style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}
       >
         <div
