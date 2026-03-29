@@ -105,6 +105,7 @@ export function FloatingBoardWindow({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const rndRef = useRef<Rnd | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const dismissedSelectsRef = useRef(new Set<HTMLSelectElement>());
 
   const dockFrameRef = useRef(normalizeFrame(initialFrame));
   useEffect(() => {
@@ -125,14 +126,13 @@ export function FloatingBoardWindow({
     holdDelayMs: dragPreferences.holdDelayMs,
   });
 
-  function dismissSelectFocus(element: HTMLSelectElement, fallbackTarget?: EventTarget | null) {
-    const isFallbackFocusable = fallbackTarget instanceof HTMLElement
-      && fallbackTarget.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
-
+  function dismissSelectFocus(element: HTMLSelectElement) {
+    dismissedSelectsRef.current.add(element);
     element.blur();
-    if (!isFallbackFocusable) {
-      surfaceRef.current?.focus({ preventScroll: true });
-    }
+    surfaceRef.current?.focus({ preventScroll: true });
+    window.setTimeout(() => {
+      dismissedSelectsRef.current.delete(element);
+    }, 150);
   }
 
   function blurElementOnNextFrame(element: HTMLButtonElement | HTMLSelectElement) {
@@ -151,29 +151,36 @@ export function FloatingBoardWindow({
       return;
     }
 
-    const dismissActiveSelect = (event: Event) => {
-      const activeElement = document.activeElement;
-      if (!(activeElement instanceof HTMLSelectElement)) {
-        return;
-      }
-
-      if (!surfaceRef.current?.contains(activeElement)) {
-        return;
-      }
-
+    // Intercept browser-initiated refocus of a select that was just dismissed (macOS Chromium
+    // returns focus to the native <select> after the OS picker closes, firing a new focus event).
+    const handleFocusCapture = (event: Event) => {
       const target = event.target;
-      if (target instanceof Node && activeElement.contains(target)) {
-        return;
-      }
-
-      dismissSelectFocus(activeElement, target);
+      if (!(target instanceof HTMLSelectElement)) return;
+      if (!dismissedSelectsRef.current.has(target)) return;
+      target.blur();
+      surfaceRef.current?.focus({ preventScroll: true });
     };
 
-    window.addEventListener("pointerdown", dismissActiveSelect, true);
-    window.addEventListener("click", dismissActiveSelect, true);
+    // Dismiss an active select when the user explicitly clicks elsewhere in the floating window.
+    const handlePointerDownCapture = (event: Event) => {
+      const activeElement = document.activeElement;
+      if (!(activeElement instanceof HTMLSelectElement)) return;
+      if (!surfaceRef.current?.contains(activeElement)) return;
+      const target = event.target;
+      if (target instanceof Node && activeElement.contains(target)) return;
+      const isFallbackFocusable = target instanceof HTMLElement
+        && target.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
+      activeElement.blur();
+      if (!isFallbackFocusable) {
+        surfaceRef.current?.focus({ preventScroll: true });
+      }
+    };
+
+    window.addEventListener("focus", handleFocusCapture, true);
+    window.addEventListener("pointerdown", handlePointerDownCapture, true);
     return () => {
-      window.removeEventListener("pointerdown", dismissActiveSelect, true);
-      window.removeEventListener("click", dismissActiveSelect, true);
+      window.removeEventListener("focus", handleFocusCapture, true);
+      window.removeEventListener("pointerdown", handlePointerDownCapture, true);
     };
   }, []);
 
@@ -287,7 +294,6 @@ export function FloatingBoardWindow({
                     dragMode: nextValue,
                   }));
                   dismissSelectFocus(event.currentTarget);
-                  blurElementOnNextFrame(event.currentTarget);
                 }}
               >
                 <option value="third-party-hold">第三方库整窗长按拖拽</option>

@@ -356,6 +356,49 @@ test("window frames and drag modes restore independently after repeated changes 
   expect(Math.abs((feedFrameAfterReload?.height ?? 0) - (feedFrameBeforeReload?.height ?? 0))).toBeLessThanOrEqual(2);
 });
 
+test("event-feed all four settings selects release focus after change and intercept simulated browser-refocus", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 980 });
+
+  const roomId = "room-floating-select-focus-guard";
+  const snapshot = buildInteractiveSnapshot(roomId);
+
+  await installFakeEventSource(page, roomId, { playerId: "p1", playerName: "房主甲" });
+  await mockRoomSnapshot(page, roomId, snapshot);
+  await page.goto(`/room/${roomId}`);
+
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await expect(page.getByTestId("floating-event-feed-settings")).toBeVisible();
+
+  // Each select: (1) change → not focused; (2) simulate browser returning focus (macOS Chromium
+  // refocuses the <select> after the native OS picker closes) → still not focused.
+  const selectCases: Array<{ testId: string; value: string }> = [
+    { testId: "floating-event-feed-numbering-order", value: "desc" },
+    { testId: "floating-event-feed-sorting-order", value: "desc" },
+    { testId: "floating-event-feed-history-mode", value: "custom" },
+    { testId: "floating-event-feed-drag-mode", value: "native" },
+  ];
+
+  for (const { testId, value } of selectCases) {
+    await page.getByTestId(testId).selectOption(value);
+    await expect(page.getByTestId(testId)).not.toBeFocused();
+    // Simulate macOS Chromium refocusing the element after the native picker closes.
+    await page.getByTestId(testId).evaluate((el: HTMLSelectElement) => el.focus());
+    await expect(page.getByTestId(testId)).not.toBeFocused();
+  }
+
+  // Close settings; drag must still work normally — no lingering focus state should
+  // interfere with the long-press drag detection in the underlying surface.
+  await page.getByTestId("floating-event-feed-settings-toggle").click();
+  const feedBefore = await page.locator(".floating-event-feed-shell").boundingBox();
+  await longPressDrag(page, '[data-testid="floating-event-feed-surface"]', 60, 40);
+  const feedAfter = await page.locator(".floating-event-feed-shell").boundingBox();
+  expect(
+    feedAfter && feedBefore
+      ? Math.abs(feedAfter.x - feedBefore.x) + Math.abs(feedAfter.y - feedBefore.y) > 30
+      : false,
+  ).toBe(true);
+});
+
 test("mobile room guidance panel remains readable with floating surfaces enabled", async ({ page }, testInfo) => {
   test.setTimeout(60000);
   await page.setViewportSize({ width: 390, height: 844 });

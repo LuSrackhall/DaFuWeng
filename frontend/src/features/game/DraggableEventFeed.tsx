@@ -66,6 +66,7 @@ export function DraggableEventFeed({
   const scrollRef = useRef<HTMLOListElement>(null);
   const [isInteracting, setIsInteracting] = useState(false);
   const surfaceRef = useRef<HTMLElement | null>(null);
+  const dismissedSelectsRef = useRef(new Set<HTMLSelectElement>());
 
   const feed = buildRecentEventFeed(events, preferences);
 
@@ -166,25 +167,13 @@ export function DraggableEventFeed({
     holdDelayMs: dragPreferences.holdDelayMs,
   });
 
-  function dismissSelectFocus(element: HTMLSelectElement, fallbackTarget?: EventTarget | null) {
-    const isFallbackFocusable = fallbackTarget instanceof HTMLElement
-      && fallbackTarget.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
-
+  function dismissSelectFocus(element: HTMLSelectElement) {
+    dismissedSelectsRef.current.add(element);
     element.blur();
-    if (!isFallbackFocusable) {
-      surfaceRef.current?.focus({ preventScroll: true });
-    }
-  }
-
-  function blurElementOnNextFrame(element: HTMLButtonElement | HTMLSelectElement) {
-    if (typeof window === "undefined") {
-      element.blur();
-      return;
-    }
-
-    element.blur();
-    window.setTimeout(() => element.blur(), 0);
-    window.requestAnimationFrame(() => element.blur());
+    surfaceRef.current?.focus({ preventScroll: true });
+    window.setTimeout(() => {
+      dismissedSelectsRef.current.delete(element);
+    }, 150);
   }
 
   useEffect(() => {
@@ -192,29 +181,33 @@ export function DraggableEventFeed({
       return;
     }
 
-    const dismissActiveSelect = (event: Event) => {
-      const activeElement = document.activeElement;
-      if (!(activeElement instanceof HTMLSelectElement)) {
-        return;
-      }
-
-      if (!surfaceRef.current?.contains(activeElement)) {
-        return;
-      }
-
+    const handleFocusCapture = (event: Event) => {
       const target = event.target;
-      if (target instanceof Node && activeElement.contains(target)) {
-        return;
-      }
-
-      dismissSelectFocus(activeElement, target);
+      if (!(target instanceof HTMLSelectElement)) return;
+      if (!dismissedSelectsRef.current.has(target)) return;
+      target.blur();
+      surfaceRef.current?.focus({ preventScroll: true });
     };
 
-    window.addEventListener("pointerdown", dismissActiveSelect, true);
-    window.addEventListener("click", dismissActiveSelect, true);
+    const handlePointerDownCapture = (event: Event) => {
+      const activeElement = document.activeElement;
+      if (!(activeElement instanceof HTMLSelectElement)) return;
+      if (!surfaceRef.current?.contains(activeElement)) return;
+      const target = event.target;
+      if (target instanceof Node && activeElement.contains(target)) return;
+      const isFallbackFocusable = target instanceof HTMLElement
+        && target.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
+      activeElement.blur();
+      if (!isFallbackFocusable) {
+        surfaceRef.current?.focus({ preventScroll: true });
+      }
+    };
+
+    window.addEventListener("focus", handleFocusCapture, true);
+    window.addEventListener("pointerdown", handlePointerDownCapture, true);
     return () => {
-      window.removeEventListener("pointerdown", dismissActiveSelect, true);
-      window.removeEventListener("click", dismissActiveSelect, true);
+      window.removeEventListener("focus", handleFocusCapture, true);
+      window.removeEventListener("pointerdown", handlePointerDownCapture, true);
     };
   }, []);
 
@@ -329,7 +322,6 @@ export function DraggableEventFeed({
                 <select data-testid="floating-event-feed-numbering-order" value={preferences.numberingOrder} onChange={(e) => {
                   onPreferencesChange((current) => ({ ...current, numberingOrder: e.target.value as "asc" | "desc" }));
                   dismissSelectFocus(e.currentTarget);
-                  blurElementOnNextFrame(e.currentTarget);
                 }}>
                   <option value="asc">纪事正序</option>
                   <option value="desc">纪事倒序</option>
@@ -340,7 +332,6 @@ export function DraggableEventFeed({
                 <select data-testid="floating-event-feed-sorting-order" value={preferences.sortingOrder} onChange={(e) => {
                   onPreferencesChange((current) => ({ ...current, sortingOrder: e.target.value as "asc" | "desc" }));
                   dismissSelectFocus(e.currentTarget);
-                  blurElementOnNextFrame(e.currentTarget);
                 }}>
                   <option value="asc">旧在上，新在下</option>
                   <option value="desc">新在上，旧在下</option>
@@ -357,7 +348,6 @@ export function DraggableEventFeed({
                       historyMode: e.target.value as "all" | "custom",
                     }));
                     dismissSelectFocus(e.currentTarget);
-                    blurElementOnNextFrame(e.currentTarget);
                   }}
                 >
                   <option value="all">全部历史事件</option>
@@ -376,7 +366,6 @@ export function DraggableEventFeed({
                       dragMode: nextValue,
                     }));
                     dismissSelectFocus(e.currentTarget);
-                    blurElementOnNextFrame(e.currentTarget);
                   }}
                 >
                   <option value="third-party-hold">第三方库整窗长按拖拽</option>
