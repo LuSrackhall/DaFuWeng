@@ -381,7 +381,9 @@ test("event-feed all four settings selects release focus after change and interc
   for (const { testId, value } of selectCases) {
     await page.getByTestId(testId).selectOption(value);
     await expect(page.getByTestId(testId)).not.toBeFocused();
-    // Simulate macOS Chromium refocusing the element after the native picker closes.
+    // Simulate macOS Chromium refocusing the element. Because the guard is now a WeakSet with no
+    // TTL (stays dismissed indefinitely until the user explicitly clicks the select again),
+    // this refocus must be blocked no matter how late it arrives.
     await page.getByTestId(testId).evaluate((el: HTMLSelectElement) => el.focus());
     await expect(page.getByTestId(testId)).not.toBeFocused();
   }
@@ -395,6 +397,58 @@ test("event-feed all four settings selects release focus after change and interc
   expect(
     feedAfter && feedBefore
       ? Math.abs(feedAfter.x - feedBefore.x) + Math.abs(feedAfter.y - feedBefore.y) > 30
+      : false,
+  ).toBe(true);
+});
+
+test("board-window drag-mode select releases focus and intercepts simulated browser-refocus", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 980 });
+
+  const roomId = "room-floating-board-select-guard";
+  const snapshot = buildInteractiveSnapshot(roomId);
+
+  await installFakeEventSource(page, roomId, { playerId: "p1", playerName: "房主甲" });
+  await mockRoomSnapshot(page, roomId, snapshot);
+  await page.goto(`/room/${roomId}`);
+
+  await page.getByTestId("board-window-settings-toggle").click();
+  await expect(page.getByTestId("board-window-settings")).toBeVisible();
+
+  // (1) Change value → must not be focused immediately after.
+  await page.getByTestId("board-window-drag-mode").selectOption("native");
+  await expect(page.getByTestId("board-window-drag-mode")).toHaveValue("native");
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
+
+  // (2) Simulate macOS Chromium asynchronously restoring focus (no-TTL guard should block any
+  // refocus that arrives late, not just ones within 150 ms).
+  await page.getByTestId("board-window-drag-mode").evaluate((el: HTMLSelectElement) => el.focus());
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
+
+  // (3) Simulate a delayed second refocus attempt (> 150 ms after change) — the previous
+  // TTL-based implementation would have missed this; the WeakSet guard must catch it.
+  await page.waitForTimeout(200);
+  await page.getByTestId("board-window-drag-mode").evaluate((el: HTMLSelectElement) => el.focus());
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
+
+  // (4) Clicking on the select (pointerdown) must un-dismiss it so the user can change it again.
+  await page.getByTestId("board-window-drag-mode").click();
+  // After an explicit click the picker opens — in Playwright headless the select may not open a
+  // native OS picker; instead check that the select can receive focus from a click without the
+  // guard immediately blurring it.
+  // We restore the expected value and re-verify dismiss works once more.
+  await page.getByTestId("board-window-drag-mode").selectOption("third-party-hold");
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
+  await page.getByTestId("board-window-drag-mode").evaluate((el: HTMLSelectElement) => el.focus());
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
+
+  // (5) Close settings; long-press drag must still work normally.
+  await page.getByTestId("board-window-settings-toggle").click();
+  const boardBefore = await page.locator(".board-resizable-wrap").boundingBox();
+  await longPressDrag(page, '[data-testid="board-window-surface"]', 80, 50);
+  const boardAfter = await page.locator(".board-resizable-wrap").boundingBox();
+  expect(
+    boardAfter && boardBefore
+      ? Math.abs(boardAfter.x - boardBefore.x) + Math.abs(boardAfter.y - boardBefore.y) > 30
       : false,
   ).toBe(true);
 });

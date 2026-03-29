@@ -105,7 +105,10 @@ export function FloatingBoardWindow({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const rndRef = useRef<Rnd | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
-  const dismissedSelectsRef = useRef(new Set<HTMLSelectElement>());
+  // WeakSet: no TTL, stays dismissed until the user explicitly clicks the select again
+  // (pointerdown on the select fires *before* focus, so we clear before focus arrives).
+  // WeakSet avoids retaining unmounted DOM nodes when the settings panel re-mounts.
+  const dismissedSelectsRef = useRef(new WeakSet<HTMLSelectElement>());
 
   const dockFrameRef = useRef(normalizeFrame(initialFrame));
   useEffect(() => {
@@ -130,20 +133,7 @@ export function FloatingBoardWindow({
     dismissedSelectsRef.current.add(element);
     element.blur();
     surfaceRef.current?.focus({ preventScroll: true });
-    window.setTimeout(() => {
-      dismissedSelectsRef.current.delete(element);
-    }, 150);
-  }
-
-  function blurElementOnNextFrame(element: HTMLButtonElement | HTMLSelectElement) {
-    if (typeof window === "undefined") {
-      element.blur();
-      return;
-    }
-
-    element.blur();
-    window.setTimeout(() => element.blur(), 0);
-    window.requestAnimationFrame(() => element.blur());
+    // No TTL — stays dismissed until the user explicitly clicks the select again.
   }
 
   useEffect(() => {
@@ -151,8 +141,8 @@ export function FloatingBoardWindow({
       return;
     }
 
-    // Intercept browser-initiated refocus of a select that was just dismissed (macOS Chromium
-    // returns focus to the native <select> after the OS picker closes, firing a new focus event).
+    // Intercept any focus event on a dismissed select — no TTL, so all future refocuses are caught
+    // regardless of how late macOS Chromium fires them after the OS picker closes.
     const handleFocusCapture = (event: Event) => {
       const target = event.target;
       if (!(target instanceof HTMLSelectElement)) return;
@@ -161,15 +151,30 @@ export function FloatingBoardWindow({
       surfaceRef.current?.focus({ preventScroll: true });
     };
 
-    // Dismiss an active select when the user explicitly clicks elsewhere in the floating window.
     const handlePointerDownCapture = (event: Event) => {
+      const target = event.target;
+
+      // When the user explicitly clicks a dismissed select, un-dismiss it so that
+      // the subsequent focus event is allowed and the OS picker can open normally.
+      // pointerdown fires *before* focus, so clearing here is race-free.
+      if (
+        target instanceof HTMLSelectElement &&
+        surfaceRef.current?.contains(target) &&
+        dismissedSelectsRef.current.has(target)
+      ) {
+        dismissedSelectsRef.current.delete(target);
+        // Continue — this pointerdown is not on the currently active element, so
+        // the 2nd guard below won't interfere.
+      }
+
+      // Dismiss whichever select is currently focused when the user clicks elsewhere.
       const activeElement = document.activeElement;
       if (!(activeElement instanceof HTMLSelectElement)) return;
       if (!surfaceRef.current?.contains(activeElement)) return;
-      const target = event.target;
       if (target instanceof Node && activeElement.contains(target)) return;
-      const isFallbackFocusable = target instanceof HTMLElement
-        && target.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
+      const isFallbackFocusable =
+        target instanceof HTMLElement &&
+        target.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
       activeElement.blur();
       if (!isFallbackFocusable) {
         surfaceRef.current?.focus({ preventScroll: true });

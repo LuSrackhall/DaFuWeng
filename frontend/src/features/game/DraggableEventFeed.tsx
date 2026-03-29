@@ -66,7 +66,8 @@ export function DraggableEventFeed({
   const scrollRef = useRef<HTMLOListElement>(null);
   const [isInteracting, setIsInteracting] = useState(false);
   const surfaceRef = useRef<HTMLElement | null>(null);
-  const dismissedSelectsRef = useRef(new Set<HTMLSelectElement>());
+  // WeakSet: no TTL, stays dismissed until the user explicitly clicks the select again.
+  const dismissedSelectsRef = useRef(new WeakSet<HTMLSelectElement>());
 
   const feed = buildRecentEventFeed(events, preferences);
 
@@ -171,9 +172,7 @@ export function DraggableEventFeed({
     dismissedSelectsRef.current.add(element);
     element.blur();
     surfaceRef.current?.focus({ preventScroll: true });
-    window.setTimeout(() => {
-      dismissedSelectsRef.current.delete(element);
-    }, 150);
+    // No TTL — stays dismissed until the user explicitly clicks the select again.
   }
 
   useEffect(() => {
@@ -190,13 +189,26 @@ export function DraggableEventFeed({
     };
 
     const handlePointerDownCapture = (event: Event) => {
+      const target = event.target;
+
+      // When the user explicitly clicks a dismissed select, un-dismiss it so that
+      // the subsequent focus event is allowed and the OS picker can open normally.
+      if (
+        target instanceof HTMLSelectElement &&
+        surfaceRef.current?.contains(target) &&
+        dismissedSelectsRef.current.has(target)
+      ) {
+        dismissedSelectsRef.current.delete(target);
+      }
+
+      // Dismiss whichever select is currently focused when the user clicks elsewhere.
       const activeElement = document.activeElement;
       if (!(activeElement instanceof HTMLSelectElement)) return;
       if (!surfaceRef.current?.contains(activeElement)) return;
-      const target = event.target;
       if (target instanceof Node && activeElement.contains(target)) return;
-      const isFallbackFocusable = target instanceof HTMLElement
-        && target.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
+      const isFallbackFocusable =
+        target instanceof HTMLElement &&
+        target.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
       activeElement.blur();
       if (!isFallbackFocusable) {
         surfaceRef.current?.focus({ preventScroll: true });
