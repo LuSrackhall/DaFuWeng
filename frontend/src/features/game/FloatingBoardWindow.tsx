@@ -34,6 +34,16 @@ type FloatingBoardWindowProps = {
   onFocus: () => void;
 };
 
+const FLOATING_SURFACE_FOCUSABLE_SELECTOR = [
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "a[href]",
+  "[tabindex]:not([tabindex='-1'])",
+  "[contenteditable='true']",
+].join(", ");
+
 function normalizeFrame(frame: FloatingFrame): FloatingFrame {
   return {
     x: Number.isFinite(frame.x) ? frame.x : 0,
@@ -115,6 +125,16 @@ export function FloatingBoardWindow({
     holdDelayMs: dragPreferences.holdDelayMs,
   });
 
+  function dismissSelectFocus(element: HTMLSelectElement, fallbackTarget?: EventTarget | null) {
+    const isFallbackFocusable = fallbackTarget instanceof HTMLElement
+      && fallbackTarget.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
+
+    element.blur();
+    if (!isFallbackFocusable) {
+      surfaceRef.current?.focus({ preventScroll: true });
+    }
+  }
+
   function blurElementOnNextFrame(element: HTMLButtonElement | HTMLSelectElement) {
     if (typeof window === "undefined") {
       element.blur();
@@ -146,7 +166,7 @@ export function FloatingBoardWindow({
         return;
       }
 
-      activeElement.blur();
+      dismissSelectFocus(activeElement, target);
     };
 
     window.addEventListener("pointerdown", dismissActiveSelect, true);
@@ -215,7 +235,7 @@ export function FloatingBoardWindow({
       style={{ position: "fixed", zIndex }}
       cancel="button, input, select, option"
     >
-      <div ref={surfaceRef} className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}${isSettingsOpen ? " board-window--settings-open" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"}>
+      <div ref={surfaceRef} className={`board-window${isDetailsCollapsed ? " board-window--details-collapsed" : ""}${isSettingsOpen ? " board-window--settings-open" : ""}`} data-testid="board-window-surface" data-focused={isFocused ? "true" : "false"} tabIndex={-1}>
         <div className="board__hero board-window__toolbar board-drag-handle" data-testid="board-window-handle">
           <div className="board-window__toolbar-title" data-testid="board-window-drag-hotspot">
             <p className="shell__eyebrow">棋盘工作台</p>
@@ -266,6 +286,7 @@ export function FloatingBoardWindow({
                     ...current,
                     dragMode: nextValue,
                   }));
+                  dismissSelectFocus(event.currentTarget);
                   blurElementOnNextFrame(event.currentTarget);
                 }}
               >

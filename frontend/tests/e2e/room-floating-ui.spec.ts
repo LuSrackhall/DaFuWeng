@@ -203,6 +203,11 @@ test("desktop room floating surfaces follow whole-window long-press drag and ind
 
   const feedBefore = await eventFeedWindow.boundingBox();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
+  await page.getByTestId("floating-event-feed-numbering-order").selectOption("desc");
+  await expect(page.getByTestId("floating-event-feed-numbering-order")).toHaveValue("desc");
+  await expect(page.getByTestId("floating-event-feed-numbering-order")).not.toBeFocused();
+  await page.getByTestId("floating-event-feed-drag-hotspot").click();
+  await expect(page.getByTestId("floating-event-feed-numbering-order")).not.toBeFocused();
   await page.getByTestId("floating-event-feed-drag-mode").selectOption("third-party-hold");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).toHaveValue("third-party-hold");
   await expect(page.getByTestId("floating-event-feed-drag-mode")).not.toBeFocused();
@@ -237,6 +242,9 @@ test("desktop room floating surfaces follow whole-window long-press drag and ind
   await expect(page.getByTestId("floating-event-feed-intro")).toBeVisible();
   await page.getByTestId("floating-event-feed-settings-toggle").click();
   await page.getByTestId("floating-event-feed-history-mode").selectOption("custom");
+  await expect(page.getByTestId("floating-event-feed-history-mode")).not.toBeFocused();
+  await page.getByTestId("floating-event-feed-drag-hotspot").click();
+  await expect(page.getByTestId("floating-event-feed-history-mode")).not.toBeFocused();
   await page.getByTestId("floating-event-feed-custom-max-count").fill("4");
   await page.getByTestId("floating-event-feed-custom-max-count").blur();
   await expect(eventItems).toHaveCount(4);

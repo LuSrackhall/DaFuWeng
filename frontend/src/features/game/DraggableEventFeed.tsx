@@ -36,6 +36,16 @@ type DraggableEventFeedProps = {
   onFocus: () => void;
 };
 
+const FLOATING_SURFACE_FOCUSABLE_SELECTOR = [
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "a[href]",
+  "[tabindex]:not([tabindex='-1'])",
+  "[contenteditable='true']",
+].join(", ");
+
 export function DraggableEventFeed({
   events,
   preferences,
@@ -156,6 +166,16 @@ export function DraggableEventFeed({
     holdDelayMs: dragPreferences.holdDelayMs,
   });
 
+  function dismissSelectFocus(element: HTMLSelectElement, fallbackTarget?: EventTarget | null) {
+    const isFallbackFocusable = fallbackTarget instanceof HTMLElement
+      && fallbackTarget.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
+
+    element.blur();
+    if (!isFallbackFocusable) {
+      surfaceRef.current?.focus({ preventScroll: true });
+    }
+  }
+
   function blurElementOnNextFrame(element: HTMLButtonElement | HTMLSelectElement) {
     if (typeof window === "undefined") {
       element.blur();
@@ -187,7 +207,7 @@ export function DraggableEventFeed({
         return;
       }
 
-      activeElement.blur();
+      dismissSelectFocus(activeElement, target);
     };
 
     window.addEventListener("pointerdown", dismissActiveSelect, true);
@@ -267,6 +287,7 @@ export function DraggableEventFeed({
         data-testid="floating-event-feed-surface"
         data-density={styleDensity}
         data-focused={isFocused ? "true" : "false"}
+        tabIndex={-1}
         style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}
       >
         <div
@@ -305,14 +326,22 @@ export function DraggableEventFeed({
             <div className="floating-event-feed__settings">
               <label className="floating-event-feed__field">
                 <strong>序号顺序</strong>
-                <select value={preferences.numberingOrder} onChange={(e) => onPreferencesChange((current) => ({ ...current, numberingOrder: e.target.value as "asc" | "desc" }))}>
+                <select data-testid="floating-event-feed-numbering-order" value={preferences.numberingOrder} onChange={(e) => {
+                  onPreferencesChange((current) => ({ ...current, numberingOrder: e.target.value as "asc" | "desc" }));
+                  dismissSelectFocus(e.currentTarget);
+                  blurElementOnNextFrame(e.currentTarget);
+                }}>
                   <option value="asc">纪事正序</option>
                   <option value="desc">纪事倒序</option>
                 </select>
               </label>
               <label className="floating-event-feed__field">
                 <strong>展示顺序</strong>
-                <select value={preferences.sortingOrder} onChange={(e) => onPreferencesChange((current) => ({ ...current, sortingOrder: e.target.value as "asc" | "desc" }))}>
+                <select data-testid="floating-event-feed-sorting-order" value={preferences.sortingOrder} onChange={(e) => {
+                  onPreferencesChange((current) => ({ ...current, sortingOrder: e.target.value as "asc" | "desc" }));
+                  dismissSelectFocus(e.currentTarget);
+                  blurElementOnNextFrame(e.currentTarget);
+                }}>
                   <option value="asc">旧在上，新在下</option>
                   <option value="desc">新在上，旧在下</option>
                 </select>
@@ -322,10 +351,14 @@ export function DraggableEventFeed({
                 <select
                   data-testid="floating-event-feed-history-mode"
                   value={preferences.historyMode}
-                  onChange={(e) => onPreferencesChange((current) => ({
-                    ...current,
-                    historyMode: e.target.value as "all" | "custom",
-                  }))}
+                  onChange={(e) => {
+                    onPreferencesChange((current) => ({
+                      ...current,
+                      historyMode: e.target.value as "all" | "custom",
+                    }));
+                    dismissSelectFocus(e.currentTarget);
+                    blurElementOnNextFrame(e.currentTarget);
+                  }}
                 >
                   <option value="all">全部历史事件</option>
                   <option value="custom">自定义最大条数</option>
@@ -342,6 +375,7 @@ export function DraggableEventFeed({
                       ...current,
                       dragMode: nextValue,
                     }));
+                    dismissSelectFocus(e.currentTarget);
                     blurElementOnNextFrame(e.currentTarget);
                   }}
                 >
