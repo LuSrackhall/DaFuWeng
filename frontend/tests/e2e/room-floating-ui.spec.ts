@@ -388,6 +388,16 @@ test("event-feed all four settings selects release focus after change and interc
     await expect(page.getByTestId(testId)).not.toBeFocused();
   }
 
+  // Cover the click-away path too: if the select was blurred because the user clicked elsewhere,
+  // any later browser refocus must still be blocked.
+  await page.getByTestId("floating-event-feed-sorting-order").click();
+  await expect(page.getByTestId("floating-event-feed-sorting-order")).toBeFocused();
+  await page.getByTestId("floating-event-feed-drag-hotspot").click();
+  await expect(page.getByTestId("floating-event-feed-sorting-order")).not.toBeFocused();
+  await page.waitForTimeout(250);
+  await page.getByTestId("floating-event-feed-sorting-order").evaluate((el: HTMLSelectElement) => el.focus());
+  await expect(page.getByTestId("floating-event-feed-sorting-order")).not.toBeFocused();
+
   // Close settings; drag must still work normally — no lingering focus state should
   // interfere with the long-press drag detection in the underlying surface.
   await page.getByTestId("floating-event-feed-settings-toggle").click();
@@ -427,6 +437,16 @@ test("board-window drag-mode select releases focus and intercepts simulated brow
   // (3) Simulate a delayed second refocus attempt (> 150 ms after change) — the previous
   // TTL-based implementation would have missed this; the WeakSet guard must catch it.
   await page.waitForTimeout(200);
+  await page.getByTestId("board-window-drag-mode").evaluate((el: HTMLSelectElement) => el.focus());
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
+
+  // (3b) Cover the click-away path too: a select blurred by clicking elsewhere must still reject
+  // any delayed browser refocus.
+  await page.getByTestId("board-window-drag-mode").click();
+  await expect(page.getByTestId("board-window-drag-mode")).toBeFocused();
+  await page.getByTestId("board-window-drag-hotspot").click();
+  await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
+  await page.waitForTimeout(250);
   await page.getByTestId("board-window-drag-mode").evaluate((el: HTMLSelectElement) => el.focus());
   await expect(page.getByTestId("board-window-drag-mode")).not.toBeFocused();
 

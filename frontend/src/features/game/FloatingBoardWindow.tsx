@@ -172,6 +172,7 @@ export function FloatingBoardWindow({
       if (!(activeElement instanceof HTMLSelectElement)) return;
       if (!surfaceRef.current?.contains(activeElement)) return;
       if (target instanceof Node && activeElement.contains(target)) return;
+      dismissedSelectsRef.current.add(activeElement);
       const isFallbackFocusable =
         target instanceof HTMLElement &&
         target.closest(FLOATING_SURFACE_FOCUSABLE_SELECTOR) !== null;
@@ -182,9 +183,11 @@ export function FloatingBoardWindow({
     };
 
     window.addEventListener("focus", handleFocusCapture, true);
+    window.addEventListener("focusin", handleFocusCapture, true);
     window.addEventListener("pointerdown", handlePointerDownCapture, true);
     return () => {
       window.removeEventListener("focus", handleFocusCapture, true);
+      window.removeEventListener("focusin", handleFocusCapture, true);
       window.removeEventListener("pointerdown", handlePointerDownCapture, true);
     };
   }, []);
